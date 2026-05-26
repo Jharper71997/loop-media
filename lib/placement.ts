@@ -78,9 +78,13 @@ export async function placeCampaign(
         .select('advertiser_id, ad:ads(category_id)')
         .eq('territory_id', camp.territory_id)
         .eq('status', 'active')
+      const catOf = (r: { ad: unknown }): string | null => {
+        const a = Array.isArray(r.ad) ? r.ad[0] : r.ad
+        return (a as { category_id: string | null } | null)?.category_id ?? null
+      }
       const distinct = new Set(
         (actives ?? [])
-          .filter((r) => (r.ad as { category_id: string | null } | null)?.category_id === ad.category_id)
+          .filter((r) => catOf(r) === ad.category_id)
           .map((r) => r.advertiser_id)
       )
       distinct.delete(camp.advertiser_id) // this advertiser is always allowed to (re)fill
