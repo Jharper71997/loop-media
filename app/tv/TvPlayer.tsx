@@ -13,6 +13,7 @@ type AdItem = {
   creative_url: string
   duration: number
   qr: string | null
+  qr_image: string | null
 }
 
 type Manifest = {
@@ -291,6 +292,18 @@ function Player({ deviceId, onUnpair }: { deviceId: string; onUnpair: () => void
           <div className="mt-4 text-3xl text-white/70">Your ad could be here.</div>
           <div className="mt-2 text-xl text-white/40">Reach customers across {venueName || 'this venue'}.</div>
         </FillerFrame>
+      )}
+
+      {/* Scan-to-act QR (overlaid on ad slides that have a destination) */}
+      {slide.kind === 'ad' && slide.qr_image && (
+        <div className="absolute bottom-8 left-8 flex items-center gap-3 rounded-2xl bg-white/95 p-3 shadow-lg">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={slide.qr_image} alt="Scan" className="size-24" />
+          <div className="pr-2 text-black">
+            <div className="text-lg font-semibold leading-tight">Scan for offer</div>
+            <div className="text-sm text-black/60">Point your camera here</div>
+          </div>
+        </div>
       )}
 
       {/* Status chips */}

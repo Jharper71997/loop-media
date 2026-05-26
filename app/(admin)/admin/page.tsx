@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Store, Tv, Inbox, Megaphone, Users, Rocket } from 'lucide-react'
+import { Store, Tv, Inbox, Megaphone, Users, Rocket, QrCode } from 'lucide-react'
 import { requireAdmin } from '@/lib/auth'
 import { getTerritoryContext } from '@/lib/territory'
 import { createClient } from '@/lib/supabase/server'
@@ -53,6 +53,23 @@ export default async function AdminOverview() {
   const totalTvs = tvRows?.length ?? 0
   const onlineTvs = tvRows?.filter((r) => r.status === 'online').length ?? 0
 
+  // QR scans rollup (scoped to the territory's ads when one is selected).
+  let scans = 0
+  if (t) {
+    const { data: adRows } = await supabase.from('ads').select('id').eq('territory_id', t)
+    const adIds = (adRows ?? []).map((a) => a.id)
+    if (adIds.length) {
+      const { count } = await supabase
+        .from('qr_scans')
+        .select('id', { count: 'exact', head: true })
+        .in('ad_id', adIds)
+      scans = count ?? 0
+    }
+  } else {
+    const { count } = await supabase.from('qr_scans').select('id', { count: 'exact', head: true })
+    scans = count ?? 0
+  }
+
   const stats = [
     { label: 'Venues', value: formatNumber(venueCount ?? 0), icon: Store, href: '/admin/venues' },
     { label: 'Screens online', value: `${onlineTvs}/${totalTvs}`, icon: Tv, href: '/admin/tvs' },
@@ -60,6 +77,7 @@ export default async function AdminOverview() {
     { label: 'Active ads', value: formatNumber(active), icon: Megaphone, href: '/admin/queue' },
     { label: 'Advertisers', value: formatNumber(advCount ?? 0), icon: Users, href: '/admin/advertisers' },
     { label: 'Active campaigns', value: formatNumber(campCount ?? 0), icon: Rocket, href: '/admin/advertisers' },
+    { label: 'QR scans', value: formatNumber(scans), icon: QrCode, href: '/admin/advertisers' },
   ]
 
   return (
