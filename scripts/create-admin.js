@@ -44,7 +44,22 @@ async function main() {
     throw createErr
   }
   if (createErr) {
-    console.log('User already existed — promoting to admin.')
+    // User already exists — confirm the email and (re)set the password so they
+    // can log in without the email-confirmation link.
+    let found = null
+    for (let page = 1; !found; page++) {
+      const { data: list, error: lErr } = await supabase.auth.admin.listUsers({ page, perPage: 1000 })
+      if (lErr) throw lErr
+      found = list.users.find((u) => (u.email || '').toLowerCase() === email.toLowerCase())
+      if (found || list.users.length < 1000) break
+    }
+    if (!found) throw new Error('User exists but could not be found in listUsers')
+    const { error: updErr } = await supabase.auth.admin.updateUserById(found.id, {
+      password,
+      email_confirm: true,
+    })
+    if (updErr) throw updErr
+    console.log('User already existed — confirmed email, reset password, promoting to admin.')
   }
 
   // Ensure the profile is a global admin (territory_id null).
