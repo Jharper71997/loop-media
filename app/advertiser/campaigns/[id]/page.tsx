@@ -1,13 +1,24 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ImageOff, ArrowLeft } from 'lucide-react'
+import { ImageOff, ArrowLeft, MapPin } from 'lucide-react'
 import { requireProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { formatNumber, formatCents } from '@/lib/format'
 import type { Ad, Campaign } from '@/lib/db.types'
+import {
+  dailySeries,
+  locationRows,
+  estImpressionsPerMonth,
+  venuesCenter,
+  PERF_WINDOW_DAYS,
+  type RunningVenue,
+  type ScanRow,
+} from '@/lib/analytics'
 import { CampaignControls } from './CampaignControls'
+import CampaignMap from './CampaignMap'
+import type { CampaignMapVenue } from './CampaignMapView'
 
 type CampaignFull = Campaign & {
   ad: Ad | null
@@ -36,29 +47,73 @@ export default async function CampaignDetail({
 
   const { data: placementsData } = await supabase
     .from('ad_placements')
-    .select('id, tv:tvs(venue:venues(name, foot_traffic_estimate))')
+    .select('id, tv:tvs(id, venue:venues(id, name, lat, lng, foot_traffic_estimate))')
     .eq('campaign_id', id)
     .neq('status', 'ended')
-  type PRow = { id: string; tv: { venue: { name: string; foot_traffic_estimate: number } | null } | null }
+  type PRow = {
+    id: string
+    tv: {
+      id: string
+      venue: {
+        id: string
+        name: string
+        lat: number | null
+        lng: number | null
+        foot_traffic_estimate: number
+      } | null
+    } | null
+  }
   const placements = (placementsData ?? []) as unknown as PRow[]
 
-  let qrScans = 0
+  // Distinct running venues + the screens at each (one venue can host several TVs).
+  const venueMap = new Map<string, RunningVenue>()
+  for (const p of placements) {
+    const v = p.tv?.venue
+    const tvId = p.tv?.id
+    if (!v || !tvId) continue
+    const existing = venueMap.get(v.id)
+    if (existing) existing.tvIds.push(tvId)
+    else
+      venueMap.set(v.id, {
+        venueId: v.id,
+        name: v.name,
+        lat: v.lat,
+        lng: v.lng,
+        footTraffic: v.foot_traffic_estimate ?? 0,
+        tvIds: [tvId],
+      })
+  }
+  const venues = [...venueMap.values()]
+
+  // Measured QR scans over the reporting window (attributed to a screen + day).
+  let scans: ScanRow[] = []
   if (c.ad_id) {
-    const { count } = await supabase
+    const since = new Date()
+    since.setUTCDate(since.getUTCDate() - PERF_WINDOW_DAYS)
+    const { data: scanData } = await supabase
       .from('qr_scans')
-      .select('id', { count: 'exact', head: true })
+      .select('tv_id, scanned_at')
       .eq('ad_id', c.ad_id)
-    qrScans = count ?? 0
+      .gte('scanned_at', since.toISOString())
+    scans = (scanData ?? []) as ScanRow[]
   }
 
-  const estImpressions = placements.reduce(
-    (sum, p) => sum + (p.tv?.venue?.foot_traffic_estimate ?? 0),
-    0
-  )
-  const locations = new Set(placements.map((p) => p.tv?.venue?.name).filter(Boolean)).size
+  const estImpressions = estImpressionsPerMonth(venues)
+  const locations = venues.length
+  const totalScans = scans.length
   const progress = c.target_impressions
     ? Math.min(100, Math.round((estImpressions / c.target_impressions) * 100))
     : 0
+
+  const series = dailySeries(venues, scans)
+  const rows = locationRows(venues, scans)
+  const maxScans = Math.max(1, ...series.map((d) => d.scans))
+  const estPerDayTotal = series[0]?.estImpressions ?? 0
+  const mapVenues: CampaignMapVenue[] = rows.map((r) => {
+    const v = venueMap.get(r.venueId)!
+    return { id: r.venueId, name: r.name, lat: v.lat, lng: v.lng, footTraffic: r.estPerMonth, scans: r.scans }
+  })
+  const hasGeo = mapVenues.some((v) => v.lat != null && v.lng != null)
 
   const adStatus = c.ad?.status
   const statusBadge =
@@ -160,37 +215,106 @@ export default async function CampaignDetail({
             </Card>
             <Card>
               <CardContent className="p-5">
-                <p className="text-sm text-muted-foreground">QR scans</p>
-                <p className="text-2xl font-semibold">{formatNumber(qrScans)}</p>
+                <p className="text-sm text-muted-foreground">QR scans · 30d</p>
+                <p className="text-2xl font-semibold">{formatNumber(totalScans)}</p>
               </CardContent>
             </Card>
           </div>
+        </div>
+      </div>
 
+      {venues.length === 0 ? (
+        <Card>
+          <CardContent className="p-5 text-sm text-muted-foreground">
+            {adStatus === 'approved' || c.status === 'active'
+              ? 'Your ad is being matched to the best screens — locations and daily performance appear here once it starts running.'
+              : 'Locations and daily performance appear here once your ad is approved and the campaign is active.'}
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-6">
+          {/* Where it's running */}
+          {hasGeo && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <MapPin className="size-4 text-muted-foreground" />
+                <h2 className="text-lg font-medium">Where it&apos;s running</h2>
+              </div>
+              <CampaignMap venues={mapVenues} center={venuesCenter(venues)} />
+            </div>
+          )}
+
+          {/* Daily QR scans, last 30 days */}
           <Card>
             <CardContent className="p-5">
-              <p className="mb-2 text-sm font-medium">Screens</p>
-              {placements.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  {adStatus === 'approved' || c.status === 'active'
-                    ? 'Placement runs shortly — we are matching your ad to the best screens.'
-                    : 'Screens appear here once your ad is approved and the campaign is active.'}
+              <div className="flex flex-wrap items-end justify-between gap-2">
+                <div>
+                  <p className="text-sm font-medium">Daily QR scans</p>
+                  <p className="text-xs text-muted-foreground">
+                    Last {PERF_WINDOW_DAYS} days · measured
+                  </p>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  ~{formatNumber(estPerDayTotal)} estimated impressions/day
+                </p>
+              </div>
+              {totalScans === 0 ? (
+                <p className="mt-4 text-sm text-muted-foreground">
+                  No QR scans yet in the last {PERF_WINDOW_DAYS} days. Scans appear here as people
+                  scan the on-screen code.
                 </p>
               ) : (
-                <ul className="space-y-1 text-sm">
-                  {placements.map((p) => (
-                    <li key={p.id} className="flex justify-between">
-                      <span>{p.tv?.venue?.name ?? 'Screen'}</span>
-                      <span className="text-muted-foreground tabular-nums">
-                        {formatNumber(p.tv?.venue?.foot_traffic_estimate ?? 0)}/mo
-                      </span>
-                    </li>
+                <div className="mt-4 flex h-28 items-end gap-px">
+                  {series.map((d) => (
+                    <div
+                      key={d.date}
+                      className="flex-1 rounded-t-sm bg-primary/80"
+                      style={{ height: `${Math.max(2, (d.scans / maxScans) * 100)}%` }}
+                      title={`${d.date}: ${d.scans} scan${d.scans === 1 ? '' : 's'}`}
+                    />
                   ))}
-                </ul>
+                </div>
               )}
             </CardContent>
           </Card>
+
+          {/* Per-location breakdown */}
+          <Card>
+            <CardContent className="p-5">
+              <p className="mb-3 text-sm font-medium">By location</p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                      <th className="pb-2 font-medium">Location</th>
+                      <th className="pb-2 text-right font-medium">Est. impressions/day</th>
+                      <th className="pb-2 text-right font-medium">Est. impressions/mo</th>
+                      <th className="pb-2 text-right font-medium">QR scans · 30d</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((r) => (
+                      <tr key={r.venueId} className="border-b border-border/50 last:border-0">
+                        <td className="py-2">{r.name}</td>
+                        <td className="py-2 text-right tabular-nums">
+                          ~{formatNumber(r.estPerDay)}
+                        </td>
+                        <td className="py-2 text-right tabular-nums">
+                          ~{formatNumber(r.estPerMonth)}
+                        </td>
+                        <td className="py-2 text-right tabular-nums">{formatNumber(r.scans)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="mt-3 text-xs text-muted-foreground">
+                Impressions are estimated from each venue&apos;s foot traffic. QR scans are measured.
+              </p>
+            </CardContent>
+          </Card>
         </div>
-      </div>
+      )}
     </div>
   )
 }
