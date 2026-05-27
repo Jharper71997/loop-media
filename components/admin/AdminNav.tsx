@@ -11,6 +11,7 @@ import {
   Tv,
   Tags,
   Users,
+  DollarSign,
   Menu,
   LogOut,
 } from 'lucide-react'
@@ -35,6 +36,7 @@ const NAV = [
   { href: '/admin/tvs', label: 'TVs', icon: Tv },
   { href: '/admin/categories', label: 'Categories & caps', icon: Tags },
   { href: '/admin/advertisers', label: 'Advertisers', icon: Users },
+  { href: '/admin/revenue', label: 'Revenue', icon: DollarSign },
 ]
 
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
