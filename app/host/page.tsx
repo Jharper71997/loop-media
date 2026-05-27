@@ -83,9 +83,14 @@ export default async function HostHome() {
 
       {venues.length === 0 ? (
         <Card>
-          <CardContent className="p-8 text-center text-sm text-muted-foreground">
-            No venue is linked to your account yet. Once Loop Media sets up your screen,
-            it&apos;ll show up here. Reach out to your Loop Media contact if this looks wrong.
+          <CardContent className="flex flex-col items-center gap-4 p-8 text-center">
+            <p className="text-sm text-muted-foreground">
+              No venue is linked to your account yet. Register your space and we&apos;ll get a
+              screen set up — you&apos;ll also unlock 3 free promo slots.
+            </p>
+            <Link href="/host/register" className={buttonVariants()}>
+              <MapPin className="size-4" /> Register your venue
+            </Link>
           </CardContent>
         </Card>
       ) : (
