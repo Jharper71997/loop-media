@@ -20,7 +20,9 @@ export interface RegisterVenueInput {
 // traffic, and flip to active.
 export async function requestVenue(input: RegisterVenueInput) {
   const profile = await requireProfile()
-  if (profile.role !== 'host') return { error: 'Only host accounts can register a venue.' }
+  if (profile.role !== 'host' && profile.role !== 'admin') {
+    return { error: 'Only host accounts can register a venue.' }
+  }
   if (!input.name.trim()) return { error: 'Enter your venue name.' }
   if (!input.territory_id) return { error: 'Pick your city.' }
 

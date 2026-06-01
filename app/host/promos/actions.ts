@@ -16,7 +16,9 @@ export async function submitHostPromo(
   input: HostPromoInput
 ): Promise<{ error: string | null }> {
   const profile = await requireProfile()
-  if (profile.role !== 'host') return { error: 'Only host venues can add promos.' }
+  if (profile.role !== 'host' && profile.role !== 'admin') {
+    return { error: 'Only host venues can add promos.' }
+  }
   if (!input.title.trim()) return { error: 'Give your promo a title.' }
   if (!input.creative_url) return { error: 'Upload a promo image or video.' }
 
@@ -59,7 +61,7 @@ export async function submitHostPromo(
 
 export async function deleteHostPromo(id: string): Promise<{ error: string | null }> {
   const profile = await requireProfile()
-  if (profile.role !== 'host') return { error: 'Not allowed.' }
+  if (profile.role !== 'host' && profile.role !== 'admin') return { error: 'Not allowed.' }
 
   const supabase = await createClient()
   // RLS already restricts deletes to the owner; scope explicitly too.

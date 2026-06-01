@@ -6,7 +6,10 @@ import { NewCampaignForm } from './NewCampaignForm'
 
 export default async function NewCampaignPage() {
   const profile = await requireProfile()
-  if (profile.role !== 'advertiser') redirect(homeForRole(profile.role))
+  // Admins may build a campaign too (for testing); everyone else goes home.
+  if (profile.role !== 'advertiser' && profile.role !== 'admin') {
+    redirect(homeForRole(profile.role))
+  }
   const supabase = await createClient()
 
   const [{ data: terr }, { data: pkgs }, { data: cats }] = await Promise.all([
