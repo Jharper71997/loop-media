@@ -59,13 +59,27 @@ export function BrowseClient({
   venues,
   markets,
   activeMarket,
+  categories,
+  activeCat,
 }: {
   venues: BrowseVenue[]
   markets: { id: string; name: string }[]
   activeMarket: string | null
+  categories: { id: string; name: string }[]
+  activeCat: string | null
 }) {
   const router = useRouter()
   const [view, setView] = useState<'list' | 'map'>('list')
+
+  // Preserve both filters when either changes. cat === null clears it.
+  const go = (next: { market?: string; cat?: string | null }) => {
+    const m = next.market ?? activeMarket ?? ''
+    const c = next.cat === undefined ? activeCat : next.cat
+    const params = new URLSearchParams()
+    if (m) params.set('market', m)
+    if (c) params.set('cat', c)
+    router.push(`/advertiser/browse?${params.toString()}`)
+  }
 
   return (
     <div className="space-y-5">
@@ -73,14 +87,11 @@ export function BrowseClient({
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Browse screens</h1>
           <p className="text-sm text-muted-foreground">
-            {venues.length} screens · sorted by foot traffic
+            {venues.length} screens{activeCat ? ' available to you' : ''} · sorted by foot traffic
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Select
-            value={activeMarket ?? ''}
-            onValueChange={(v) => router.push(`/advertiser/browse?market=${v ?? ''}`)}
-          >
+          <Select value={activeMarket ?? ''} onValueChange={(v) => go({ market: v ?? '' })}>
             <SelectTrigger size="sm">
               <SelectValue>
                 {(v: string | null) => markets.find((m) => m.id === v)?.name ?? 'Market'}
@@ -90,6 +101,27 @@ export function BrowseClient({
               {markets.map((m) => (
                 <SelectItem key={m.id} value={m.id}>
                   {m.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={activeCat ?? 'all'}
+            onValueChange={(v) => go({ cat: v === 'all' ? null : v })}
+          >
+            <SelectTrigger size="sm">
+              <SelectValue>
+                {(v: string | null) =>
+                  v && v !== 'all'
+                    ? categories.find((c) => c.id === v)?.name ?? 'Category'
+                    : 'Your category'}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All categories</SelectItem>
+              {categories.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name}
                 </SelectItem>
               ))}
             </SelectContent>

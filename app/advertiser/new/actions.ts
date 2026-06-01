@@ -18,6 +18,7 @@ export interface NewCampaignInput {
   creative_type: 'video' | 'image' | null
   creative_url: string | null
   creative_help_brief: string | null
+  target_venue_ids: string[] | null // null/empty = auto-place across all eligible screens
 }
 
 export interface SubmitResult {
@@ -70,6 +71,15 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
     .select('id')
     .single()
   if (cErr || !campaign) return { error: cErr?.message ?? 'Could not create campaign.' }
+
+  // Hand-picked screens (if any). Defensive: a missing campaign_targets table
+  // must not block campaign creation — the campaign just auto-places instead.
+  const targetIds = (input.target_venue_ids ?? []).filter(Boolean)
+  if (targetIds.length) {
+    await supabase
+      .from('campaign_targets')
+      .insert(targetIds.map((venue_id) => ({ campaign_id: campaign.id, venue_id })))
+  }
 
   if (input.creative_help_brief?.trim()) {
     await supabase

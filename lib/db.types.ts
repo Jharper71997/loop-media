@@ -151,6 +151,12 @@ export interface Subscription {
   updated_at: string
 }
 
+export interface CampaignTarget {
+  campaign_id: string
+  venue_id: string
+  created_at: string
+}
+
 export interface AdPlacement {
   id: string
   ad_id: string

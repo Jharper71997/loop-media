@@ -6,27 +6,32 @@ import { BrowseClient, type BrowseVenue } from './BrowseClient'
 export default async function BrowsePage({
   searchParams,
 }: {
-  searchParams: Promise<{ market?: string }>
+  searchParams: Promise<{ market?: string; cat?: string }>
 }) {
   await requireProfile()
   const supabase = await createClient()
 
-  const { data: terr } = await supabase
-    .from('territories')
-    .select('*')
-    .eq('is_holding', false)
-    .eq('status', 'active')
-    .order('name')
+  const [{ data: terr }, { data: catData }] = await Promise.all([
+    supabase
+      .from('territories')
+      .select('*')
+      .eq('is_holding', false)
+      .eq('status', 'active')
+      .order('name'),
+    supabase.from('categories').select('id, name').order('name'),
+  ])
   const markets = (terr ?? []) as Territory[]
+  const categories = (catData ?? []) as { id: string; name: string }[]
 
-  const { market } = await searchParams
+  const { market, cat } = await searchParams
   const activeMarket = markets.find((m) => m.id === market)?.id ?? markets[0]?.id ?? null
+  const activeCat = categories.find((c) => c.id === cat)?.id ?? null
 
   let venues: BrowseVenue[] = []
   if (activeMarket) {
     const { data } = await supabase
       .from('venues')
-      .select('id, name, venue_type, lat, lng, foot_traffic_estimate, category:categories(name), tvs(id, loop_length_seconds, slot_seconds)')
+      .select('id, name, venue_type, category_id, lat, lng, foot_traffic_estimate, category:categories(name), tvs(id, loop_length_seconds, slot_seconds)')
       .eq('territory_id', activeMarket)
       .eq('status', 'active')
       .order('foot_traffic_estimate', { ascending: false })
@@ -35,13 +40,18 @@ export default async function BrowsePage({
       id: string
       name: string
       venue_type: string | null
+      category_id: string | null
       lat: number | null
       lng: number | null
       foot_traffic_estimate: number
       category: { name: string } | null
       tvs: { id: string; loop_length_seconds: number; slot_seconds: number }[]
     }
-    const rows = (data ?? []) as unknown as Row[]
+    // Exclusivity: when the viewer picks their business category, hide venues of
+    // that same category — they could never run there.
+    const rows = ((data ?? []) as unknown as Row[]).filter(
+      (r) => !(activeCat && r.category_id === activeCat)
+    )
 
     // Active placements per TV → used slots.
     const tvIds = rows.flatMap((r) => r.tvs.map((t) => t.id))
@@ -81,6 +91,8 @@ export default async function BrowsePage({
       venues={venues}
       markets={markets.map((m) => ({ id: m.id, name: m.name }))}
       activeMarket={activeMarket}
+      categories={categories}
+      activeCat={activeCat}
     />
   )
 }

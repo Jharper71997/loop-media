@@ -124,6 +124,16 @@ export async function placeCampaign(
   }
   const venues = (venuesData ?? []) as unknown as V[]
 
+  // If the advertiser hand-picked venues, restrict to that set. Defensive: if the
+  // campaign_targets table doesn't exist yet, the query errors and we fall back to
+  // auto-place across all eligible venues (original behavior).
+  const { data: targetRows } = await admin
+    .from('campaign_targets')
+    .select('venue_id')
+    .eq('campaign_id', campaignId)
+  const targetIds = new Set((targetRows ?? []).map((r) => r.venue_id))
+  const scopedVenues = targetIds.size ? venues.filter((v) => targetIds.has(v.id)) : venues
+
   // How many active placements each TV already has (slot occupancy) + which TVs
   // this campaign already runs on (skip those).
   const { data: activePl } = await admin
@@ -139,7 +149,7 @@ export async function placeCampaign(
 
   type Candidate = { tvId: string; venueId: string; traffic: number; slot: number }
   const candidates: Candidate[] = []
-  for (const v of venues) {
+  for (const v of scopedVenues) {
     if (ad.category_id && v.category_id === ad.category_id) continue // exclusivity
     for (const t of v.tvs ?? []) {
       if (myTvs.has(t.id)) continue // already running here

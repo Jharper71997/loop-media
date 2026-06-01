@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -24,6 +25,17 @@ import { submitCampaign, type NewCampaignInput } from './actions'
 const TIER_RANK: Record<string, number> = { bronze: 0, silver: 1, gold: 2, custom: 3 }
 const NO_CATEGORY = 'none'
 
+export type BuilderVenue = {
+  id: string
+  territoryId: string
+  name: string
+  categoryId: string | null
+  footTraffic: number
+  screens: number
+  capacity: number
+  open: number
+}
+
 function customPriceCents(target: number) {
   return Math.max(9900, Math.round(target / 1000) * 500)
 }
@@ -33,11 +45,13 @@ export function NewCampaignForm({
   markets,
   packages,
   categories,
+  venues,
 }: {
   userId: string
   markets: { id: string; name: string }[]
   packages: Package[]
   categories: { id: string; name: string }[]
+  venues: BuilderVenue[]
 }) {
   const router = useRouter()
   const sorted = useMemo(
@@ -55,7 +69,25 @@ export function NewCampaignForm({
   const [mode, setMode] = useState<'upload' | 'help'>('upload')
   const [file, setFile] = useState<File | null>(null)
   const [brief, setBrief] = useState('')
+  const [placement, setPlacement] = useState<'auto' | 'pick'>('auto')
+  const [picked, setPicked] = useState<string[]>([])
   const [pending, start] = useTransition()
+
+  // Venues in the chosen market this advertiser is eligible for — exclusivity
+  // hides any venue whose own category matches the advertiser's category.
+  const eligibleVenues = useMemo(
+    () =>
+      venues.filter(
+        (v) => v.territoryId === territoryId && !(categoryId && v.categoryId === categoryId)
+      ),
+    [venues, territoryId, categoryId]
+  )
+  const eligibleIds = useMemo(() => new Set(eligibleVenues.map((v) => v.id)), [eligibleVenues])
+  const pickedEligible = useMemo(() => picked.filter((id) => eligibleIds.has(id)), [picked, eligibleIds])
+
+  function toggleVenue(id: string) {
+    setPicked((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+  }
 
   const selected = sorted.find((p) => p.id === packageId)
   const isCustom = selected?.tier === 'custom'
@@ -67,6 +99,8 @@ export function NewCampaignForm({
     if (!title.trim()) return toast.error('Give your ad a title.')
     if (mode === 'upload' && !file) return toast.error('Upload a creative or switch to "Request help".')
     if (mode === 'help' && !brief.trim()) return toast.error('Describe what you need from our creative team.')
+    if (placement === 'pick' && pickedEligible.length === 0)
+      return toast.error('Pick at least one screen, or switch to auto-place.')
 
     start(async () => {
       let creative_url: string | null = null
@@ -96,6 +130,7 @@ export function NewCampaignForm({
         creative_type,
         creative_url,
         creative_help_brief: mode === 'help' ? brief : null,
+        target_venue_ids: placement === 'pick' ? pickedEligible : null,
       }
 
       const res = await submitCampaign(input)
@@ -233,6 +268,87 @@ export function NewCampaignForm({
             onChange={(e) => setQrUrl(e.target.value)}
           />
         </div>
+      </section>
+
+      {/* Where it runs */}
+      <section className="space-y-3">
+        <Label>Where it runs</Label>
+        <div className="flex w-fit rounded-md border border-border p-0.5">
+          <Button
+            type="button"
+            size="sm"
+            variant={placement === 'auto' ? 'secondary' : 'ghost'}
+            onClick={() => setPlacement('auto')}
+          >
+            Auto-place (recommended)
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={placement === 'pick' ? 'secondary' : 'ghost'}
+            onClick={() => setPlacement('pick')}
+          >
+            Pick screens
+          </Button>
+        </div>
+
+        {placement === 'auto' ? (
+          <p className="text-sm text-muted-foreground">
+            We place your ad on the highest-traffic screens you&apos;re eligible for until your
+            goal is met.
+          </p>
+        ) : eligibleVenues.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No screens are available to you in this market
+            {categoryId ? ' for your category' : ''} yet.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">
+              Showing only screens you&apos;re eligible for · {pickedEligible.length} selected
+            </p>
+            <div className="divide-y divide-border rounded-lg border border-border">
+              {eligibleVenues.map((v) => {
+                const on = pickedEligible.includes(v.id)
+                return (
+                  <button
+                    type="button"
+                    key={v.id}
+                    onClick={() => toggleVenue(v.id)}
+                    className={cn(
+                      'flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition',
+                      on ? 'bg-primary/5' : 'hover:bg-accent'
+                    )}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={cn(
+                          'grid size-5 shrink-0 place-items-center rounded border',
+                          on ? 'border-primary bg-primary text-primary-foreground' : 'border-border'
+                        )}
+                      >
+                        {on && <Check className="size-3.5" />}
+                      </span>
+                      <div>
+                        <div className="font-medium">{v.name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {formatNumber(v.footTraffic)} visits/mo · {v.screens} screen
+                          {v.screens === 1 ? '' : 's'}
+                        </div>
+                      </div>
+                    </div>
+                    <Badge
+                      variant={v.open > 0 ? 'default' : 'destructive'}
+                      className={cn(v.open > 0 && 'bg-emerald-600')}
+                    >
+                      {v.open > 0 ? `${v.open} open` : 'Full'}
+                    </Badge>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
       </section>
 
       {/* Creative */}
