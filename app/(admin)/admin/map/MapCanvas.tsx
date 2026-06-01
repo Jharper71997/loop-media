@@ -1,0 +1,93 @@
+'use client'
+
+import Link from 'next/link'
+import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet'
+import 'leaflet/dist/leaflet.css'
+
+export type VenuePin = {
+  id: string
+  name: string
+  category: string | null
+  lat: number | null
+  lng: number | null
+  footTraffic: number
+  screensTotal: number
+  online: number
+  offline: number
+  unpaired: number
+  capacity: number
+  used: number
+}
+
+// Vector CircleMarkers (avoids Leaflet's default-icon bundler issues). When a
+// coverage advertiser is selected, covered venues glow gold and the rest dim;
+// otherwise venues are colored by aggregate screen status.
+export function MapCanvas({
+  venues,
+  center,
+  highlightIds,
+}: {
+  venues: VenuePin[]
+  center: [number, number]
+  highlightIds: string[] | null
+}) {
+  const highlight = highlightIds ? new Set(highlightIds) : null
+
+  return (
+    <MapContainer
+      center={center}
+      zoom={12}
+      scrollWheelZoom
+      className="h-[70vh] w-full overflow-hidden rounded-lg"
+    >
+      <TileLayer
+        attribution="&copy; OpenStreetMap contributors"
+        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+      />
+      {venues
+        .filter((v) => v.lat != null && v.lng != null)
+        .map((v) => {
+          const statusColor =
+            v.online > 0 ? '#10b981' : v.offline > 0 ? '#ef4444' : '#71717a'
+          let color = statusColor
+          let opacity = 0.6
+          if (highlight) {
+            if (highlight.has(v.id)) color = '#d4a333'
+            else {
+              color = '#52525b'
+              opacity = 0.25
+            }
+          }
+          const fill = v.capacity > 0 ? v.used / v.capacity : 0
+          const radius = 8 + Math.round(fill * 10)
+          return (
+            <CircleMarker
+              key={v.id}
+              center={[v.lat as number, v.lng as number]}
+              radius={radius}
+              pathOptions={{ color, fillColor: color, fillOpacity: opacity, weight: 2 }}
+            >
+              <Popup>
+                <strong>{v.name}</strong>
+                <br />
+                {v.category ?? '—'}
+                <br />
+                {v.footTraffic.toLocaleString()} visits/mo
+                <br />
+                {v.used}/{v.capacity} slots filled · {v.screensTotal} screen
+                {v.screensTotal === 1 ? '' : 's'}
+                <br />
+                <span style={{ color: '#10b981' }}>{v.online} online</span>
+                {' · '}
+                <span style={{ color: '#ef4444' }}>{v.offline} offline</span>
+                {' · '}
+                {v.unpaired} unpaired
+                <br />
+                <Link href={`/admin/venues`}>Venues</Link>
+              </Popup>
+            </CircleMarker>
+          )
+        })}
+    </MapContainer>
+  )
+}

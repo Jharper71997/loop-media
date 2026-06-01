@@ -131,6 +131,7 @@ export interface Campaign {
   package_id: string | null
   territory_id: string
   target_impressions: number
+  screen_cap_override: number | null
   status: CampaignStatus
   created_at: string
   updated_at: string

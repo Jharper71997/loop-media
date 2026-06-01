@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { requireAdmin } from '@/lib/auth'
 import { getTerritoryContext } from '@/lib/territory'
 import { createClient } from '@/lib/supabase/server'
@@ -79,7 +80,11 @@ export default async function TvsPage() {
               )}
               {rows.map((tv) => (
                 <TableRow key={tv.id}>
-                  <TableCell className="font-medium">{tv.venue?.name ?? '—'}</TableCell>
+                  <TableCell className="font-medium">
+                    <Link href={`/admin/tvs/${tv.id}`} className="hover:underline">
+                      {tv.venue?.name ?? '—'}
+                    </Link>
+                  </TableCell>
                   <TableCell>
                     <code className="rounded bg-muted px-2 py-1 font-mono text-sm">
                       {tv.pairing_code ?? '—'}

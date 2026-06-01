@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { requireAdmin } from '@/lib/auth'
 import { getTerritoryContext } from '@/lib/territory'
 import { createClient } from '@/lib/supabase/server'
@@ -75,9 +76,17 @@ export default async function AdvertisersPage() {
               {advertisers.map((a) => {
                 const counts = adsByOwner.get(a.id) ?? { total: 0, active: 0 }
                 return (
-                  <TableRow key={a.id}>
-                    <TableCell className="font-medium">{a.full_name ?? '—'}</TableCell>
-                    <TableCell className="text-muted-foreground">{a.email}</TableCell>
+                  <TableRow key={a.id} className="cursor-pointer hover:bg-accent/50">
+                    <TableCell className="font-medium">
+                      <Link href={`/admin/advertisers/${a.id}`} className="block hover:underline">
+                        {a.full_name ?? '—'}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      <Link href={`/admin/advertisers/${a.id}`} className="block">
+                        {a.email}
+                      </Link>
+                    </TableCell>
                     <TableCell className="text-muted-foreground">
                       {formatDateTime(a.created_at)}
                     </TableCell>

@@ -12,6 +12,8 @@ import {
   Tags,
   Users,
   DollarSign,
+  Map,
+  Package,
   Menu,
   LogOut,
 } from 'lucide-react'
@@ -32,9 +34,11 @@ import { setActiveTerritory } from '@/app/(admin)/admin/territory-actions'
 const NAV = [
   { href: '/admin', label: 'Overview', icon: LayoutDashboard, exact: true },
   { href: '/admin/queue', label: 'Approval queue', icon: Inbox },
+  { href: '/admin/map', label: 'Map', icon: Map },
   { href: '/admin/venues', label: 'Venues', icon: Store },
   { href: '/admin/tvs', label: 'TVs', icon: Tv },
   { href: '/admin/categories', label: 'Categories & caps', icon: Tags },
+  { href: '/admin/packages', label: 'Packages', icon: Package },
   { href: '/admin/advertisers', label: 'Advertisers', icon: Users },
   { href: '/admin/revenue', label: 'Revenue', icon: DollarSign },
 ]

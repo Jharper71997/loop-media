@@ -45,7 +45,7 @@ export async function placeCampaign(
 
   const { data: camp } = await admin
     .from('campaigns')
-    .select('id, advertiser_id, ad_id, package_id, territory_id, target_impressions, status')
+    .select('id, advertiser_id, ad_id, package_id, territory_id, target_impressions, screen_cap_override, status')
     .eq('id', campaignId)
     .maybeSingle()
   if (!camp) return empty('Campaign not found')
@@ -94,7 +94,8 @@ export async function placeCampaign(
     }
   }
 
-  // ---- package screen cap ----
+  // ---- screen cap = min(package cap, per-campaign override) ----
+  // Either may be null (no limit); the effective cap is the tightest non-null one.
   let screenCap: number | null = null
   if (camp.package_id) {
     const { data: pkg } = await admin
@@ -103,6 +104,10 @@ export async function placeCampaign(
       .eq('id', camp.package_id)
       .maybeSingle()
     screenCap = pkg?.screen_cap ?? null
+  }
+  const override = camp.screen_cap_override ?? null
+  if (override != null) {
+    screenCap = screenCap == null ? override : Math.min(screenCap, override)
   }
 
   // ---- 1. Eligible screens (territory, active, category mismatch, free slot) ----
