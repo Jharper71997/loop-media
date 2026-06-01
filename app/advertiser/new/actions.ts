@@ -29,7 +29,12 @@ export interface SubmitResult {
 
 export async function submitCampaign(input: NewCampaignInput): Promise<SubmitResult> {
   const profile = await requireProfile()
-  if (profile.role !== 'advertiser') return { error: 'Only advertisers can create campaigns.' }
+  // Advertisers create campaigns normally; admins may create them too (for
+  // testing) and skip live payment — see the Stripe gate below.
+  if (profile.role !== 'advertiser' && profile.role !== 'admin') {
+    return { error: 'Only advertisers can create campaigns.' }
+  }
+  const isAdmin = profile.role === 'admin'
   if (!input.title.trim()) return { error: 'Give your ad a title.' }
   if (!input.territory_id) return { error: 'Pick a market.' }
 
@@ -91,8 +96,9 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
   )
 
   // Real Stripe Checkout when configured; otherwise demo-activate so the flow
-  // is fully testable without payment keys.
-  if (process.env.STRIPE_SECRET_KEY) {
+  // is fully testable without payment keys. Admins always skip payment (internal
+  // testing) so they're never charged on the live keys.
+  if (process.env.STRIPE_SECRET_KEY && !isAdmin) {
     try {
       const base = appUrl()
       const session = await stripe().checkout.sessions.create({

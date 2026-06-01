@@ -8,7 +8,7 @@ export function AdminPreviewBanner({ surface }: { surface: 'advertiser' | 'host'
     <div className="flex items-center justify-between gap-3 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs text-amber-700 dark:text-amber-300">
       <span className="flex items-center gap-1.5">
         <Eye className="size-3.5" />
-        Admin preview — you&apos;re viewing the {surface} experience.
+        You&apos;re in the {surface} app as an admin (testing — no charges).
       </span>
       <Link href="/admin" className="flex items-center gap-1 font-medium hover:underline">
         <ArrowLeft className="size-3.5" /> Back to admin
