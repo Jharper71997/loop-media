@@ -14,6 +14,7 @@ import {
   DollarSign,
   Map,
   Package,
+  Megaphone,
   Menu,
   LogOut,
 } from 'lucide-react'
@@ -142,6 +143,24 @@ function SidebarBody({
 
       <div className="flex-1">
         <NavLinks onNavigate={onNavigate} />
+      </div>
+
+      <div className="space-y-1 border-t border-border pt-4">
+        <span className="px-1 text-xs text-muted-foreground">Preview as</span>
+        <Link
+          href="/advertiser"
+          onClick={onNavigate}
+          className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-muted-foreground transition hover:bg-accent hover:text-foreground"
+        >
+          <Megaphone className="size-4 shrink-0" /> Advertiser app
+        </Link>
+        <Link
+          href="/host"
+          onClick={onNavigate}
+          className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-muted-foreground transition hover:bg-accent hover:text-foreground"
+        >
+          <Store className="size-4 shrink-0" /> Host app
+        </Link>
       </div>
 
       <div className="border-t border-border pt-4">
