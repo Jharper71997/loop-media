@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/auth'
+import { geocodeAddress } from '@/lib/geocode'
 
 export interface VenueInput {
   id?: string
@@ -24,6 +25,15 @@ export async function saveVenue(input: VenueInput) {
   await requireAdmin()
   const supabase = await createClient()
   const { id, ...payload } = input
+
+  // Auto-fill coordinates from the address so admins never type lat/lng.
+  if ((payload.lat == null || payload.lng == null) && payload.address?.trim()) {
+    const geo = await geocodeAddress(payload.address)
+    if (geo) {
+      payload.lat = geo.lat
+      payload.lng = geo.lng
+    }
+  }
 
   const { error } = id
     ? await supabase.from('venues').update(payload).eq('id', id)

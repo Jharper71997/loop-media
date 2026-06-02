@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { formatCents, formatNumber } from '@/lib/format'
+import { CREATIVE_SETUP_FEE_CENTS, CREATIVE_REFRESH_CENTS } from '@/lib/fees'
 import type { Package } from '@/lib/db.types'
 import { submitCampaign, type NewCampaignInput } from './actions'
 
@@ -400,7 +401,19 @@ export function NewCampaignForm({
       <section className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border bg-card p-4">
         <div className="text-sm">
           <div className="text-muted-foreground">Goal: {formatNumber(target)} impressions / month</div>
-          <div className="text-2xl font-semibold">{formatCents(priceCents)}/mo</div>
+          {mode === 'help' && (
+            <div className="mt-1 text-xs text-muted-foreground">
+              Plan {formatCents(priceCents)}/mo + creative refresh {formatCents(CREATIVE_REFRESH_CENTS)}/mo
+            </div>
+          )}
+          <div className="text-2xl font-semibold">
+            {formatCents(priceCents + (mode === 'help' ? CREATIVE_REFRESH_CENTS : 0))}/mo
+          </div>
+          {mode === 'help' && (
+            <div className="text-xs text-muted-foreground">
+              + {formatCents(CREATIVE_SETUP_FEE_CENTS)} one-time creative setup
+            </div>
+          )}
         </div>
         <Button type="submit" size="lg" disabled={pending}>
           {pending ? 'Working…' : 'Continue to payment'}

@@ -6,6 +6,7 @@ import { requireProfile } from '@/lib/auth'
 import { stripe, appUrl } from '@/lib/stripe'
 import { resolvePriceCents } from '@/lib/pricing'
 import { activatePlacementsIfReady } from '@/lib/placement'
+import { CREATIVE_SETUP_FEE_CENTS, CREATIVE_REFRESH_CENTS } from '@/lib/fees'
 
 export interface NewCampaignInput {
   territory_id: string
@@ -111,6 +112,9 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
   if (process.env.STRIPE_SECRET_KEY && !isAdmin) {
     try {
       const base = appUrl()
+      // Paid creative help: one-time setup (billed on the first invoice) + a
+      // recurring monthly creative-refresh add-on. Uploading your own = no fee.
+      const wantsCreative = !!input.creative_help_brief?.trim()
       const session = await stripe().checkout.sessions.create({
         mode: 'subscription',
         customer_email: profile.email,
@@ -124,6 +128,27 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
               product_data: { name: `Loop Media — ${input.package_label}` },
             },
           },
+          ...(wantsCreative
+            ? [
+                {
+                  quantity: 1,
+                  price_data: {
+                    currency: 'usd',
+                    unit_amount: CREATIVE_REFRESH_CENTS,
+                    recurring: { interval: 'month' as const },
+                    product_data: { name: 'Loop Media — Creative refresh' },
+                  },
+                },
+                {
+                  quantity: 1,
+                  price_data: {
+                    currency: 'usd',
+                    unit_amount: CREATIVE_SETUP_FEE_CENTS,
+                    product_data: { name: 'Loop Media — Creative setup (one-time)' },
+                  },
+                },
+              ]
+            : []),
         ],
         metadata: {
           campaign_id: campaign.id,

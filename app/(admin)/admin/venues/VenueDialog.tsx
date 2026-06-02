@@ -165,24 +165,14 @@ export function VenueDialog({
           </Field>
 
           <Field label="Address" className="sm:col-span-2">
-            <Input value={form.address} onChange={(e) => set('address', e.target.value)} />
-          </Field>
-
-          <Field label="Latitude">
             <Input
-              type="number"
-              step="0.000001"
-              value={form.lat ?? ''}
-              onChange={(e) => set('lat', e.target.value === '' ? null : Number(e.target.value))}
+              value={form.address}
+              onChange={(e) => set('address', e.target.value)}
+              placeholder="Street, city, state"
             />
-          </Field>
-          <Field label="Longitude">
-            <Input
-              type="number"
-              step="0.000001"
-              value={form.lng ?? ''}
-              onChange={(e) => set('lng', e.target.value === '' ? null : Number(e.target.value))}
-            />
+            <p className="text-xs text-muted-foreground">
+              Map coordinates are filled in automatically from the address.
+            </p>
           </Field>
 
           <Field label="Contact name">

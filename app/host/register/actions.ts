@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { requireProfile } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { geocodeAddress } from '@/lib/geocode'
 
 export interface RegisterVenueInput {
   name: string
@@ -26,11 +27,15 @@ export async function requestVenue(input: RegisterVenueInput) {
   if (!input.name.trim()) return { error: 'Enter your venue name.' }
   if (!input.territory_id) return { error: 'Pick your city.' }
 
+  const geo = await geocodeAddress(input.address)
+
   const admin = createAdminClient()
   const { error } = await admin.from('venues').insert({
     territory_id: input.territory_id,
     name: input.name.trim(),
     address: input.address.trim() || null,
+    lat: geo?.lat ?? null,
+    lng: geo?.lng ?? null,
     venue_type: input.venue_type?.trim() || null,
     category_id: input.category_id,
     foot_traffic_estimate: Math.max(0, Math.round(input.foot_traffic_estimate || 0)),
