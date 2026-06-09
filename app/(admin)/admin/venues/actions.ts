@@ -47,6 +47,17 @@ export async function saveVenue(input: VenueInput) {
   return { error: null }
 }
 
+// Show/hide a venue. Inactive venues are grayed out in admin and hidden from
+// the advertiser map — use it to stage a location that isn't ready yet.
+export async function setVenueStatus(id: string, status: 'active' | 'inactive') {
+  await requireAdmin()
+  const supabase = await createClient()
+  const { error } = await supabase.from('venues').update({ status }).eq('id', id)
+  if (error) return { error: error.message }
+  revalidatePath('/admin/venues')
+  return { error: null }
+}
+
 export async function deleteVenue(id: string) {
   await requireAdmin()
   const supabase = await createClient()

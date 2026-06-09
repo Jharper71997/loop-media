@@ -16,7 +16,9 @@ import { formatNumber, formatCents } from '@/lib/format'
 import { suggestTier, tierPriceCents, TIER_LABEL } from '@/lib/pricing'
 import type { Category, Territory, Venue, PriceTier } from '@/lib/db.types'
 import { VenueDialog } from './VenueDialog'
+import { VisibilityToggle } from './VisibilityToggle'
 import { deleteVenue } from './actions'
+import { cn } from '@/lib/utils'
 
 const venueTier = (v: { price_tier: PriceTier | null; foot_traffic_estimate: number }): PriceTier =>
   v.price_tier ?? suggestTier(v.foot_traffic_estimate)
@@ -70,7 +72,13 @@ export default async function VenuesPage() {
             </p>
           )}
           {rows.map((v) => (
-            <div key={v.id} className="rounded-xl border border-border bg-card p-4">
+            <div
+              key={v.id}
+              className={cn(
+                'rounded-xl border border-border bg-card p-4',
+                v.status !== 'active' && 'opacity-50'
+              )}
+            >
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <div className="font-medium">{v.name}</div>
@@ -78,7 +86,9 @@ export default async function VenuesPage() {
                     <div className="text-xs text-muted-foreground">{v.venue_type}</div>
                   )}
                 </div>
-                <Badge variant={v.status === 'active' ? 'default' : 'secondary'}>{v.status}</Badge>
+                <Badge variant={v.status === 'active' ? 'default' : 'secondary'}>
+                  {v.status === 'active' ? 'On map' : 'Hidden'}
+                </Badge>
               </div>
               <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                 <span>{v.category?.name ?? '—'}</span>
@@ -89,6 +99,7 @@ export default async function VenuesPage() {
                 </span>
               </div>
               <div className="mt-3 flex justify-end gap-1">
+                <VisibilityToggle id={v.id} active={v.status === 'active'} />
                 <VenueDialog
                   venue={v}
                   categories={cats}
@@ -124,7 +135,7 @@ export default async function VenuesPage() {
                 </TableRow>
               )}
               {rows.map((v) => (
-                <TableRow key={v.id}>
+                <TableRow key={v.id} className={cn(v.status !== 'active' && 'opacity-50')}>
                   <TableCell>
                     <div className="font-medium">{v.name}</div>
                     {v.venue_type && (
@@ -150,11 +161,12 @@ export default async function VenuesPage() {
                   </TableCell>
                   <TableCell>
                     <Badge variant={v.status === 'active' ? 'default' : 'secondary'}>
-                      {v.status}
+                      {v.status === 'active' ? 'On map' : 'Hidden'}
                     </Badge>
                   </TableCell>
                   <TableCell>
                     <div className="flex justify-end gap-1">
+                      <VisibilityToggle id={v.id} active={v.status === 'active'} />
                       <VenueDialog
                         venue={v}
                         categories={cats}
