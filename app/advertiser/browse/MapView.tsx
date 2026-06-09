@@ -26,8 +26,8 @@ export default function MapView({
     <MapContainer
       center={center}
       zoom={12}
-      scrollWheelZoom
-      className="h-[60vh] w-full overflow-hidden rounded-lg"
+      scrollWheelZoom={false}
+      className="h-[40vh] min-h-64 w-full overflow-hidden rounded-xl"
     >
       <TileLayer
         attribution="&copy; OpenStreetMap contributors"

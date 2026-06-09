@@ -31,9 +31,12 @@ export default async function BrowsePage({
   const { market, cat } = await searchParams
   const activeMarket = markets.find((m) => m.id === market)?.id ?? markets[0]?.id ?? null
   const activeCat = categories.find((c) => c.id === cat)?.id ?? null
+  // Step 1 of the flow: the category must be chosen (a real id, or 'all' to skip)
+  // before we show the map. Absent param = not chosen yet.
+  const categoryChosen = cat != null
 
   let venues: BrowseVenue[] = []
-  if (activeMarket) {
+  if (activeMarket && categoryChosen) {
     const { data } = await supabase
       .from('venues')
       .select(
@@ -141,6 +144,7 @@ export default async function BrowsePage({
       activeMarket={activeMarket}
       categories={categories}
       activeCat={activeCat}
+      categoryChosen={categoryChosen}
       quoteOpts={quoteOpts}
     />
   )

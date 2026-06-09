@@ -52,7 +52,7 @@ export function RegisterVenueForm({
         toast.error(res.error)
         return
       }
-      toast.success('Venue submitted — Loop Media will review and set it live.')
+      toast.success('Venue submitted — Loop Network will review and set it live.')
       router.push('/host')
     })
   }

@@ -123,7 +123,7 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
               currency: 'usd',
               unit_amount: totalCents,
               recurring: { interval: 'month' },
-              product_data: { name: `Loop Media — ${screenLabel}` },
+              product_data: { name: `Loop Network — ${screenLabel}` },
             },
           },
           ...(wantsCreative
@@ -134,7 +134,7 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
                     currency: 'usd',
                     unit_amount: CREATIVE_REFRESH_CENTS,
                     recurring: { interval: 'month' as const },
-                    product_data: { name: 'Loop Media — Creative refresh' },
+                    product_data: { name: 'Loop Network — Creative refresh' },
                   },
                 },
                 {
@@ -142,7 +142,7 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
                   price_data: {
                     currency: 'usd',
                     unit_amount: CREATIVE_SETUP_FEE_CENTS,
-                    product_data: { name: 'Loop Media — Creative setup (one-time)' },
+                    product_data: { name: 'Loop Network — Creative setup (one-time)' },
                   },
                 },
               ]

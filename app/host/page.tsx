@@ -75,7 +75,7 @@ export default async function HostHome() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Your venue</h1>
+        <h1 className="font-heading text-2xl font-bold tracking-tight">Your venue</h1>
         <p className="text-sm text-muted-foreground">
           Screen status, what&apos;s playing right now, and your free promo slots.
         </p>

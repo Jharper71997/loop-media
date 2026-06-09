@@ -43,7 +43,7 @@ export default async function HostPromosPage() {
         <h1 className="text-2xl font-semibold tracking-tight">Your promo slots</h1>
         <p className="text-sm text-muted-foreground">
           Run up to {PROMO_SLOTS} of your own 15-second promos on your screens, free. New promos
-          go to Loop Media for a quick review before they go live.
+          go to Loop Network for a quick review before they go live.
         </p>
       </div>
 

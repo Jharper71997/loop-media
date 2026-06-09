@@ -276,31 +276,29 @@ export default async function CampaignDetail({
           <Card>
             <CardContent className="p-5">
               <p className="mb-3 text-sm font-medium">By location</p>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                      <th className="pb-2 font-medium">Location</th>
-                      <th className="pb-2 text-right font-medium">Est. impressions/day</th>
-                      <th className="pb-2 text-right font-medium">Est. impressions/mo</th>
-                      <th className="pb-2 text-right font-medium">QR scans · 30d</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((r) => (
-                      <tr key={r.venueId} className="border-b border-border/50 last:border-0">
-                        <td className="py-2">{r.name}</td>
-                        <td className="py-2 text-right tabular-nums">
-                          ~{formatNumber(r.estPerDay)}
-                        </td>
-                        <td className="py-2 text-right tabular-nums">
-                          ~{formatNumber(r.estPerMonth)}
-                        </td>
-                        <td className="py-2 text-right tabular-nums">{formatNumber(r.scans)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="space-y-2">
+                {rows.map((r) => (
+                  <div
+                    key={r.venueId}
+                    className="rounded-lg border border-border/60 px-3 py-2.5"
+                  >
+                    <div className="font-medium">{r.name}</div>
+                    <div className="mt-1.5 flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground">
+                      <span>
+                        ~{formatNumber(r.estPerMonth)}{' '}
+                        <span className="text-muted-foreground/70">impr/mo</span>
+                      </span>
+                      <span>
+                        ~{formatNumber(r.estPerDay)}{' '}
+                        <span className="text-muted-foreground/70">impr/day</span>
+                      </span>
+                      <span>
+                        {formatNumber(r.scans)}{' '}
+                        <span className="text-muted-foreground/70">scans · 30d</span>
+                      </span>
+                    </div>
+                  </div>
+                ))}
               </div>
               <p className="mt-3 text-xs text-muted-foreground">
                 Impressions are estimated from each venue&apos;s foot traffic. QR scans are measured.

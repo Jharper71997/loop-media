@@ -1,60 +1,52 @@
 import Link from 'next/link'
-import Image from 'next/image'
 import { redirect } from 'next/navigation'
 import { getProfile, homeForRole } from '@/lib/auth'
 import { buttonVariants } from '@/components/ui/button'
+import { BrandLockup } from '@/components/app/BrandLockup'
+import { cn } from '@/lib/utils'
 
 export default async function Home() {
   const profile = await getProfile()
   if (profile) redirect(homeForRole(profile.role))
 
   return (
-    <main className="flex flex-1 flex-col">
-      <header className="flex items-center justify-between px-6 py-5 md:px-10">
-        <span className="flex items-center rounded-xl bg-[#0c0c0e] px-3 py-2">
-          <Image
-            src="/loop-network-logo.png"
-            alt="Loop Network"
-            width={120}
-            height={120}
-            priority
-            className="h-10 w-auto"
-          />
-        </span>
-        <div className="flex items-center gap-2">
-          <Link href="/login" className={buttonVariants({ variant: 'ghost', size: 'sm' })}>
-            Log in
-          </Link>
-          <Link href="/signup" className={buttonVariants({ size: 'sm' })}>
-            Get started
-          </Link>
-        </div>
-      </header>
+    <main className="flex flex-1 flex-col items-center justify-center px-6 py-12 text-center">
+      <div className="flex w-full max-w-md flex-col items-center">
+        <BrandLockup className="h-40 w-auto" />
 
-      <section className="mx-auto flex max-w-3xl flex-1 flex-col items-center justify-center px-6 py-20 text-center">
-        <span className="mb-4 rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">
-          Facebook Ads, but physical
+        <span className="mt-2 rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">
+          Facebook ads, but physical
         </span>
-        <h1 className="text-balance text-4xl font-bold tracking-tight md:text-6xl">
-          Put your business on screens all over town.
+
+        <h1 className="mt-6 text-balance font-heading text-4xl font-extrabold leading-[1.05] tracking-tight">
+          Get seen <span className="text-gold-metallic">where people go.</span>
         </h1>
-        <p className="mt-5 max-w-xl text-pretty text-lg text-muted-foreground">
-          Loop Network runs your 15-second ad across TVs in the busiest bars, gyms,
-          barber shops and breweries in your city. Tap the businesses you want on the
-          map and you&apos;re live.
+        <p className="mt-4 text-pretty text-base text-muted-foreground">
+          Your 15-second ad on the TVs in the busiest bars, gyms, and shops in town. Tap the spots
+          you want on a map and you&apos;re live.
         </p>
-        <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-          <Link href="/signup" className={buttonVariants({ size: 'lg' })}>
+
+        <div className="mt-8 flex w-full flex-col gap-3">
+          <Link
+            href="/signup"
+            className={cn(buttonVariants({ size: 'lg' }), 'h-12 w-full text-base')}
+          >
             Start advertising
           </Link>
           <Link
             href="/signup"
-            className={buttonVariants({ size: 'lg', variant: 'outline' })}
+            className={cn(buttonVariants({ size: 'lg', variant: 'outline' }), 'h-12 w-full text-base')}
           >
             Host a screen
           </Link>
+          <Link
+            href="/login"
+            className="mt-1 text-sm text-muted-foreground hover:text-foreground"
+          >
+            Log in
+          </Link>
         </div>
-      </section>
+      </div>
     </main>
   )
 }

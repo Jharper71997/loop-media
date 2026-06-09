@@ -1,7 +1,9 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import Image from 'next/image'
 
+const GOLD = '#d4af37'
 const DEVICE_KEY = 'lm_device'
 const cacheKey = (d: string) => `lm_loop_${d}`
 
@@ -110,29 +112,35 @@ function Pairing({ onPaired }: { onPaired: (deviceId: string) => void }) {
 
   return (
     <div className="flex h-screen w-screen flex-col items-center justify-center bg-black text-white">
-      <div className="mb-2 text-2xl font-semibold tracking-tight">
-        Loop<span className="text-amber-400">Media</span>
-      </div>
+      <Image
+        src="/loop-network-logo.png"
+        alt="Loop Network"
+        width={220}
+        height={220}
+        priority
+        className="mb-4 h-40 w-auto"
+      />
       <p className="mb-8 text-white/50">Pair this screen</p>
       <form onSubmit={submit} className="flex flex-col items-center gap-4">
         <input
           autoFocus
           value={code}
           onChange={(e) => setCode(e.target.value.toUpperCase())}
-          placeholder="LM-XXXXX"
-          className="w-80 rounded-xl border border-white/15 bg-white/5 px-6 py-5 text-center text-3xl tracking-widest uppercase outline-none focus:border-amber-400"
+          placeholder="LN-XXXXX"
+          className="w-80 rounded-xl border border-white/15 bg-white/5 px-6 py-5 text-center text-3xl tracking-widest uppercase outline-none focus:border-[#d4af37]"
         />
         <button
           type="submit"
           disabled={busy || !code}
-          className="rounded-xl bg-amber-400 px-8 py-3 text-lg font-medium text-black disabled:opacity-50"
+          style={{ background: GOLD }}
+          className="rounded-xl px-8 py-3 text-lg font-medium text-black disabled:opacity-50"
         >
           {busy ? 'Pairing…' : 'Pair screen'}
         </button>
         {error && <p className="text-red-400">{error}</p>}
       </form>
       <p className="mt-10 max-w-md text-center text-sm text-white/40">
-        Enter the pairing code from your Loop Media admin. The code is shown on
+        Enter the pairing code from your Loop Network admin. The code is shown on
         the TVs page next to this venue.
       </p>
     </div>
@@ -286,10 +294,14 @@ function Player({ deviceId, onUnpair }: { deviceId: string; onUnpair: () => void
         </FillerFrame>
       ) : (
         <FillerFrame title={venueName}>
-          <div className="text-6xl font-bold tracking-tight">
-            Loop<span className="text-amber-400">Media</span>
-          </div>
-          <div className="mt-4 text-3xl text-white/70">Your ad could be here.</div>
+          <Image
+            src="/loop-network-logo.png"
+            alt="Loop Network"
+            width={260}
+            height={260}
+            className="h-48 w-auto"
+          />
+          <div className="mt-6 text-3xl text-white/70">Your ad could be here.</div>
           <div className="mt-2 text-xl text-white/40">Reach customers across {venueName || 'this venue'}.</div>
         </FillerFrame>
       )}

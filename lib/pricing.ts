@@ -1,4 +1,4 @@
-// Loop Media — pricing engine (the spine).
+// Loop Network — pricing engine (the spine).
 //
 // Per-TV à la carte: every venue has a price TIER; the advertiser taps venues
 // into a cart and the monthly bill is the sum of the picked venues' tier prices,

@@ -130,7 +130,7 @@ function SidebarBody({
   return (
     <div className="flex h-full flex-col gap-6 p-4">
       <Link href="/admin" className="px-2 text-lg font-semibold tracking-tight">
-        Loop<span className="text-primary">Media</span>
+        Loop<span className="text-primary"> Network</span>
         <span className="ml-2 align-middle text-[10px] uppercase tracking-widest text-muted-foreground">
           Admin
         </span>
@@ -201,7 +201,7 @@ export function AdminNav({
       {/* Mobile top bar */}
       <div className="flex items-center justify-between border-b border-border p-3 md:hidden">
         <Link href="/admin" className="text-base font-semibold tracking-tight">
-          Loop<span className="text-primary">Media</span>
+          Loop<span className="text-primary"> Network</span>
         </Link>
         <Sheet open={open} onOpenChange={setOpen}>
           <SheetTrigger render={<Button variant="outline" size="icon" />}>

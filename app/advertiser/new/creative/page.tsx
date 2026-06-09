@@ -4,17 +4,18 @@ import { createClient } from '@/lib/supabase/server'
 import type { PriceTier } from '@/lib/db.types'
 import { suggestTier, tierPriceCents, type QuoteOptions } from '@/lib/pricing'
 import { resolveAdvertiserContext, contextToQuoteOptions } from '@/lib/pricing.server'
-import { ReviewStep } from './ReviewStep'
-import type { CartVenue } from './types'
+import { CreativeStep } from '../CreativeStep'
+import type { CartVenue } from '../types'
 
-export default async function ReviewPage() {
+export default async function CreativePage() {
   const profile = await requireProfile()
   if (!['advertiser', 'admin', 'host'].includes(profile.role)) {
     redirect(homeForRole(profile.role))
   }
   const supabase = await createClient()
 
-  const [{ data: venueRows }, ctx] = await Promise.all([
+  const [{ data: cats }, { data: venueRows }, ctx] = await Promise.all([
+    supabase.from('categories').select('id, name').order('name'),
     supabase
       .from('venues')
       .select('id, territory_id, name, category_id, foot_traffic_estimate, price_tier')
@@ -44,5 +45,12 @@ export default async function ReviewPage() {
   })
 
   const quoteOpts: QuoteOptions = contextToQuoteOptions(ctx)
-  return <ReviewStep venues={venues} quoteOpts={quoteOpts} />
+  return (
+    <CreativeStep
+      userId={profile.id}
+      categories={(cats ?? []) as { id: string; name: string }[]}
+      venues={venues}
+      quoteOpts={quoteOpts}
+    />
+  )
 }

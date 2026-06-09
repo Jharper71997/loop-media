@@ -63,7 +63,7 @@ export function PromoSlots({
       <Card>
         <CardContent className="p-8 text-center text-sm text-muted-foreground">
           No venue is linked to your account yet, so there&apos;s nowhere to run a promo.
-          Reach out to your Loop Media contact to get your screen set up.
+          Reach out to your Loop Network contact to get your screen set up.
         </CardContent>
       </Card>
     )

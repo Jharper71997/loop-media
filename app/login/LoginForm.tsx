@@ -39,7 +39,7 @@ export function LoginForm({ next }: { next: string }) {
     <Card>
       <CardHeader>
         <CardTitle>Welcome back</CardTitle>
-        <CardDescription>Log in to your Loop Media account.</CardDescription>
+        <CardDescription>Log in to your Loop Network account.</CardDescription>
       </CardHeader>
       <form onSubmit={onSubmit}>
         <CardContent className="space-y-4">

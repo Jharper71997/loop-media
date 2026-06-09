@@ -1,4 +1,4 @@
-// Placement engine — the core of Loop Media.
+// Placement engine — the core of Loop Network.
 //
 // Given an ACTIVE campaign whose ad is APPROVED, it decides which screens the ad
 // runs on. In the per-TV cart model an advertiser hand-picks venues

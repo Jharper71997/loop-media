@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { requireProfile, homeForRole } from '@/lib/auth'
-import { AdvertiserNav } from '@/components/advertiser/AdvertiserNav'
+import { AppShell } from '@/components/app/AppShell'
 import { AdminPreviewBanner } from '@/components/AdminPreviewBanner'
 
 export default async function AdvertiserLayout({
@@ -16,10 +16,9 @@ export default async function AdvertiserLayout({
   }
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <>
       {profile.role === 'admin' && <AdminPreviewBanner surface="advertiser" />}
-      <AdvertiserNav email={profile.email} />
-      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8">{children}</main>
-    </div>
+      <AppShell role="advertiser">{children}</AppShell>
+    </>
   )
 }

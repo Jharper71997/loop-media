@@ -101,7 +101,7 @@ export function VenueDialog({
         <DialogHeader>
           <DialogTitle>{isEdit ? 'Edit venue' : 'New venue'}</DialogTitle>
           <DialogDescription>
-            A physical location that hosts a Loop Media screen.
+            A physical location that hosts a Loop Network screen.
           </DialogDescription>
         </DialogHeader>
 

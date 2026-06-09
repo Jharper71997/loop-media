@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import { TvPlayer } from './TvPlayer'
 
 export const metadata: Metadata = {
-  title: 'Loop Media — Display',
+  title: 'Loop Network — Display',
 }
 
 // Keep TV browsers from scaling the kiosk view.
