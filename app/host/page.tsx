@@ -8,6 +8,7 @@ import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { formatNumber, timeAgo } from '@/lib/format'
 import type { Tv, Venue } from '@/lib/db.types'
+import { OnboardingTour } from '@/components/app/OnboardingTour'
 
 type VenueWithTvs = Venue & {
   tvs: Tv[]
@@ -74,6 +75,7 @@ export default async function HostHome() {
 
   return (
     <div className="space-y-8">
+      <OnboardingTour role="host" />
       <div>
         <h1 className="font-heading text-2xl font-bold tracking-tight">Your venue</h1>
         <p className="text-sm text-muted-foreground">

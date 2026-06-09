@@ -12,10 +12,14 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import { formatNumber } from '@/lib/format'
-import type { Category, Territory, Venue } from '@/lib/db.types'
+import { formatNumber, formatCents } from '@/lib/format'
+import { suggestTier, tierPriceCents, TIER_LABEL } from '@/lib/pricing'
+import type { Category, Territory, Venue, PriceTier } from '@/lib/db.types'
 import { VenueDialog } from './VenueDialog'
 import { deleteVenue } from './actions'
+
+const venueTier = (v: { price_tier: PriceTier | null; foot_traffic_estimate: number }): PriceTier =>
+  v.price_tier ?? suggestTier(v.foot_traffic_estimate)
 
 type VenueRow = Venue & {
   category: { name: string } | null
@@ -79,7 +83,10 @@ export default async function VenuesPage() {
               <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                 <span>{v.category?.name ?? '—'}</span>
                 {!t && <span>{v.territory?.name ?? '—'}</span>}
-                <span>{formatNumber(v.foot_traffic_estimate)}/mo</span>
+                <span>{formatNumber(v.foot_traffic_estimate)}/mo traffic</span>
+                <span className="font-medium text-primary">
+                  {TIER_LABEL[venueTier(v)]} · {formatCents(tierPriceCents(venueTier(v)))}/mo
+                </span>
               </div>
               <div className="mt-3 flex justify-end gap-1">
                 <VenueDialog
@@ -103,6 +110,7 @@ export default async function VenuesPage() {
                 <TableHead>Category</TableHead>
                 {!t && <TableHead>Territory</TableHead>}
                 <TableHead className="text-right">Foot traffic</TableHead>
+                <TableHead className="text-right">Price / mo</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="w-20" />
               </TableRow>
@@ -110,7 +118,7 @@ export default async function VenuesPage() {
             <TableBody>
               {rows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
+                  <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
                     No venues yet. Add your first location.
                   </TableCell>
                 </TableRow>
@@ -133,6 +141,12 @@ export default async function VenuesPage() {
                   )}
                   <TableCell className="text-right tabular-nums">
                     {formatNumber(v.foot_traffic_estimate)}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    <span className="font-medium">{formatCents(tierPriceCents(venueTier(v)))}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {TIER_LABEL[venueTier(v)]}
+                    </span>
                   </TableCell>
                   <TableCell>
                     <Badge variant={v.status === 'active' ? 'default' : 'secondary'}>

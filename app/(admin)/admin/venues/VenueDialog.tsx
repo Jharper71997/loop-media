@@ -214,8 +214,31 @@ export function VenueDialog({
               placeholder="Street, city, state"
             />
             <p className="text-xs text-muted-foreground">
-              Map coordinates are filled in automatically from the address.
+              Coordinates auto-fill from the address. Set them below to place the pin exactly.
             </p>
+          </Field>
+
+          <Field label="Latitude">
+            <Input
+              type="number"
+              step="any"
+              value={form.lat ?? ''}
+              placeholder="auto from address"
+              onChange={(e) =>
+                set('lat', e.target.value === '' ? null : Number(e.target.value))
+              }
+            />
+          </Field>
+          <Field label="Longitude">
+            <Input
+              type="number"
+              step="any"
+              value={form.lng ?? ''}
+              placeholder="auto from address"
+              onChange={(e) =>
+                set('lng', e.target.value === '' ? null : Number(e.target.value))
+              }
+            />
           </Field>
 
           <Field label="Contact name">

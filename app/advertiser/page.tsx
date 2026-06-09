@@ -9,6 +9,7 @@ import { formatCents } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { loyaltyCredits } from '@/lib/pricing'
 import { resolveAdvertiserContext } from '@/lib/pricing.server'
+import { OnboardingTour } from '@/components/app/OnboardingTour'
 
 type CampaignRow = {
   id: string
@@ -75,6 +76,7 @@ export default async function AdvertiserDashboard() {
 
   return (
     <div className="space-y-6">
+      <OnboardingTour role="advertiser" />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="font-heading text-2xl font-bold tracking-tight">Your campaigns</h1>

@@ -41,6 +41,11 @@ export function SignupForm() {
       toast.error(error.message)
       return
     }
+    // Flag a fresh sign-up so the dashboard shows the first-run walkthrough once.
+    try {
+      localStorage.setItem('loop.signup', '1')
+      sessionStorage.setItem('loop.signup', '1')
+    } catch {}
     if (data.session) {
       window.location.assign(role === 'host' ? '/host' : '/advertiser')
     } else {
