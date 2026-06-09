@@ -4,22 +4,23 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { requireProfile } from '@/lib/auth'
 import { stripe, appUrl } from '@/lib/stripe'
-import { resolvePriceCents } from '@/lib/pricing'
+import {
+  resolveCartCents,
+  resolveAdvertiserContext,
+  contextToQuoteOptions,
+} from '@/lib/pricing.server'
 import { activatePlacementsIfReady } from '@/lib/placement'
 import { CREATIVE_SETUP_FEE_CENTS, CREATIVE_REFRESH_CENTS } from '@/lib/fees'
 
 export interface NewCampaignInput {
   territory_id: string
-  package_id: string | null
-  package_label: string
-  target_impressions: number
+  venue_ids: string[] // the cart — screens the advertiser picked off the map
   category_id: string | null
   title: string
   qr_target_url: string | null
   creative_type: 'video' | 'image' | null
   creative_url: string | null
   creative_help_brief: string | null
-  target_venue_ids: string[] | null // null/empty = auto-place across all eligible screens
 }
 
 export interface SubmitResult {
@@ -31,14 +32,23 @@ export interface SubmitResult {
 
 export async function submitCampaign(input: NewCampaignInput): Promise<SubmitResult> {
   const profile = await requireProfile()
-  // Advertisers create campaigns normally; admins may create them too (for
-  // testing) and skip live payment — see the Stripe gate below.
-  if (profile.role !== 'advertiser' && profile.role !== 'admin') {
-    return { error: 'Only advertisers can create campaigns.' }
+  // Advertisers, admins (testing), and hosts (advertising elsewhere) can buy.
+  if (!['advertiser', 'admin', 'host'].includes(profile.role)) {
+    return { error: 'You are not able to create campaigns.' }
   }
   const isAdmin = profile.role === 'admin'
   if (!input.title.trim()) return { error: 'Give your ad a title.' }
   if (!input.territory_id) return { error: 'Pick a market.' }
+
+  const venueIds = [...new Set((input.venue_ids ?? []).filter(Boolean))]
+  if (!venueIds.length) return { error: 'Your cart is empty — pick at least one screen.' }
+
+  // Authoritative re-price from the DB (never trust a client total). Volume,
+  // host (20%), and loyalty discounts + free-screen credits are applied here
+  // from the buyer's standing, not the client.
+  const ctx = await resolveAdvertiserContext(profile.id)
+  const { totalCents, tiers, quote } = await resolveCartCents(venueIds, contextToQuoteOptions(ctx))
+  if (!tiers.length) return { error: 'None of the selected screens are available anymore.' }
 
   const supabase = await createClient()
 
@@ -64,23 +74,19 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
     .insert({
       advertiser_id: profile.id,
       ad_id: ad.id,
-      package_id: input.package_id,
+      package_id: null,
       territory_id: input.territory_id,
-      target_impressions: input.target_impressions,
+      monthly_total_cents: totalCents,
       status: 'draft',
     })
     .select('id')
     .single()
   if (cErr || !campaign) return { error: cErr?.message ?? 'Could not create campaign.' }
 
-  // Hand-picked screens (if any). Defensive: a missing campaign_targets table
-  // must not block campaign creation — the campaign just auto-places instead.
-  const targetIds = (input.target_venue_ids ?? []).filter(Boolean)
-  if (targetIds.length) {
-    await supabase
-      .from('campaign_targets')
-      .insert(targetIds.map((venue_id) => ({ campaign_id: campaign.id, venue_id })))
-  }
+  // The cart IS the placement target set.
+  await supabase
+    .from('campaign_targets')
+    .insert(venueIds.map((venue_id) => ({ campaign_id: campaign.id, venue_id })))
 
   if (input.creative_help_brief?.trim()) {
     await supabase
@@ -93,27 +99,19 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
     .insert({
       advertiser_id: profile.id,
       campaign_id: campaign.id,
-      package_id: input.package_id,
+      package_id: null,
       territory_id: input.territory_id,
       status: 'incomplete',
     })
     .select('id')
     .single()
 
-  const priceCents = await resolvePriceCents(
-    input.package_id,
-    input.territory_id,
-    input.target_impressions
-  )
+  const screenLabel = `${quote.totalScreens} screen${quote.totalScreens === 1 ? '' : 's'}`
 
-  // Real Stripe Checkout when configured; otherwise demo-activate so the flow
-  // is fully testable without payment keys. Admins always skip payment (internal
-  // testing) so they're never charged on the live keys.
+  // Real Stripe Checkout when configured; admins always skip live payment.
   if (process.env.STRIPE_SECRET_KEY && !isAdmin) {
     try {
       const base = appUrl()
-      // Paid creative help: one-time setup (billed on the first invoice) + a
-      // recurring monthly creative-refresh add-on. Uploading your own = no fee.
       const wantsCreative = !!input.creative_help_brief?.trim()
       const session = await stripe().checkout.sessions.create({
         mode: 'subscription',
@@ -123,9 +121,9 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
             quantity: 1,
             price_data: {
               currency: 'usd',
-              unit_amount: priceCents,
+              unit_amount: totalCents,
               recurring: { interval: 'month' },
-              product_data: { name: `Loop Media — ${input.package_label}` },
+              product_data: { name: `Loop Media — ${screenLabel}` },
             },
           },
           ...(wantsCreative
@@ -164,7 +162,7 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
     }
   }
 
-  // Demo mode: no Stripe key — activate immediately.
+  // Demo / admin: no live charge — activate immediately.
   await supabase
     .from('subscriptions')
     .update({
@@ -173,7 +171,6 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
     })
     .eq('id', sub?.id ?? '')
   await supabase.from('campaigns').update({ status: 'active' }).eq('id', campaign.id)
-  // Ad is still pending review, so this no-ops until an admin approves it.
   await activatePlacementsIfReady(campaign.id)
   revalidatePath('/advertiser')
   return { campaignId: campaign.id, demo: true }

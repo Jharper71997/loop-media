@@ -28,7 +28,7 @@ export default async function RegisterVenuePage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Register your venue</h1>
         <p className="text-sm text-muted-foreground">
-          Tell us about your space and we&apos;ll get a screen set up. You get 3 free promo slots
+          Tell us about your space and we&apos;ll get a screen set up. You get 2 free promo slots
           to advertise your own venue, too.
         </p>
       </div>

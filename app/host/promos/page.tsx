@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import type { Ad, Venue } from '@/lib/db.types'
 import { PromoSlots } from './PromoSlots'
 
-const PROMO_SLOTS = 3
+const PROMO_SLOTS = 2
 
 export default async function HostPromosPage() {
   const profile = await requireProfile()

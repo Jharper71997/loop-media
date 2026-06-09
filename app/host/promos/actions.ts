@@ -47,9 +47,9 @@ export async function submitHostPromo(
     qr_target_url: input.qr_target_url || null,
   })
   if (error) {
-    // The DB trigger raises this when the 3-slot cap is hit.
+    // The DB trigger raises this when the 2-slot cap is hit.
     if (/promo limit/i.test(error.message)) {
-      return { error: 'You already have 3 promo slots in use. Remove one to add another.' }
+      return { error: 'You already have 2 promo slots in use. Remove one to add another.' }
     }
     return { error: error.message }
   }

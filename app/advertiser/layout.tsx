@@ -9,8 +9,9 @@ export default async function AdvertiserLayout({
   children: React.ReactNode
 }) {
   const profile = await requireProfile()
-  // Admins may preview this surface; everyone else is sent to their own home.
-  if (profile.role !== 'advertiser' && profile.role !== 'admin') {
+  // Advertisers live here; admins may preview; hosts may advertise elsewhere
+  // (they get 20% off). Anyone else goes to their own home.
+  if (!['advertiser', 'admin', 'host'].includes(profile.role)) {
     redirect(homeForRole(profile.role))
   }
 

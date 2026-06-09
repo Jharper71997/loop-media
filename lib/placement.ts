@@ -1,16 +1,16 @@
 // Placement engine — the core of Loop Media.
 //
 // Given an ACTIVE campaign whose ad is APPROVED, it decides which screens the ad
-// runs on:
-//   1. Exclusivity  — exact category match only: an ad never runs on a screen
-//      whose venue is the same category as the advertiser (a bar ad never on a
-//      bar's screen). Ads with no category are unrestricted.
-//   2. Category cap — per-territory limit on how many distinct advertisers may
-//      run in a given category; activation is refused if it would exceed it.
-//   3. Goal fill    — eligible screens are sorted by foot traffic (desc) and
-//      assigned until the campaign's impression goal OR the package's screen cap
-//      is reached. MVP impression model: foot_traffic_estimate ≈ impressions per
-//      screen per month.
+// runs on. In the per-TV cart model an advertiser hand-picks venues
+// (campaign_targets); the engine fills exactly those venues' screens:
+//   1. Exclusivity  — per VENUE per CATEGORY: a venue holds at most
+//      venues.category_slots DISTINCT advertisers of a given category (1 = full
+//      exclusivity). Ads with no category are unrestricted.
+//   2. Targeting    — placement is scoped to the campaign's picked venues
+//      (campaign_targets). No targets = all eligible venues (legacy fallback).
+//   3. Fill         — eligible screens are sorted by foot traffic (desc) and
+//      assigned until the (optional) impression goal OR screen cap is reached.
+//      Carts run with goal 0, so every picked venue's free TV slots are filled.
 //
 // Always runs with the service-role admin client (ad_placements is admin-write
 // under RLS), so callers must already have authorized the action.
@@ -64,35 +64,8 @@ export async function placeCampaign(
 
   const goal = camp.target_impressions ?? 0
 
-  // ---- 2. Category cap ----
-  if (ad.category_id) {
-    const { data: cap } = await admin
-      .from('category_caps')
-      .select('max_advertisers')
-      .eq('territory_id', camp.territory_id)
-      .eq('category_id', ad.category_id)
-      .maybeSingle()
-    if (cap) {
-      const { data: actives } = await admin
-        .from('campaigns')
-        .select('advertiser_id, ad:ads(category_id)')
-        .eq('territory_id', camp.territory_id)
-        .eq('status', 'active')
-      const catOf = (r: { ad: unknown }): string | null => {
-        const a = Array.isArray(r.ad) ? r.ad[0] : r.ad
-        return (a as { category_id: string | null } | null)?.category_id ?? null
-      }
-      const distinct = new Set(
-        (actives ?? [])
-          .filter((r) => catOf(r) === ad.category_id)
-          .map((r) => r.advertiser_id)
-      )
-      distinct.delete(camp.advertiser_id) // this advertiser is always allowed to (re)fill
-      if (distinct.size >= cap.max_advertisers) {
-        return empty(`Category is full in this market (cap ${cap.max_advertisers})`, goal)
-      }
-    }
-  }
+  // Exclusivity is now enforced PER VENUE (venues.category_slots) while building
+  // candidates below, not as a per-territory cap. See the candidate loop.
 
   // ---- screen cap = min(package cap, per-campaign override) ----
   // Either may be null (no limit); the effective cap is the tightest non-null one.
@@ -110,15 +83,18 @@ export async function placeCampaign(
     screenCap = screenCap == null ? override : Math.min(screenCap, override)
   }
 
-  // ---- 1. Eligible screens (territory, active, category mismatch, free slot) ----
+  // ---- 1. Eligible screens (territory, active, category slots free, free slot) ----
   const { data: venuesData } = await admin
     .from('venues')
-    .select('id, category_id, foot_traffic_estimate, status, tvs(id, status, loop_length_seconds, slot_seconds)')
+    .select(
+      'id, category_id, category_slots, foot_traffic_estimate, status, tvs(id, status, loop_length_seconds, slot_seconds)'
+    )
     .eq('territory_id', camp.territory_id)
     .eq('status', 'active')
   type V = {
     id: string
     category_id: string | null
+    category_slots: number | null
     foot_traffic_estimate: number
     tvs: { id: string; loop_length_seconds: number; slot_seconds: number }[]
   }
@@ -134,23 +110,48 @@ export async function placeCampaign(
   const targetIds = new Set((targetRows ?? []).map((r) => r.venue_id))
   const scopedVenues = targetIds.size ? venues.filter((v) => targetIds.has(v.id)) : venues
 
-  // How many active placements each TV already has (slot occupancy) + which TVs
-  // this campaign already runs on (skip those).
+  // One read of active placements gives us slot occupancy per TV, which TVs this
+  // campaign already runs on, and per-venue category occupancy (distinct OTHER
+  // advertisers running each category at each venue) for exclusivity.
+  const tvToVenue = new Map<string, string>()
+  for (const v of venues) for (const t of v.tvs ?? []) tvToVenue.set(t.id, v.id)
+
   const { data: activePl } = await admin
     .from('ad_placements')
-    .select('tv_id, campaign_id')
+    .select('tv_id, campaign_id, ad:ads(category_id, owner_user_id)')
     .eq('status', 'active')
   const usedByTv = new Map<string, number>()
   const myTvs = new Set<string>()
-  for (const p of activePl ?? []) {
+  const venueCatAdvertisers = new Map<string, Map<string, Set<string>>>() // venue -> cat -> advertisers
+  for (const p of (activePl ?? []) as unknown as {
+    tv_id: string
+    campaign_id: string | null
+    ad: { category_id: string | null; owner_user_id: string } | null
+  }[]) {
     usedByTv.set(p.tv_id, (usedByTv.get(p.tv_id) ?? 0) + 1)
     if (p.campaign_id === campaignId) myTvs.add(p.tv_id)
+    const venueId = tvToVenue.get(p.tv_id)
+    const pad = Array.isArray(p.ad) ? p.ad[0] : p.ad
+    if (venueId && pad?.category_id) {
+      let byCat = venueCatAdvertisers.get(venueId)
+      if (!byCat) venueCatAdvertisers.set(venueId, (byCat = new Map()))
+      let advs = byCat.get(pad.category_id)
+      if (!advs) byCat.set(pad.category_id, (advs = new Set()))
+      advs.add(pad.owner_user_id)
+    }
   }
 
   type Candidate = { tvId: string; venueId: string; traffic: number; slot: number }
   const candidates: Candidate[] = []
   for (const v of scopedVenues) {
-    if (ad.category_id && v.category_id === ad.category_id) continue // exclusivity
+    // Per-venue category exclusivity: if this ad has a category, the venue can
+    // hold at most category_slots DISTINCT advertisers of that category. This
+    // advertiser is always allowed to (re)fill its own slot.
+    if (ad.category_id) {
+      const advs = new Set(venueCatAdvertisers.get(v.id)?.get(ad.category_id) ?? [])
+      advs.delete(camp.advertiser_id)
+      if (advs.size >= (v.category_slots ?? 1)) continue // category full at this venue
+    }
     for (const t of v.tvs ?? []) {
       if (myTvs.has(t.id)) continue // already running here
       const maxSlots = Math.max(1, Math.floor((t.loop_length_seconds || 360) / (t.slot_seconds || 15)))

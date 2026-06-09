@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/auth'
 import { geocodeAddress } from '@/lib/geocode'
+import type { PriceTier } from '@/lib/db.types'
 
 export interface VenueInput {
   id?: string
@@ -15,6 +16,8 @@ export interface VenueInput {
   venue_type: string
   category_id: string | null
   foot_traffic_estimate: number
+  price_tier: PriceTier | null
+  category_slots: number
   contact_name: string
   contact_email: string
   contact_phone: string

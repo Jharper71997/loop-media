@@ -22,10 +22,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import type { Category, Territory, Venue } from '@/lib/db.types'
+import type { Category, Territory, Venue, PriceTier } from '@/lib/db.types'
+import { TIER_LABEL, TIER_PRICE_CENTS, suggestTier } from '@/lib/pricing'
+import { formatCents } from '@/lib/format'
 import { saveVenue, type VenueInput } from './actions'
 
 const NO_CATEGORY = 'none'
+const TIERS: PriceTier[] = ['local', 'standard', 'high', 'premium']
 
 export function VenueDialog({
   venue,
@@ -52,6 +55,8 @@ export function VenueDialog({
     venue_type: venue?.venue_type ?? '',
     category_id: venue?.category_id ?? null,
     foot_traffic_estimate: venue?.foot_traffic_estimate ?? 0,
+    price_tier: venue?.price_tier ?? null,
+    category_slots: venue?.category_slots ?? 1,
     contact_name: venue?.contact_name ?? '',
     contact_email: venue?.contact_email ?? '',
     contact_phone: venue?.contact_phone ?? '',
@@ -162,6 +167,44 @@ export function VenueDialog({
               value={form.foot_traffic_estimate}
               onChange={(e) => set('foot_traffic_estimate', Number(e.target.value) || 0)}
             />
+          </Field>
+
+          <Field label="Price tier">
+            <Select
+              value={form.price_tier ?? 'auto'}
+              onValueChange={(v) => set('price_tier', v === 'auto' ? null : (v as PriceTier))}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue>
+                  {(v: string | null) =>
+                    v && v !== 'auto'
+                      ? `${TIER_LABEL[v as PriceTier]} · ${formatCents(TIER_PRICE_CENTS[v as PriceTier])}/mo`
+                      : `Auto (${TIER_LABEL[suggestTier(form.foot_traffic_estimate)]})`}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto">
+                  Auto from foot traffic ({formatCents(TIER_PRICE_CENTS[suggestTier(form.foot_traffic_estimate)])}/mo)
+                </SelectItem>
+                {TIERS.map((t) => (
+                  <SelectItem key={t} value={t}>
+                    {TIER_LABEL[t]} · {formatCents(TIER_PRICE_CENTS[t])}/mo
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+
+          <Field label="Advertisers per category">
+            <Input
+              type="number"
+              min={1}
+              value={form.category_slots}
+              onChange={(e) => set('category_slots', Math.max(1, Number(e.target.value) || 1))}
+            />
+            <p className="text-xs text-muted-foreground">
+              1 = full exclusivity (one advertiser per category at this venue).
+            </p>
           </Field>
 
           <Field label="Address" className="sm:col-span-2">

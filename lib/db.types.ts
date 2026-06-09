@@ -20,6 +20,7 @@ export type SubscriptionStatus =
   | 'incomplete'
 export type PlacementStatus = 'active' | 'paused' | 'ended'
 export type FillerType = 'weather' | 'sports' | 'trivia' | 'event' | 'promo'
+export type PriceTier = 'local' | 'standard' | 'high' | 'premium'
 
 export interface Territory {
   id: string
@@ -67,6 +68,8 @@ export interface Venue {
   venue_type: string | null
   category_id: string | null
   foot_traffic_estimate: number
+  price_tier: PriceTier | null
+  category_slots: number
   contact_name: string | null
   contact_email: string | null
   contact_phone: string | null
@@ -132,6 +135,7 @@ export interface Campaign {
   territory_id: string
   target_impressions: number
   screen_cap_override: number | null
+  monthly_total_cents: number | null
   status: CampaignStatus
   created_at: string
   updated_at: string
@@ -154,6 +158,15 @@ export interface Subscription {
 export interface CampaignTarget {
   campaign_id: string
   venue_id: string
+  created_at: string
+}
+
+export interface VenueWaitlist {
+  id: string
+  venue_id: string
+  category_id: string | null
+  advertiser_id: string
+  notified_at: string | null
   created_at: string
 }
 

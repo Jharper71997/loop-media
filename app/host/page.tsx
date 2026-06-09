@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Tv as TvIcon, MapPin, Megaphone, Wifi, WifiOff, PlugZap } from 'lucide-react'
+import { Tv as TvIcon, MapPin, Megaphone, Wifi, WifiOff, PlugZap, Percent } from 'lucide-react'
 import { requireProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { Badge } from '@/components/ui/badge'
@@ -21,7 +21,7 @@ type RunningPlacement = {
   ad: { title: string; creative_type: string; owner_kind: string } | null
 }
 
-const PROMO_SLOTS = 3
+const PROMO_SLOTS = 2
 
 function tvStatusBadge(status: Tv['status']) {
   switch (status) {
@@ -86,7 +86,7 @@ export default async function HostHome() {
           <CardContent className="flex flex-col items-center gap-4 p-8 text-center">
             <p className="text-sm text-muted-foreground">
               No venue is linked to your account yet. Register your space and we&apos;ll get a
-              screen set up — you&apos;ll also unlock 3 free promo slots.
+              screen set up — you&apos;ll also unlock 2 free promo slots.
             </p>
             <Link href="/host/register" className={buttonVariants()}>
               <MapPin className="size-4" /> Register your venue
@@ -228,6 +228,23 @@ export default async function HostHome() {
             </div>
             <Link href="/host/promos" className={cn(buttonVariants(), 'shrink-0')}>
               <Megaphone className="size-4" /> Manage promos
+            </Link>
+          </section>
+
+          {/* Advertise elsewhere — host discount */}
+          <section className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-primary/30 bg-primary/5 p-5">
+            <div className="flex items-start gap-3 text-sm">
+              <Percent className="mt-0.5 size-5 shrink-0 text-primary" />
+              <div>
+                <p className="font-medium">Advertise across the whole network — 20% off</p>
+                <p className="text-muted-foreground">
+                  Your hardware is part of Loop Network, so you get 20% off every screen on the map.
+                  The discount is applied automatically at checkout.
+                </p>
+              </div>
+            </div>
+            <Link href="/advertiser/browse" className={cn(buttonVariants(), 'shrink-0')}>
+              <MapPin className="size-4" /> Browse screens
             </Link>
           </section>
         </>

@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  @page { size: Letter; margin: 0; }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  :root{
+    --ink:#0b1020; --slate:#1b2236; --muted:#5b6478;
+    --blue:#2563eb; --cyan:#06b6d4; --amber:#f59e0b; --line:#e6e9f0; --paper:#ffffff;
+  }
+  html,body{ font-family:"Segoe UI",Arial,sans-serif; color:var(--ink); background:var(--paper); }
+  .page{ width:8.5in; height:11in; display:flex; flex-direction:column; }
+
+  .hero{ background:linear-gradient(135deg,#0b1020 0%,#16203b 55%,#1f2d52 100%); color:#fff; padding:40px 54px 30px; position:relative; overflow:hidden; }
+  .hero::after{ content:""; position:absolute; right:-80px; top:-80px; width:280px; height:280px; border-radius:50%; background:radial-gradient(circle,rgba(6,182,212,.35),transparent 70%); }
+  .brand{ display:flex; align-items:center; gap:12px; font-weight:800; letter-spacing:.5px; font-size:18px; }
+  .brand .dot{ width:11px; height:11px; border-radius:3px; background:var(--cyan); box-shadow:0 0 14px var(--cyan); }
+  .kicker{ margin-top:18px; color:var(--cyan); font-weight:700; font-size:12.5px; letter-spacing:2.5px; text-transform:uppercase; }
+  h1{ font-size:38px; line-height:1.04; margin-top:8px; font-weight:800; }
+  .sub{ margin-top:12px; font-size:15px; color:#c7d0e6; max-width:6.7in; line-height:1.5; }
+
+  .body{ padding:26px 54px 0; }
+  .section-title{ font-size:12.5px; letter-spacing:2px; text-transform:uppercase; color:var(--blue); font-weight:800; margin-bottom:14px; }
+
+  /* what it is */
+  .what{ font-size:14px; color:var(--slate); line-height:1.55; max-width:7in; }
+  .what b{ color:var(--ink); }
+
+  .perks{ display:grid; grid-template-columns:1fr 1fr; gap:15px 26px; margin-top:6px; }
+  .perk{ display:flex; gap:13px; }
+  .perk .ic{ flex:0 0 34px; height:34px; border-radius:9px; background:#eef2ff; color:var(--blue); display:flex; align-items:center; justify-content:center; font-size:18px; font-weight:800; }
+  .perk h3{ font-size:14.5px; margin-bottom:3px; }
+  .perk p{ font-size:12.5px; color:var(--muted); line-height:1.45; }
+
+  /* worth band */
+  .worth{ margin-top:24px; background:var(--ink); color:#fff; border-radius:16px; padding:22px 28px; display:flex; align-items:center; justify-content:space-between; }
+  .worth .big{ font-size:34px; font-weight:800; line-height:1.05; }
+  .worth .big span{ color:var(--cyan); }
+  .worth p{ font-size:12.5px; color:#aab4cf; margin-top:6px; max-width:3.4in; line-height:1.45; }
+  .worth .chips{ display:flex; flex-wrap:wrap; gap:8px; max-width:3.3in; justify-content:flex-end; }
+  .worth .chip{ font-size:12px; font-weight:700; color:#0b1020; background:var(--cyan); border-radius:999px; padding:6px 12px; }
+  .worth .chip.alt{ background:#22304f; color:#dbe2f2; }
+
+  .how{ margin-top:24px; display:flex; gap:0; }
+  .step{ flex:1; padding:0 18px; position:relative; }
+  .step:not(:last-child)::after{ content:"→"; position:absolute; right:-9px; top:6px; color:var(--cyan); font-weight:800; }
+  .step .n{ font-size:13px; font-weight:800; color:#fff; background:var(--ink); width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; }
+  .step h4{ margin-top:9px; font-size:14px; }
+  .step p{ margin-top:4px; font-size:12px; color:var(--muted); line-height:1.4; }
+
+  .foot{ margin-top:auto; background:#f7f9fd; border-top:1px solid var(--line); padding:16px 54px; display:flex; align-items:center; justify-content:space-between; }
+  .foot .cta{ font-size:17px; font-weight:800; }
+  .foot .cta span{ color:var(--blue); }
+  .foot .contact{ text-align:right; font-size:12px; color:var(--muted); line-height:1.5; }
+  .foot .contact b{ color:var(--ink); }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="hero">
+    <div class="brand"><span class="dot"></span> LOOP NETWORK</div>
+    <div class="kicker">For venues with a screen</div>
+    <h1>Host a screen.<br>Advertise yourself for free.</h1>
+    <p class="sub">Loop Network is a local network of TVs in the busiest bars, gyms, and shops in town. Each screen plays a clean loop of 15-second local ads. Put one on your wall and your own business runs on every screen in the network, at no cost to you.</p>
+  </div>
+
+  <div class="body">
+    <div class="section-title">What is Loop Network?</div>
+    <p class="what">Advertisers pay to reach local customers on our screens. They build campaigns by spending <b>points</b> on the venues they want to appear in. Your location is part of that network, so the busier and more visible your spot is, the more valuable your screen becomes. <b>You host the screen, and in return you advertise free across the whole network.</b></p>
+
+    <div class="section-title" style="margin-top:26px;">Your incentive as a host</div>
+    <div class="perks">
+      <div class="perk"><div class="ic">$</div><div><h3>$0 to host</h3><p>No setup fee, no monthly cost. We supply the content and keep the screen running.</p></div></div>
+      <div class="perk"><div class="ic">▶</div><div><h3>Free advertising for you</h3><p>Your own ad runs across every screen in the network, placement advertisers pay $200+/month for.</p></div></div>
+      <div class="perk"><div class="ic">⛨</div><div><h3>Competitor-free</h3><p>Category exclusivity means no direct competitor ever advertises on your screen.</p></div></div>
+      <div class="perk"><div class="ic">◷</div><div><h3>Zero upkeep</h3><p>We pair it, manage the content, and handle everything remotely. You just plug it in.</p></div></div>
+    </div>
+
+    <div class="worth">
+      <div>
+        <div class="big">Your screen carries <span>real point value</span></div>
+        <p>The more foot traffic you have, the more your screen is worth to advertisers, and the more weight your own free placement carries.</p>
+      </div>
+      <div class="chips">
+        <span class="chip">Large Bar / Brewery · 5 pts</span>
+        <span class="chip alt">Restaurant · 3 pts</span>
+        <span class="chip alt">Gym · 3 pts</span>
+        <span class="chip alt">Barber · 2 pts</span>
+        <span class="chip alt">Coffee · 2 pts</span>
+      </div>
+    </div>
+
+    <div class="section-title" style="margin-top:26px;">How it works</div>
+    <div class="how">
+      <div class="step"><div class="n">1</div><h4>We set up the screen</h4><p>Mount a TV or use one you have. We pair it to the network in minutes.</p></div>
+      <div class="step"><div class="n">2</div><h4>The loop plays</h4><p>A curated reel of 15-second local ads runs on repeat, with your promo mixed in.</p></div>
+      <div class="step"><div class="n">3</div><h4>You get seen</h4><p>Your business shows up on screens across town while customers stay engaged in yours.</p></div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <div class="cta">Ready to host? <span>Let's get a screen up this week.</span></div>
+    <div class="contact"><b>Loop Network</b><br>[ Name ] · [ Phone ] · [ Email ]</div>
+  </div>
+</div>
+</body>
+</html>

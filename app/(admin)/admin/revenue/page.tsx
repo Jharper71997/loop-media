@@ -2,7 +2,6 @@ import { DollarSign, Users, TrendingUp, AlertCircle } from 'lucide-react'
 import { requireAdmin } from '@/lib/auth'
 import { getTerritoryContext } from '@/lib/territory'
 import { createClient } from '@/lib/supabase/server'
-import { resolvePriceCents } from '@/lib/pricing'
 import { PageHeader } from '@/components/admin/PageHeader'
 import { Card, CardContent } from '@/components/ui/card'
 import { formatCents, formatNumber } from '@/lib/format'
@@ -15,7 +14,12 @@ type SubRow = {
   advertiser_id: string
   campaign_id: string | null
   package_id: string | null
-  campaign: { id: string; status: string; target_impressions: number; ad: { title: string } | null } | null
+  campaign: {
+    id: string
+    status: string
+    monthly_total_cents: number | null
+    ad: { title: string } | null
+  } | null
   package: { name: string } | null
 }
 
@@ -28,25 +32,16 @@ export default async function RevenuePage() {
   let q = supabase
     .from('subscriptions')
     .select(
-      'id, status, territory_id, advertiser_id, campaign_id, package_id, campaign:campaigns(id, status, target_impressions, ad:ads(title)), package:packages(name)'
+      'id, status, territory_id, advertiser_id, campaign_id, package_id, campaign:campaigns(id, status, monthly_total_cents, ad:ads(title)), package:packages(name)'
     )
     .order('created_at', { ascending: false })
   if (t) q = q.eq('territory_id', t)
   const { data } = await q
   const subs = (data ?? []) as unknown as SubRow[]
 
-  // Monthly price per subscription (per-territory override → base → custom floor).
+  // Monthly price per subscription = the cart total frozen at checkout.
   const priceById = new Map<string, number>()
-  await Promise.all(
-    subs.map(async (s) => {
-      const cents = await resolvePriceCents(
-        s.package_id,
-        s.territory_id ?? '',
-        s.campaign?.target_impressions ?? 0
-      )
-      priceById.set(s.id, cents)
-    })
-  )
+  for (const s of subs) priceById.set(s.id, s.campaign?.monthly_total_cents ?? 0)
 
   const active = subs.filter((s) => s.status === 'active')
   const mrr = active.reduce((sum, s) => sum + (priceById.get(s.id) ?? 0), 0)

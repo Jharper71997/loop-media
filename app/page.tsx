@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import Image from 'next/image'
 import { redirect } from 'next/navigation'
 import { getProfile, homeForRole } from '@/lib/auth'
 import { buttonVariants } from '@/components/ui/button'
@@ -10,8 +11,15 @@ export default async function Home() {
   return (
     <main className="flex flex-1 flex-col">
       <header className="flex items-center justify-between px-6 py-5 md:px-10">
-        <span className="text-lg font-semibold tracking-tight">
-          Loop<span className="text-primary">Media</span>
+        <span className="flex items-center rounded-xl bg-[#0c0c0e] px-3 py-2">
+          <Image
+            src="/loop-network-logo.png"
+            alt="Loop Network"
+            width={120}
+            height={120}
+            priority
+            className="h-10 w-auto"
+          />
         </span>
         <div className="flex items-center gap-2">
           <Link href="/login" className={buttonVariants({ variant: 'ghost', size: 'sm' })}>
@@ -31,8 +39,9 @@ export default async function Home() {
           Put your business on screens all over town.
         </h1>
         <p className="mt-5 max-w-xl text-pretty text-lg text-muted-foreground">
-          Loop Media runs your 15-second ad across TVs in the busiest bars, gyms,
-          barber shops and breweries in your city. Pick a reach goal, we place it.
+          Loop Network runs your 15-second ad across TVs in the busiest bars, gyms,
+          barber shops and breweries in your city. Tap the businesses you want on the
+          map and you&apos;re live.
         </p>
         <div className="mt-8 flex flex-col gap-3 sm:flex-row">
           <Link href="/signup" className={buttonVariants({ size: 'lg' })}>

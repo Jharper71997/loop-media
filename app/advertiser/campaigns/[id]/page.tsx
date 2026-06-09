@@ -101,9 +101,6 @@ export default async function CampaignDetail({
   const estImpressions = estImpressionsPerMonth(venues)
   const locations = venues.length
   const totalScans = scans.length
-  const progress = c.target_impressions
-    ? Math.min(100, Math.round((estImpressions / c.target_impressions) * 100))
-    : 0
 
   const series = dailySeries(venues, scans)
   const rows = locationRows(venues, scans)
@@ -182,8 +179,8 @@ export default async function CampaignDetail({
             )}
           </div>
           <CardContent className="p-4 text-sm text-muted-foreground">
-            {c.package?.name ?? 'Custom'} ·{' '}
-            {c.package ? formatCents(c.package.base_price_cents) + '/mo' : 'flexible pricing'}
+            {locations} screen{locations === 1 ? '' : 's'}
+            {c.monthly_total_cents != null && <> · {formatCents(c.monthly_total_cents)}/mo</>}
           </CardContent>
         </Card>
 
@@ -196,12 +193,9 @@ export default async function CampaignDetail({
                   <p className="text-sm text-muted-foreground">Estimated impressions / mo</p>
                   <p className="text-3xl font-semibold">{formatNumber(estImpressions)}</p>
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  goal {formatNumber(c.target_impressions)}
+                <p className="text-xs text-muted-foreground">
+                  from {formatNumber(estPerDayTotal)}/day across your screens
                 </p>
-              </div>
-              <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
-                <div className="h-full bg-primary" style={{ width: `${progress}%` }} />
               </div>
             </CardContent>
           </Card>

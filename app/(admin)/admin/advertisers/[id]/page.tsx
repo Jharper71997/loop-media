@@ -4,7 +4,6 @@ import { ArrowLeft, ImageOff, Tv as TvIcon } from 'lucide-react'
 import { requireAdmin } from '@/lib/auth'
 import { getTerritoryContext } from '@/lib/territory'
 import { createClient } from '@/lib/supabase/server'
-import { resolvePriceCents } from '@/lib/pricing'
 import { PageHeader } from '@/components/admin/PageHeader'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -114,16 +113,9 @@ export default async function AdvertiserDetail({
     for (const s of scanData ?? []) scansByAd.set(s.ad_id, (scansByAd.get(s.ad_id) ?? 0) + 1)
   }
 
-  // Monthly price per campaign + total active spend.
+  // Monthly price per campaign = the cart total frozen at checkout.
   const priceByCampaign = new Map<string, number>()
-  await Promise.all(
-    campaigns.map(async (c) => {
-      priceByCampaign.set(
-        c.id,
-        await resolvePriceCents(c.package_id, c.territory_id, c.target_impressions)
-      )
-    })
-  )
+  for (const c of campaigns) priceByCampaign.set(c.id, c.monthly_total_cents ?? 0)
   const monthlySpend = campaigns
     .filter((c) => c.status === 'active')
     .reduce((sum, c) => sum + (priceByCampaign.get(c.id) ?? 0), 0)
