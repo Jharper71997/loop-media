@@ -2,6 +2,8 @@ import { requireAdmin } from '@/lib/auth'
 import { getTerritoryContext } from '@/lib/territory'
 import { createClient } from '@/lib/supabase/server'
 import { PageHeader } from '@/components/admin/PageHeader'
+import Link from 'next/link'
+import { ChevronRight } from 'lucide-react'
 import { DeleteButton } from '@/components/admin/DeleteButton'
 import {
   Table,
@@ -79,17 +81,20 @@ export default async function VenuesPage() {
                 v.status !== 'active' && 'opacity-50'
               )}
             >
-              <div className="flex items-start justify-between gap-2">
+              <Link href={`/admin/venues/${v.id}`} className="flex items-start justify-between gap-2">
                 <div>
-                  <div className="font-medium">{v.name}</div>
+                  <div className="font-medium hover:underline">{v.name}</div>
                   {v.venue_type && (
                     <div className="text-xs text-muted-foreground">{v.venue_type}</div>
                   )}
                 </div>
-                <Badge variant={v.status === 'active' ? 'default' : 'secondary'}>
-                  {v.status === 'active' ? 'On map' : 'Hidden'}
-                </Badge>
-              </div>
+                <div className="flex items-center gap-1.5">
+                  <Badge variant={v.status === 'active' ? 'default' : 'secondary'}>
+                    {v.status === 'active' ? 'On map' : 'Hidden'}
+                  </Badge>
+                  <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+                </div>
+              </Link>
               <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                 <span>{v.category?.name ?? '—'}</span>
                 {!t && <span>{v.territory?.name ?? '—'}</span>}
@@ -137,7 +142,9 @@ export default async function VenuesPage() {
               {rows.map((v) => (
                 <TableRow key={v.id} className={cn(v.status !== 'active' && 'opacity-50')}>
                   <TableCell>
-                    <div className="font-medium">{v.name}</div>
+                    <Link href={`/admin/venues/${v.id}`} className="font-medium hover:underline">
+                      {v.name}
+                    </Link>
                     {v.venue_type && (
                       <div className="text-xs text-muted-foreground">{v.venue_type}</div>
                     )}
