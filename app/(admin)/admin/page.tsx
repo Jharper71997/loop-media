@@ -97,23 +97,25 @@ export default async function AdminOverview() {
           ) : undefined
         }
       />
-      <div className="grid gap-4 p-6 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 p-5 sm:grid-cols-2 md:p-6 lg:grid-cols-3">
         {stats.map((s) => (
-          <Link key={s.label} href={s.href}>
-            <Card className="transition hover:border-primary/50">
+          <Link key={s.label} href={s.href} className="group">
+            <Card className="transition-colors group-hover:border-primary/50">
               <CardContent className="flex items-center justify-between p-5">
                 <div>
                   <p className="text-sm text-muted-foreground">{s.label}</p>
                   <p
                     className={
-                      'mt-1 text-2xl font-semibold ' +
+                      'mt-1 font-heading text-3xl font-bold tabular-nums ' +
                       (s.highlight ? 'text-primary' : '')
                     }
                   >
                     {s.value}
                   </p>
                 </div>
-                <s.icon className="size-5 text-muted-foreground" />
+                <span className="grid size-10 place-items-center rounded-full bg-primary/10 text-primary transition-transform group-hover:scale-110">
+                  <s.icon className="size-5" />
+                </span>
               </CardContent>
             </Card>
           </Link>

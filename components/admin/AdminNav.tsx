@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { useRouter } from 'next/navigation'
 import {
@@ -17,6 +18,7 @@ import {
   Megaphone,
   Menu,
   LogOut,
+  type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -32,41 +34,71 @@ import type { Profile } from '@/lib/db.types'
 import type { TerritoryContext } from '@/lib/territory'
 import { setActiveTerritory } from '@/app/(admin)/admin/territory-actions'
 
-const NAV = [
-  { href: '/admin', label: 'Overview', icon: LayoutDashboard, exact: true },
-  { href: '/admin/queue', label: 'Approval queue', icon: Inbox },
-  { href: '/admin/map', label: 'Map', icon: Map },
-  { href: '/admin/venues', label: 'Venues', icon: Store },
-  { href: '/admin/tvs', label: 'TVs', icon: Tv },
-  { href: '/admin/categories', label: 'Categories & caps', icon: Tags },
-  { href: '/admin/packages', label: 'Packages', icon: Package },
-  { href: '/admin/advertisers', label: 'Advertisers', icon: Users },
-  { href: '/admin/revenue', label: 'Revenue', icon: DollarSign },
+type NavItem = { href: string; label: string; icon: LucideIcon; exact?: boolean }
+type NavGroup = { label: string | null; items: NavItem[] }
+
+const GROUPS: NavGroup[] = [
+  { label: null, items: [{ href: '/admin', label: 'Overview', icon: LayoutDashboard, exact: true }] },
+  {
+    label: 'Operations',
+    items: [
+      { href: '/admin/queue', label: 'Approval queue', icon: Inbox },
+      { href: '/admin/map', label: 'Map', icon: Map },
+    ],
+  },
+  {
+    label: 'Inventory',
+    items: [
+      { href: '/admin/venues', label: 'Venues', icon: Store },
+      { href: '/admin/tvs', label: 'TVs', icon: Tv },
+      { href: '/admin/categories', label: 'Categories & caps', icon: Tags },
+      { href: '/admin/packages', label: 'Packages', icon: Package },
+    ],
+  },
+  {
+    label: 'Business',
+    items: [
+      { href: '/admin/advertisers', label: 'Advertisers', icon: Users },
+      { href: '/admin/revenue', label: 'Revenue', icon: DollarSign },
+    ],
+  },
 ]
 
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname()
   return (
-    <nav className="flex flex-col gap-1">
-      {NAV.map(({ href, label, icon: Icon, exact }) => {
-        const active = exact ? pathname === href : pathname.startsWith(href)
-        return (
-          <Link
-            key={href}
-            href={href}
-            onClick={onNavigate}
-            className={cn(
-              'flex items-center gap-3 rounded-md px-3 py-2 text-sm transition',
-              active
-                ? 'bg-primary/10 font-medium text-foreground'
-                : 'text-muted-foreground hover:bg-accent hover:text-foreground'
-            )}
-          >
-            <Icon className="size-4 shrink-0" />
-            {label}
-          </Link>
-        )
-      })}
+    <nav className="flex flex-col gap-4">
+      {GROUPS.map((group, gi) => (
+        <div key={gi} className="flex flex-col gap-0.5">
+          {group.label && (
+            <span className="px-3 pb-1 text-[10px] font-medium uppercase tracking-widest text-muted-foreground/70">
+              {group.label}
+            </span>
+          )}
+          {group.items.map(({ href, label, icon: Icon, exact }) => {
+            const active = exact ? pathname === href : pathname.startsWith(href)
+            return (
+              <Link
+                key={href}
+                href={href}
+                onClick={onNavigate}
+                className={cn(
+                  'relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                  active
+                    ? 'bg-primary/10 font-medium text-foreground'
+                    : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                )}
+              >
+                {active && (
+                  <span className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-primary" />
+                )}
+                <Icon className={cn('size-4 shrink-0', active && 'text-primary')} />
+                {label}
+              </Link>
+            )
+          })}
+        </div>
+      ))}
     </nav>
   )
 }
@@ -78,10 +110,9 @@ function TerritorySwitcher({ territory }: { territory: TerritoryContext }) {
 
   if (territory.locked) {
     const name =
-      territory.territories.find((t) => t.id === territory.activeId)?.name ??
-      'Your territory'
+      territory.territories.find((t) => t.id === territory.activeId)?.name ?? 'Your territory'
     return (
-      <div className="rounded-md border border-border px-3 py-2 text-xs text-muted-foreground">
+      <div className="rounded-lg border border-border px-3 py-2 text-xs text-muted-foreground">
         {name}
       </div>
     )
@@ -118,6 +149,28 @@ function TerritorySwitcher({ territory }: { territory: TerritoryContext }) {
   )
 }
 
+function Wordmark() {
+  return (
+    <Link href="/admin" className="flex items-center gap-2 px-1">
+      <Image
+        src="/loop-network-emblem.png"
+        alt="Loop Network"
+        width={24}
+        height={27}
+        priority
+        className="h-6 w-auto"
+      />
+      <span className="font-heading text-sm font-extrabold tracking-[0.16em]">
+        <span className="text-primary">LOOP</span>{' '}
+        <span className="text-muted-foreground">NETWORK</span>
+      </span>
+      <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-widest text-primary">
+        Admin
+      </span>
+    </Link>
+  )
+}
+
 function SidebarBody({
   profile,
   territory,
@@ -128,36 +181,33 @@ function SidebarBody({
   onNavigate?: () => void
 }) {
   return (
-    <div className="flex h-full flex-col gap-6 p-4">
-      <Link href="/admin" className="px-2 text-lg font-semibold tracking-tight">
-        Loop<span className="text-primary"> Network</span>
-        <span className="ml-2 align-middle text-[10px] uppercase tracking-widest text-muted-foreground">
-          Admin
-        </span>
-      </Link>
+    <div className="flex h-full flex-col gap-5 p-4">
+      <Wordmark />
 
       <div className="space-y-1.5">
         <span className="px-1 text-xs text-muted-foreground">Territory</span>
         <TerritorySwitcher territory={territory} />
       </div>
 
-      <div className="flex-1">
+      <div className="flex-1 overflow-y-auto">
         <NavLinks onNavigate={onNavigate} />
       </div>
 
-      <div className="space-y-1 border-t border-border pt-4">
-        <span className="px-1 text-xs text-muted-foreground">Preview as</span>
+      <div className="space-y-0.5 border-t border-border pt-4">
+        <span className="px-1 text-[10px] font-medium uppercase tracking-widest text-muted-foreground/70">
+          Preview as
+        </span>
         <Link
           href="/advertiser"
           onClick={onNavigate}
-          className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-muted-foreground transition hover:bg-accent hover:text-foreground"
+          className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
         >
           <Megaphone className="size-4 shrink-0" /> Advertiser app
         </Link>
         <Link
           href="/host"
           onClick={onNavigate}
-          className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-muted-foreground transition hover:bg-accent hover:text-foreground"
+          className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
         >
           <Store className="size-4 shrink-0" /> Host app
         </Link>
@@ -192,17 +242,15 @@ export function AdminNav({
   return (
     <>
       {/* Desktop sidebar */}
-      <aside className="hidden w-64 shrink-0 border-r border-border md:block">
+      <aside className="hidden w-64 shrink-0 border-r border-border bg-card/30 md:block">
         <div className="sticky top-0 h-screen">
           <SidebarBody profile={profile} territory={territory} />
         </div>
       </aside>
 
       {/* Mobile top bar */}
-      <div className="flex items-center justify-between border-b border-border p-3 md:hidden">
-        <Link href="/admin" className="text-base font-semibold tracking-tight">
-          Loop<span className="text-primary"> Network</span>
-        </Link>
+      <div className="sticky top-0 z-40 flex items-center justify-between border-b border-border bg-background/85 px-3 py-2.5 backdrop-blur md:hidden">
+        <Wordmark />
         <Sheet open={open} onOpenChange={setOpen}>
           <SheetTrigger render={<Button variant="outline" size="icon" />}>
             <Menu className="size-4" />

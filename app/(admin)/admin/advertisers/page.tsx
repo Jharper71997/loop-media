@@ -53,8 +53,46 @@ export default async function AdvertisersPage() {
         description={`${advertisers.length} advertiser${advertisers.length === 1 ? '' : 's'}`}
       />
 
-      <div className="p-6">
-        <div className="rounded-lg border border-border">
+      <div className="p-5 md:p-6">
+        {/* Mobile cards */}
+        <div className="space-y-2.5 md:hidden">
+          {advertisers.length === 0 && (
+            <p className="rounded-xl border border-border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
+              No advertisers yet.
+            </p>
+          )}
+          {advertisers.map((a) => {
+            const counts = adsByOwner.get(a.id) ?? { total: 0, active: 0 }
+            return (
+              <Link
+                key={a.id}
+                href={`/admin/advertisers/${a.id}`}
+                className="block rounded-xl border border-border bg-card p-4"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="truncate font-medium">{a.full_name ?? '—'}</div>
+                    <div className="truncate text-xs text-muted-foreground">{a.email}</div>
+                  </div>
+                  {counts.active > 0 ? (
+                    <Badge>{counts.active} active</Badge>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">0 active</span>
+                  )}
+                </div>
+                <div className="mt-2 flex flex-wrap gap-x-4 text-xs text-muted-foreground">
+                  <span>
+                    {counts.total} ad{counts.total === 1 ? '' : 's'}
+                  </span>
+                  <span>Joined {formatDateTime(a.created_at)}</span>
+                </div>
+              </Link>
+            )
+          })}
+        </div>
+
+        {/* Desktop table */}
+        <div className="hidden rounded-lg border border-border md:block">
           <Table>
             <TableHeader>
               <TableRow>

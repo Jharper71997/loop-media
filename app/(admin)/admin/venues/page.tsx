@@ -57,8 +57,45 @@ export default async function VenuesPage() {
         }
       />
 
-      <div className="p-6">
-        <div className="rounded-lg border border-border">
+      <div className="p-5 md:p-6">
+        {/* Mobile cards */}
+        <div className="space-y-2.5 md:hidden">
+          {rows.length === 0 && (
+            <p className="rounded-xl border border-border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
+              No venues yet. Add your first location.
+            </p>
+          )}
+          {rows.map((v) => (
+            <div key={v.id} className="rounded-xl border border-border bg-card p-4">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <div className="font-medium">{v.name}</div>
+                  {v.venue_type && (
+                    <div className="text-xs text-muted-foreground">{v.venue_type}</div>
+                  )}
+                </div>
+                <Badge variant={v.status === 'active' ? 'default' : 'secondary'}>{v.status}</Badge>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                <span>{v.category?.name ?? '—'}</span>
+                {!t && <span>{v.territory?.name ?? '—'}</span>}
+                <span>{formatNumber(v.foot_traffic_estimate)}/mo</span>
+              </div>
+              <div className="mt-3 flex justify-end gap-1">
+                <VenueDialog
+                  venue={v}
+                  categories={cats}
+                  territories={territories}
+                  defaultTerritoryId={t ?? ''}
+                />
+                <DeleteButton id={v.id} action={deleteVenue} />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Desktop table */}
+        <div className="hidden rounded-lg border border-border md:block">
           <Table>
             <TableHeader>
               <TableRow>

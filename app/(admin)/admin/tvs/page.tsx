@@ -57,8 +57,41 @@ export default async function TvsPage() {
         action={<TvDialog venues={venues} />}
       />
 
-      <div className="p-6">
-        <div className="rounded-lg border border-border">
+      <div className="p-5 md:p-6">
+        {/* Mobile cards */}
+        <div className="space-y-2.5 md:hidden">
+          {rows.length === 0 && (
+            <p className="rounded-xl border border-border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
+              No TVs yet. Create one and share its pairing code.
+            </p>
+          )}
+          {rows.map((tv) => (
+            <div key={tv.id} className="rounded-xl border border-border bg-card p-4">
+              <div className="flex items-start justify-between gap-2">
+                <Link href={`/admin/tvs/${tv.id}`} className="font-medium hover:underline">
+                  {tv.venue?.name ?? '—'}
+                </Link>
+                <Badge variant={STATUS_VARIANT[tv.status]}>{tv.status}</Badge>
+              </div>
+              <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                <code className="rounded bg-muted px-2 py-1 font-mono">{tv.pairing_code ?? '—'}</code>
+                <span>
+                  · {Math.round(tv.loop_length_seconds / 60)}m / {tv.slot_seconds}s
+                </span>
+              </div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                Last seen {timeAgo(tv.last_heartbeat_at)}
+              </div>
+              <div className="mt-3 flex justify-end gap-1">
+                <RegenerateButton id={tv.id} />
+                <DeleteButton id={tv.id} action={deleteTv} />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Desktop table */}
+        <div className="hidden rounded-lg border border-border md:block">
           <Table>
             <TableHeader>
               <TableRow>

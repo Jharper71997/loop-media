@@ -35,7 +35,7 @@ export default async function QueuePage() {
         description={`${ads.length} ad${ads.length === 1 ? '' : 's'} awaiting review`}
       />
 
-      <div className="p-6">
+      <div className="p-5 md:p-6">
         {ads.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border py-16 text-center text-muted-foreground">
             🎉 Nothing to review. The queue is empty.
