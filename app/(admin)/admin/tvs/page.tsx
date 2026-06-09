@@ -4,6 +4,8 @@ import { getTerritoryContext } from '@/lib/territory'
 import { createClient } from '@/lib/supabase/server'
 import { PageHeader } from '@/components/admin/PageHeader'
 import { DeleteButton } from '@/components/admin/DeleteButton'
+import { LiveStatus } from '@/components/app/LiveStatus'
+import { AutoRefresh } from '@/components/app/AutoRefresh'
 import {
   Table,
   TableBody,
@@ -12,20 +14,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Badge } from '@/components/ui/badge'
-import { timeAgo } from '@/lib/format'
+import { timeAgo, isTvLive } from '@/lib/format'
 import type { Tv } from '@/lib/db.types'
 import { TvDialog } from './TvDialog'
 import { RegenerateButton } from './RegenerateButton'
 import { deleteTv } from './actions'
 
 type TvRow = Tv & { venue: { name: string } | null }
-
-const STATUS_VARIANT = {
-  online: 'default',
-  offline: 'destructive',
-  unpaired: 'secondary',
-} as const
 
 export default async function TvsPage() {
   const profile = await requireAdmin()
@@ -40,6 +35,7 @@ export default async function TvsPage() {
   const venueIds = venues.map((v) => v.id)
 
   let rows: TvRow[] = []
+  const adsByTv = new Map<string, number>()
   if (venueIds.length) {
     const { data } = await supabase
       .from('tvs')
@@ -47,13 +43,26 @@ export default async function TvsPage() {
       .in('venue_id', venueIds)
       .order('created_at', { ascending: false })
     rows = (data ?? []) as TvRow[]
+
+    const tvIds = rows.map((r) => r.id)
+    if (tvIds.length) {
+      const { data: pl } = await supabase
+        .from('ad_placements')
+        .select('tv_id')
+        .in('tv_id', tvIds)
+        .eq('status', 'active')
+      for (const p of pl ?? []) adsByTv.set(p.tv_id, (adsByTv.get(p.tv_id) ?? 0) + 1)
+    }
   }
+
+  const liveCount = rows.filter((r) => !!r.device_id && isTvLive(r.last_heartbeat_at)).length
 
   return (
     <>
+      <AutoRefresh seconds={20} />
       <PageHeader
         title="TVs"
-        description={`${rows.length} screen${rows.length === 1 ? '' : 's'}`}
+        description={`${liveCount} of ${rows.length} screen${rows.length === 1 ? '' : 's'} live now`}
         action={<TvDialog venues={venues} />}
       />
 
@@ -71,7 +80,11 @@ export default async function TvsPage() {
                 <Link href={`/admin/tvs/${tv.id}`} className="font-medium hover:underline">
                   {tv.venue?.name ?? '—'}
                 </Link>
-                <Badge variant={STATUS_VARIANT[tv.status]}>{tv.status}</Badge>
+                <LiveStatus
+                  lastHeartbeat={tv.last_heartbeat_at}
+                  paired={!!tv.device_id}
+                  adsRunning={adsByTv.get(tv.id) ?? 0}
+                />
               </div>
               <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
                 <code className="rounded bg-muted px-2 py-1 font-mono">{tv.pairing_code ?? '—'}</code>
@@ -124,7 +137,11 @@ export default async function TvsPage() {
                     </code>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={STATUS_VARIANT[tv.status]}>{tv.status}</Badge>
+                    <LiveStatus
+                      lastHeartbeat={tv.last_heartbeat_at}
+                      paired={!!tv.device_id}
+                      adsRunning={adsByTv.get(tv.id) ?? 0}
+                    />
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {timeAgo(tv.last_heartbeat_at)}

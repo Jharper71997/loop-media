@@ -22,6 +22,14 @@ export function formatDateTime(iso: string | null): string {
   })
 }
 
+// A screen is "live" only if it checked in recently. The TV posts a heartbeat
+// every 30s; allow ~3 misses before we call it offline. (The stored `status`
+// enum is unreliable — nothing flips it back to offline — so trust the clock.)
+export function isTvLive(lastHeartbeat: string | null): boolean {
+  if (!lastHeartbeat) return false
+  return Date.now() - new Date(lastHeartbeat).getTime() < 95_000
+}
+
 // e.g. "2 minutes ago" / "3 days ago"; used for TV last-heartbeat freshness.
 export function timeAgo(iso: string | null): string {
   if (!iso) return 'never'

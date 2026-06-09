@@ -1,14 +1,15 @@
 import Link from 'next/link'
-import { Tv as TvIcon, MapPin, Megaphone, Wifi, WifiOff, PlugZap, Percent } from 'lucide-react'
+import { Tv as TvIcon, MapPin, Megaphone, Percent } from 'lucide-react'
 import { requireProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
-import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { formatNumber, timeAgo } from '@/lib/format'
+import { formatNumber, timeAgo, isTvLive } from '@/lib/format'
 import type { Tv, Venue } from '@/lib/db.types'
 import { OnboardingTour } from '@/components/app/OnboardingTour'
+import { LiveStatus } from '@/components/app/LiveStatus'
+import { AutoRefresh } from '@/components/app/AutoRefresh'
 
 type VenueWithTvs = Venue & {
   tvs: Tv[]
@@ -23,17 +24,6 @@ type RunningPlacement = {
 }
 
 const PROMO_SLOTS = 2
-
-function tvStatusBadge(status: Tv['status']) {
-  switch (status) {
-    case 'online':
-      return { label: 'Online', cls: 'bg-emerald-600', Icon: Wifi }
-    case 'offline':
-      return { label: 'Offline', cls: 'bg-zinc-600', Icon: WifiOff }
-    default:
-      return { label: 'Not paired', cls: 'bg-amber-600', Icon: PlugZap }
-  }
-}
 
 export default async function HostHome() {
   const profile = await requireProfile()
@@ -70,12 +60,13 @@ export default async function HostHome() {
     .neq('status', 'rejected')
 
   const allTvs = venues.flatMap((v) => v.tvs)
-  const onlineCount = allTvs.filter((t) => t.status === 'online').length
+  const onlineCount = allTvs.filter((t) => isTvLive(t.last_heartbeat_at)).length
   const totalTraffic = venues.reduce((s, v) => s + (v.foot_traffic_estimate ?? 0), 0)
 
   return (
     <div className="space-y-8">
       <OnboardingTour role="host" />
+      <AutoRefresh seconds={20} />
       <div>
         <h1 className="font-heading text-2xl font-bold tracking-tight">Your venue</h1>
         <p className="text-sm text-muted-foreground">
@@ -153,35 +144,29 @@ export default async function HostHome() {
                     {v.tvs.length === 0 ? (
                       <p className="text-sm text-muted-foreground">No screens set up here yet.</p>
                     ) : (
-                      v.tvs.map((t) => {
-                        const b = tvStatusBadge(t.status)
-                        return (
-                          <div
-                            key={t.id}
-                            className="flex items-center justify-between rounded-lg border border-border px-3 py-2"
-                          >
-                            <div className="flex items-center gap-2 text-sm">
-                              <TvIcon className="size-4 text-muted-foreground" />
-                              <span>
-                                {t.status === 'unpaired' && t.pairing_code ? (
-                                  <>
-                                    Pairing code{' '}
-                                    <code className="rounded bg-muted px-1 py-0.5 font-mono">
-                                      {t.pairing_code}
-                                    </code>
-                                  </>
-                                ) : (
-                                  `Last check-in ${timeAgo(t.last_heartbeat_at)}`
-                                )}
-                              </span>
-                            </div>
-                            <Badge className={cn('gap-1', b.cls)}>
-                              <b.Icon className="size-3" />
-                              {b.label}
-                            </Badge>
+                      v.tvs.map((t) => (
+                        <div
+                          key={t.id}
+                          className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2"
+                        >
+                          <div className="flex items-center gap-2 text-sm">
+                            <TvIcon className="size-4 text-muted-foreground" />
+                            <span>
+                              {!t.device_id && t.pairing_code ? (
+                                <>
+                                  Pairing code{' '}
+                                  <code className="rounded bg-muted px-1 py-0.5 font-mono">
+                                    {t.pairing_code}
+                                  </code>
+                                </>
+                              ) : (
+                                `Last check-in ${timeAgo(t.last_heartbeat_at)}`
+                              )}
+                            </span>
                           </div>
-                        )
-                      })
+                          <LiveStatus lastHeartbeat={t.last_heartbeat_at} paired={!!t.device_id} />
+                        </div>
+                      ))
                     )}
                   </div>
                 </CardContent>
