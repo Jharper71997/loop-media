@@ -6,21 +6,24 @@ import { createClient } from '@/lib/supabase/server'
 import { PageHeader } from '@/components/admin/PageHeader'
 import { DeleteButton } from '@/components/admin/DeleteButton'
 import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { formatDateTime, timeAgo } from '@/lib/format'
+import { formatDateTime, timeAgo, formatNumber } from '@/lib/format'
+import { LiveStatus } from '@/components/app/LiveStatus'
+import { AutoRefresh } from '@/components/app/AutoRefresh'
 import type { Tv } from '@/lib/db.types'
 import { RegenerateButton } from '../RegenerateButton'
 import { deleteTv } from '../actions'
 import { TvLoopControls, RemovePlacementButton, AddPlacement } from './TvControls'
 
-const STATUS_VARIANT = {
-  online: 'default',
-  offline: 'destructive',
-  unpaired: 'secondary',
-} as const
-
 type TvFull = Tv & {
   venue: { id: string; name: string; territory_id: string } | null
+}
+
+function formatDuration(seconds: number): string {
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  if (h > 0) return `${h}h ${m}m`
+  if (m > 0) return `${m}m`
+  return `${seconds}s`
 }
 
 export default async function TvDetail({ params }: { params: Promise<{ id: string }> }) {
@@ -89,6 +92,36 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
   const used = placements.length
   const open = Math.max(0, maxSlots - used)
 
+  // ---- proof of play: uptime today + ad plays today/this month ----
+  const todayStr = new Date().toISOString().slice(0, 10)
+  const monthStart = todayStr.slice(0, 8) + '01'
+  const [{ data: up }, { data: plays }] = await Promise.all([
+    supabase.from('tv_uptime_days').select('seconds').eq('tv_id', id).eq('day', todayStr).maybeSingle(),
+    supabase.from('ad_plays').select('ad_id, played_at').eq('tv_id', id).gte('played_at', monthStart),
+  ])
+  const uptimeToday = (up as { seconds: number } | null)?.seconds ?? 0
+  const playRows = (plays ?? []) as { ad_id: string; played_at: string }[]
+  const byAd = new Map<string, { today: number; month: number }>()
+  for (const p of playRows) {
+    const e = byAd.get(p.ad_id) ?? { today: 0, month: 0 }
+    e.month += 1
+    if (p.played_at.slice(0, 10) === todayStr) e.today += 1
+    byAd.set(p.ad_id, e)
+  }
+  const playsTodayTotal = playRows.filter((p) => p.played_at.slice(0, 10) === todayStr).length
+  // Titles for any ad that has plays (may include ads no longer on the loop).
+  const playAdIds = [...byAd.keys()]
+  const adTitle = new Map<string, string>()
+  for (const p of placements) if (p.ad) adTitle.set(p.ad.id, p.ad.title)
+  const missingTitles = playAdIds.filter((aid) => !adTitle.has(aid))
+  if (missingTitles.length) {
+    const { data: titleRows } = await supabase.from('ads').select('id, title').in('id', missingTitles)
+    for (const a of titleRows ?? []) adTitle.set(a.id, a.title)
+  }
+  const playList = playAdIds
+    .map((aid) => ({ id: aid, title: adTitle.get(aid) ?? 'Ad', ...byAd.get(aid)! }))
+    .sort((a, b) => b.month - a.month)
+
   return (
     <>
       <PageHeader
@@ -102,7 +135,8 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
         }
       />
 
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-5 md:p-6">
+        <AutoRefresh seconds={20} />
         <Link
           href="/admin/tvs"
           className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
@@ -110,40 +144,81 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
           <ArrowLeft className="size-4" /> All TVs
         </Link>
 
-        {/* Status + pairing */}
+        {/* Status + live metrics */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardContent className="p-5">
               <p className="text-sm text-muted-foreground">Status</p>
-              <div className="mt-1">
-                <Badge variant={STATUS_VARIANT[tv.status]}>{tv.status}</Badge>
+              <div className="mt-2">
+                <LiveStatus
+                  lastHeartbeat={tv.last_heartbeat_at}
+                  paired={!!tv.device_id}
+                  adsRunning={used}
+                />
               </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Last seen {timeAgo(tv.last_heartbeat_at)}
+              </p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-5">
-              <p className="text-sm text-muted-foreground">Pairing code</p>
-              <code className="mt-1 inline-block rounded bg-muted px-2 py-1 font-mono text-sm">
-                {tv.pairing_code ?? '—'}
-              </code>
+              <p className="text-sm text-muted-foreground">On today</p>
+              <p className="mt-1 font-heading text-2xl font-bold tabular-nums">
+                {formatDuration(uptimeToday)}
+              </p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-5">
-              <p className="text-sm text-muted-foreground">Last heartbeat</p>
-              <p className="mt-1 font-medium">{timeAgo(tv.last_heartbeat_at)}</p>
+              <p className="text-sm text-muted-foreground">Ads shown today</p>
+              <p className="mt-1 font-heading text-2xl font-bold tabular-nums">
+                {formatNumber(playsTodayTotal)}
+              </p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-5">
               <p className="text-sm text-muted-foreground">Slot fill</p>
-              <p className="mt-1 text-2xl font-semibold tabular-nums">
+              <p className="mt-1 font-heading text-2xl font-bold tabular-nums">
                 {used}/{maxSlots}
               </p>
-              <p className="text-xs text-muted-foreground">{open} open</p>
+              <p className="text-xs text-muted-foreground">
+                {open} open · code{' '}
+                <code className="rounded bg-muted px-1 font-mono">{tv.pairing_code ?? '—'}</code>
+              </p>
             </CardContent>
           </Card>
         </div>
+
+        {/* Plays per ad */}
+        <Card>
+          <CardContent className="space-y-3 p-5">
+            <p className="text-sm font-medium">Times shown per ad</p>
+            {playList.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No plays logged yet. Counts appear here as the screen runs the loop.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {playList.map((p) => (
+                  <div
+                    key={p.id}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-border/60 px-3 py-2.5"
+                  >
+                    <span className="min-w-0 truncate font-medium">{p.title}</span>
+                    <span className="shrink-0 text-sm text-muted-foreground tabular-nums">
+                      <span className="font-medium text-foreground">{formatNumber(p.today)}</span> today
+                      {' · '}
+                      <span className="font-medium text-foreground">{formatNumber(p.month)}</span> this
+                      month
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         <p className="text-xs text-muted-foreground">
           Device {tv.device_id ?? 'not paired'} · Last sync {formatDateTime(tv.last_sync_at)} ·

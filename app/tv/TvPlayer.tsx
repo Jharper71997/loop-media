@@ -249,6 +249,18 @@ function Player({ deviceId, onUnpair }: { deviceId: string; onUnpair: () => void
     }
   }, [slide, index, playlist.length])
 
+  // Proof of play: log each time an ad slide becomes active.
+  useEffect(() => {
+    if (!slide || slide.kind !== 'ad') return
+    fetch('/api/tv/play', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ device_id: deviceId, ad_id: slide.id }),
+      keepalive: true,
+    }).catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [index, deviceId])
+
   const advance = () => setIndex((i) => (i + 1) % Math.max(playlist.length, 1))
 
   if (fatal) return <Splash>{fatal}</Splash>

@@ -9,9 +9,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Missing device_id.' }, { status: 400 })
   }
   const supabase = createAdminClient()
-  await supabase
+  const { data: tv } = await supabase
     .from('tvs')
     .update({ status: 'online', last_heartbeat_at: new Date().toISOString() })
     .eq('device_id', device)
+    .select('id')
+    .maybeSingle()
+  // Heartbeat fires every ~30s; add that to the screen's uptime for the day.
+  if (tv) await supabase.rpc('bump_tv_uptime', { p_tv: tv.id, p_secs: 30 })
   return NextResponse.json({ ok: true })
 }
