@@ -7,7 +7,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { buttonVariants } from '@/components/ui/button'
 import { StepHeader } from '@/components/app/StepHeader'
 import { StickyCta } from '@/components/app/StickyCta'
-import { formatCents, formatNumber } from '@/lib/format'
+import { formatCents } from '@/lib/format'
 import { quoteCart, TIER_LABEL, MIN_MONTHLY_CENTS, type QuoteOptions } from '@/lib/pricing'
 import { CART_KEY } from '../browse/BrowseClient'
 import type { CartVenue } from './types'
@@ -67,9 +67,7 @@ export function ReviewStep({
             <CardContent className="flex items-center justify-between gap-3 p-3.5">
               <div className="min-w-0">
                 <div className="truncate font-medium">{v.name}</div>
-                <div className="text-xs text-muted-foreground">
-                  {TIER_LABEL[v.tier]} · {formatNumber(v.footTraffic)}/mo
-                </div>
+                <div className="text-xs text-muted-foreground">{TIER_LABEL[v.tier]}</div>
               </div>
               <div className="flex items-center gap-3">
                 <span className="font-heading font-bold tabular-nums">

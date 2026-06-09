@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Card, CardContent } from '@/components/ui/card'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { formatNumber, timeAgo, isTvLive } from '@/lib/format'
+import { timeAgo, isTvLive } from '@/lib/format'
 import type { Tv, Venue } from '@/lib/db.types'
 import { OnboardingTour } from '@/components/app/OnboardingTour'
 import { LiveStatus } from '@/components/app/LiveStatus'
@@ -61,7 +61,6 @@ export default async function HostHome() {
 
   const allTvs = venues.flatMap((v) => v.tvs)
   const onlineCount = allTvs.filter((t) => isTvLive(t.last_heartbeat_at)).length
-  const totalTraffic = venues.reduce((s, v) => s + (v.foot_traffic_estimate ?? 0), 0)
 
   return (
     <div className="space-y-8">
@@ -89,7 +88,7 @@ export default async function HostHome() {
       ) : (
         <>
           {/* Summary tiles */}
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2">
             <Card>
               <CardContent className="p-5">
                 <p className="text-sm text-muted-foreground">Screens online</p>
@@ -100,12 +99,6 @@ export default async function HostHome() {
                     / {allTvs.length}
                   </span>
                 </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-5">
-                <p className="text-sm text-muted-foreground">Est. monthly foot traffic</p>
-                <p className="text-2xl font-semibold">{formatNumber(totalTraffic)}</p>
               </CardContent>
             </Card>
             <Card>
@@ -135,9 +128,6 @@ export default async function HostHome() {
                         {v.category?.name && <span>· {v.category.name}</span>}
                       </p>
                     </div>
-                    <span className="text-xs text-muted-foreground">
-                      ~{formatNumber(v.foot_traffic_estimate ?? 0)} visitors/mo
-                    </span>
                   </div>
 
                   <div className="mt-4 space-y-2">

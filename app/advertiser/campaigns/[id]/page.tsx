@@ -301,7 +301,7 @@ export default async function CampaignDetail({
                 ))}
               </div>
               <p className="mt-3 text-xs text-muted-foreground">
-                Impressions are estimated from each venue&apos;s foot traffic. QR scans are measured.
+                Ad views are an estimate of how many times your ad is seen. QR scans are measured.
               </p>
             </CardContent>
           </Card>

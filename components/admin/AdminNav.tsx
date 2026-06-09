@@ -18,6 +18,7 @@ import {
   Megaphone,
   Menu,
   LogOut,
+  UserCircle,
   type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -215,12 +216,19 @@ function SidebarBody({
 
       <div className="border-t border-border pt-4">
         <p className="truncate px-2 text-xs text-muted-foreground">{profile.email}</p>
+        <Link
+          href="/admin/account"
+          onClick={onNavigate}
+          className="mt-1 flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        >
+          <UserCircle className="size-4 shrink-0" /> Account
+        </Link>
         <form action="/auth/signout" method="post">
           <Button
             type="submit"
             variant="ghost"
             size="sm"
-            className="mt-1 w-full justify-start text-muted-foreground"
+            className="w-full justify-start text-muted-foreground"
           >
             <LogOut className="size-4" /> Sign out
           </Button>

@@ -30,7 +30,6 @@ export function RegisterVenueForm({
   const [territoryId, setTerritoryId] = useState(markets[0]?.id ?? '')
   const [categoryId, setCategoryId] = useState<string | null>(null)
   const [venueType, setVenueType] = useState('')
-  const [footTraffic, setFootTraffic] = useState(0)
   const [phone, setPhone] = useState('')
   const [pending, start] = useTransition()
 
@@ -45,7 +44,7 @@ export function RegisterVenueForm({
         territory_id: territoryId,
         category_id: categoryId,
         venue_type: venueType || null,
-        foot_traffic_estimate: footTraffic,
+        foot_traffic_estimate: 0,
         contact_phone: phone || null,
       })
       if (res.error) {
@@ -125,17 +124,6 @@ export function RegisterVenueForm({
             placeholder="e.g. Coffee shop, Gym"
           />
         </div>
-
-        <div className="space-y-1.5">
-          <Label>Est. monthly visitors</Label>
-          <Input
-            type="number"
-            min={0}
-            step={100}
-            value={footTraffic}
-            onChange={(e) => setFootTraffic(Number(e.target.value) || 0)}
-          />
-        </div>
       </div>
 
       <div className="space-y-1.5">
@@ -149,8 +137,8 @@ export function RegisterVenueForm({
       </div>
 
       <p className="text-xs text-muted-foreground">
-        We&apos;ll verify your details, confirm foot traffic, and ship a paired screen. You&apos;ll
-        see it on your dashboard once it&apos;s live.
+        We&apos;ll verify your details and ship a paired screen. You&apos;ll see it on your
+        dashboard once it&apos;s live.
       </p>
 
       <Button type="submit" size="lg" disabled={pending}>

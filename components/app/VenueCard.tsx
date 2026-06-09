@@ -4,7 +4,7 @@ import { Plus, Check, Bell, BellRing } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { formatNumber, formatCents } from '@/lib/format'
+import { formatCents } from '@/lib/format'
 import { TIER_LABEL, type PriceTier } from '@/lib/pricing'
 
 export type VenueCardData = {
@@ -51,7 +51,7 @@ export function VenueCard({
       <div className="min-w-0">
         <div className="truncate font-medium">{venue.name}</div>
         <div className="mt-0.5 text-xs text-muted-foreground">
-          {TIER_LABEL[venue.tier]} · {formatNumber(venue.foot_traffic_estimate)}/mo
+          {TIER_LABEL[venue.tier]}
         </div>
         <div className="mt-1 font-heading text-lg font-bold tabular-nums">
           {formatCents(venue.priceCents)}

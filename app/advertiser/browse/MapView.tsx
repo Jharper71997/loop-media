@@ -61,9 +61,7 @@ export default function MapView({
                 <div style={{ minWidth: 170 }}>
                   <strong>{v.name}</strong>
                   <br />
-                  <span style={{ color: '#666' }}>
-                    {TIER_LABEL[v.tier]} · {v.foot_traffic_estimate.toLocaleString()} visits/mo
-                  </span>
+                  <span style={{ color: '#666' }}>{TIER_LABEL[v.tier]}</span>
                   <br />
                   <span style={{ fontSize: 16, fontWeight: 700 }}>{formatCents(v.priceCents)}</span>
                   <span style={{ color: '#666' }}>/mo</span>

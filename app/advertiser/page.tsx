@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Plus, ImageOff, Lock, Gift, Sparkles } from 'lucide-react'
+import { Plus, ImageOff, Lock, Gift, Sparkles, MapPin, Trash2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { requireProfile } from '@/lib/auth'
 import { Badge } from '@/components/ui/badge'
@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils'
 import { loyaltyCredits } from '@/lib/pricing'
 import { resolveAdvertiserContext } from '@/lib/pricing.server'
 import { OnboardingTour } from '@/components/app/OnboardingTour'
+import AdsMap, { type AdsMapVenue } from './AdsMap'
 
 type CampaignRow = {
   id: string
@@ -42,16 +43,59 @@ function statusLabel(c: CampaignRow): {
 export default async function AdvertiserDashboard() {
   const profile = await requireProfile()
   const supabase = await createClient()
-  const [{ data }, ctx] = await Promise.all([
+  const [{ data }, { count: trashedCount }, ctx] = await Promise.all([
     supabase
       .from('campaigns')
       .select(
         '*, ad:ads(title, status, creative_type, creative_url, rejection_reason), targets:campaign_targets(count), subscription:subscriptions(status)'
       )
+      .is('deleted_at', null)
       .order('created_at', { ascending: false }),
+    supabase
+      .from('campaigns')
+      .select('id', { count: 'exact', head: true })
+      .not('deleted_at', 'is', null),
     resolveAdvertiserContext(profile.id),
   ])
   const campaigns = (data ?? []) as CampaignRow[]
+
+  // Where the advertiser's ads physically are right now — drives the top map.
+  const campaignMeta = new Map(
+    campaigns.map((c) => [c.id, { title: c.ad?.title ?? 'Untitled', live: c.status === 'active' }])
+  )
+  let mapVenues: AdsMapVenue[] = []
+  if (campaigns.length) {
+    const { data: placementsData } = await supabase
+      .from('ad_placements')
+      .select('campaign_id, tv:tvs(venue:venues(id, name, lat, lng))')
+      .in('campaign_id', [...campaignMeta.keys()])
+      .neq('status', 'ended')
+    type PRow = {
+      campaign_id: string | null
+      tv: { venue: { id: string; name: string; lat: number | null; lng: number | null } | null } | null
+    }
+    const byVenue = new Map<string, AdsMapVenue>()
+    for (const p of (placementsData ?? []) as unknown as PRow[]) {
+      const v = p.tv?.venue
+      const meta = p.campaign_id ? campaignMeta.get(p.campaign_id) : null
+      if (!v || !meta) continue
+      const entry: AdsMapVenue =
+        byVenue.get(v.id) ?? { id: v.id, name: v.name, lat: v.lat, lng: v.lng, ads: [] }
+      if (!entry.ads.some((a) => a.title === meta.title && a.live === meta.live))
+        entry.ads.push({ title: meta.title, live: meta.live })
+      byVenue.set(v.id, entry)
+    }
+    mapVenues = [...byVenue.values()]
+  }
+  const geoVenues = mapVenues.filter((v) => v.lat != null && v.lng != null)
+  const center: [number, number] = geoVenues.length
+    ? [
+        geoVenues.reduce((s, v) => s + (v.lat as number), 0) / geoVenues.length,
+        geoVenues.reduce((s, v) => s + (v.lng as number), 0) / geoVenues.length,
+      ]
+    : [34.7541, -77.4302]
+  const liveVenueCount = geoVenues.filter((v) => v.ads.some((a) => a.live)).length
+
   const credits = loyaltyCredits({
     monthsActive: ctx.monthsActive,
     screensRunning: ctx.screensRunning,
@@ -79,13 +123,43 @@ export default async function AdvertiserDashboard() {
       <OnboardingTour role="advertiser" />
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-heading text-2xl font-bold tracking-tight">Your campaigns</h1>
-          <p className="text-sm text-muted-foreground">Reach customers on screens across town.</p>
+          <h1 className="font-heading text-2xl font-bold tracking-tight">Your ads</h1>
+          <p className="text-sm text-muted-foreground">See exactly where your ads are playing.</p>
         </div>
         <Link href="/advertiser/browse" className={buttonVariants()}>
           <Plus className="size-4" /> New campaign
         </Link>
       </div>
+
+      {/* Map first — where the ads physically are */}
+      {geoVenues.length > 0 ? (
+        <div className="space-y-2">
+          <AdsMap venues={mapVenues} center={center} />
+          <div className="flex items-center gap-2 px-1 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block size-2.5 rounded-full bg-emerald-500" /> Live now
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block size-2.5 rounded-full bg-gray-400" /> Paused
+            </span>
+            <span className="ml-auto">
+              {liveVenueCount} location{liveVenueCount === 1 ? '' : 's'} live
+            </span>
+          </div>
+        </div>
+      ) : (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+            <MapPin className="size-7 text-muted-foreground" />
+            <p className="max-w-xs text-sm text-muted-foreground">
+              Once your ad is approved and running, this map shows exactly which screens it&apos;s on.
+            </p>
+            <Link href="/advertiser/browse" className={buttonVariants()}>
+              <Plus className="size-4" /> Pick screens on the map
+            </Link>
+          </CardContent>
+        </Card>
+      )}
 
       {(perks.length > 0 || nextMilestone) && (
         <Card className="border-primary/30 bg-primary/5">
@@ -102,9 +176,21 @@ export default async function AdvertiserDashboard() {
         </Card>
       )}
 
+      <div className="flex items-center justify-between">
+        <h2 className="font-heading text-lg font-semibold">Campaigns</h2>
+        {(trashedCount ?? 0) > 0 && (
+          <Link
+            href="/advertiser/trash"
+            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+          >
+            <Trash2 className="size-4" /> Trash ({trashedCount})
+          </Link>
+        )}
+      </div>
+
       {campaigns.length === 0 ? (
         <Card>
-          <CardContent className="flex flex-col items-center gap-4 py-16 text-center">
+          <CardContent className="flex flex-col items-center gap-4 py-12 text-center">
             <p className="text-muted-foreground">
               No campaigns yet. Build one off the map in a couple of minutes.
             </p>
