@@ -18,10 +18,8 @@ import { requestVenue } from './actions'
 const NO_CATEGORY = 'none'
 
 export function RegisterVenueForm({
-  markets,
   categories,
 }: {
-  markets: { id: string; name: string }[]
   categories: { id: string; name: string }[]
 }) {
   const router = useRouter()
@@ -30,7 +28,6 @@ export function RegisterVenueForm({
   const [city, setCity] = useState('')
   const [stateVal, setStateVal] = useState('')
   const [zip, setZip] = useState('')
-  const [territoryId, setTerritoryId] = useState(markets[0]?.id ?? '')
   const [categoryId, setCategoryId] = useState<string | null>(null)
   const [venueType, setVenueType] = useState('')
   const [phone, setPhone] = useState('')
@@ -39,7 +36,7 @@ export function RegisterVenueForm({
   function onSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!name.trim()) return toast.error('Enter your venue name.')
-    if (!territoryId) return toast.error('Pick your city.')
+    if (!city.trim() || !stateVal.trim()) return toast.error('Enter your city and state.')
     start(async () => {
       const res = await requestVenue({
         name,
@@ -47,7 +44,6 @@ export function RegisterVenueForm({
         city,
         state: stateVal,
         postal_code: zip,
-        territory_id: territoryId,
         category_id: categoryId,
         venue_type: venueType || null,
         foot_traffic_estimate: 0,
@@ -99,24 +95,6 @@ export function RegisterVenueForm({
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-1.5">
-          <Label>City / market</Label>
-          <Select value={territoryId} onValueChange={(v) => setTerritoryId(v ?? '')}>
-            <SelectTrigger className="w-full">
-              <SelectValue>
-                {(v: string | null) => markets.find((m) => m.id === v)?.name ?? 'Select city'}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {markets.map((m) => (
-                <SelectItem key={m.id} value={m.id}>
-                  {m.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
         <div className="space-y-1.5">
           <Label>Venue category</Label>
           <Select

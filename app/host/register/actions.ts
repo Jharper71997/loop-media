@@ -11,11 +11,41 @@ export interface RegisterVenueInput {
   city: string
   state: string
   postal_code: string
-  territory_id: string
   category_id: string | null
   venue_type: string | null
   foot_traffic_estimate: number
   contact_phone: string | null
+}
+
+function slugify(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+}
+
+// A host can register a venue in ANY US city. The "market" (territory) is
+// derived from the city + state they entered and created on the fly if it's
+// new, so they're never limited to a pre-seeded list. Returns the territory id.
+async function findOrCreateTerritory(
+  admin: ReturnType<typeof createAdminClient>,
+  city: string,
+  state: string
+): Promise<string | null> {
+  const name = `${city.trim()}, ${state.trim().toUpperCase()}`
+  const slug = slugify(name)
+  const { data: existing } = await admin
+    .from('territories')
+    .select('id')
+    .eq('slug', slug)
+    .maybeSingle()
+  if (existing) return existing.id
+  const { data: created } = await admin
+    .from('territories')
+    .insert({ name, slug, is_holding: false, status: 'active' })
+    .select('id')
+    .maybeSingle()
+  return created?.id ?? null
 }
 
 // A host self-registers their venue. `venues` is admin-write under RLS, so this
@@ -28,7 +58,13 @@ export async function requestVenue(input: RegisterVenueInput) {
     return { error: 'Only host accounts can register a venue.' }
   }
   if (!input.name.trim()) return { error: 'Enter your venue name.' }
-  if (!input.territory_id) return { error: 'Pick your city.' }
+  if (!input.city.trim() || !input.state.trim()) {
+    return { error: 'Enter your city and state.' }
+  }
+
+  const admin = createAdminClient()
+  const territoryId = await findOrCreateTerritory(admin, input.city, input.state)
+  if (!territoryId) return { error: 'Could not set up your city. Try again.' }
 
   const geo = await geocodeAddress({
     street: input.address,
@@ -37,9 +73,8 @@ export async function requestVenue(input: RegisterVenueInput) {
     zip: input.postal_code,
   })
 
-  const admin = createAdminClient()
   const { error } = await admin.from('venues').insert({
-    territory_id: input.territory_id,
+    territory_id: territoryId,
     name: input.name.trim(),
     address: input.address.trim() || null,
     city: input.city.trim() || null,

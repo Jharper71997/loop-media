@@ -9,11 +9,7 @@ export default async function RegisterVenuePage() {
   await requireProfile()
   const supabase = await createClient()
 
-  const [{ data: terr }, { data: cats }] = await Promise.all([
-    supabase.from('territories').select('id, name').eq('is_holding', false).eq('status', 'active').order('name'),
-    supabase.from('categories').select('id, name').order('name'),
-  ])
-  const markets = (terr ?? []) as { id: string; name: string }[]
+  const { data: cats } = await supabase.from('categories').select('id, name').order('name')
   const categories = (cats ?? []) as { id: string; name: string }[]
 
   return (
@@ -35,7 +31,7 @@ export default async function RegisterVenuePage() {
 
       <Card>
         <CardContent className="p-6">
-          <RegisterVenueForm markets={markets} categories={categories} />
+          <RegisterVenueForm categories={categories} />
         </CardContent>
       </Card>
     </div>
