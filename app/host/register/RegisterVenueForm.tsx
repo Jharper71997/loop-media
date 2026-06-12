@@ -121,11 +121,11 @@ export function RegisterVenueForm({
         </div>
 
         <div className="space-y-1.5">
-          <Label>Venue type (label)</Label>
+          <Label>Specific type (optional)</Label>
           <Input
             value={venueType}
             onChange={(e) => setVenueType(e.target.value)}
-            placeholder="e.g. Coffee shop, Gym"
+            placeholder="e.g. Sports bar, CrossFit gym"
           />
         </div>
       </div>
@@ -141,8 +141,8 @@ export function RegisterVenueForm({
       </div>
 
       <p className="text-xs text-muted-foreground">
-        We&apos;ll verify your details and ship a paired screen. You&apos;ll see it on your
-        dashboard once it&apos;s live.
+        No hardware to ship, you use a TV you already have. After we verify your details, your
+        dashboard gives you a pairing code and steps to open the loop on your venue&apos;s screen.
       </p>
 
       <Button type="submit" size="lg" disabled={pending}>

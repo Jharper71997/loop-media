@@ -11,6 +11,9 @@ import { OnboardingTour } from '@/components/app/OnboardingTour'
 import { LiveStatus } from '@/components/app/LiveStatus'
 import { AutoRefresh } from '@/components/app/AutoRefresh'
 import { AddScreenButton } from './AddScreenButton'
+import { TvSetupSteps } from './TvSetupSteps'
+
+const TV_URL = `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/tv`
 
 type VenueWithTvs = Venue & {
   tvs: Tv[]
@@ -87,8 +90,8 @@ export default async function HostHome() {
         <Card>
           <CardContent className="flex flex-col items-center gap-4 p-8 text-center">
             <p className="text-sm text-muted-foreground">
-              No venue is linked to your account yet. Register your space and we&apos;ll get a
-              screen set up — you&apos;ll also unlock 2 free promo slots.
+              No venue is linked to your account yet. Register your space to run the loop on your
+              own TV, you&apos;ll also unlock 2 free promo slots.
             </p>
             <Link href="/host/register" className={buttonVariants()}>
               <MapPin className="size-4" /> Register your venue
@@ -147,29 +150,30 @@ export default async function HostHome() {
                         No screens set up here yet. Add one to get a pairing code.
                       </p>
                     ) : (
-                      v.tvs.map((t) => (
-                        <div
-                          key={t.id}
-                          className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2"
-                        >
-                          <div className="flex items-center gap-2 text-sm">
-                            <TvIcon className="size-4 text-muted-foreground" />
-                            <span>
-                              {!t.device_id && t.pairing_code ? (
-                                <>
-                                  Pairing code{' '}
-                                  <code className="rounded bg-muted px-1 py-0.5 font-mono">
-                                    {t.pairing_code}
-                                  </code>
-                                </>
-                              ) : (
-                                `Last check-in ${timeAgo(t.last_heartbeat_at)}`
-                              )}
-                            </span>
+                      v.tvs.map((t) =>
+                        !t.device_id && t.pairing_code ? (
+                          <div key={t.id} className="space-y-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <TvIcon className="size-4" /> New screen, not paired yet
+                              </span>
+                              <LiveStatus lastHeartbeat={t.last_heartbeat_at} paired={false} />
+                            </div>
+                            <TvSetupSteps code={t.pairing_code} tvUrl={TV_URL} />
                           </div>
-                          <LiveStatus lastHeartbeat={t.last_heartbeat_at} paired={!!t.device_id} />
-                        </div>
-                      ))
+                        ) : (
+                          <div
+                            key={t.id}
+                            className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2"
+                          >
+                            <div className="flex items-center gap-2 text-sm">
+                              <TvIcon className="size-4 text-muted-foreground" />
+                              <span>{`Last check-in ${timeAgo(t.last_heartbeat_at)}`}</span>
+                            </div>
+                            <LiveStatus lastHeartbeat={t.last_heartbeat_at} paired={!!t.device_id} />
+                          </div>
+                        )
+                      )
                     )}
                   </div>
                 </CardContent>

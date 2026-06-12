@@ -126,7 +126,7 @@ function Pairing({ onPaired }: { onPaired: (deviceId: string) => void }) {
           autoFocus
           value={code}
           onChange={(e) => setCode(e.target.value.toUpperCase())}
-          placeholder="LN-XXXXX"
+          placeholder="LM-XXXXX"
           className="w-80 rounded-xl border border-white/15 bg-white/5 px-6 py-5 text-center text-3xl tracking-widest uppercase outline-none focus:border-[#d4af37]"
         />
         <button
@@ -140,8 +140,8 @@ function Pairing({ onPaired }: { onPaired: (deviceId: string) => void }) {
         {error && <p className="text-red-400">{error}</p>}
       </form>
       <p className="mt-10 max-w-md text-center text-sm text-white/40">
-        Enter the pairing code from your Loop Network admin. The code is shown on
-        the TVs page next to this venue.
+        Enter the pairing code from your Loop Network dashboard. It&apos;s shown under your venue,
+        next to this screen.
       </p>
     </div>
   )
