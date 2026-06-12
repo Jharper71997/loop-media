@@ -4,28 +4,31 @@ import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import { formatCents } from '@/lib/format'
 import { TIER_LABEL } from '@/lib/pricing'
+import { US_CENTER, US_ZOOM } from '@/lib/geo'
+import { MapFitBounds } from '@/components/app/MapFitBounds'
 import type { BrowseVenue } from './BrowseClient'
 
 // CircleMarkers (vector) avoid Leaflet's default-icon asset issues in bundlers.
 export default function MapView({
   venues,
-  center,
   cart,
   waitlisted,
   onToggle,
   onNotify,
 }: {
   venues: BrowseVenue[]
-  center: [number, number]
   cart: string[]
   waitlisted: Set<string>
   onToggle: (id: string) => void
   onNotify: (v: BrowseVenue) => void
 }) {
+  const points = venues
+    .filter((v) => v.lat != null && v.lng != null)
+    .map((v) => [v.lat as number, v.lng as number] as [number, number])
   return (
     <MapContainer
-      center={center}
-      zoom={12}
+      center={US_CENTER}
+      zoom={US_ZOOM}
       scrollWheelZoom={false}
       className="h-[40vh] min-h-64 w-full overflow-hidden rounded-xl"
     >
@@ -33,6 +36,7 @@ export default function MapView({
         attribution="&copy; OpenStreetMap contributors"
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
+      <MapFitBounds points={points} />
       {venues
         .filter((v) => v.lat != null && v.lng != null)
         .map((v) => {
@@ -66,7 +70,11 @@ export default function MapView({
                   <span style={{ fontSize: 16, fontWeight: 700 }}>{formatCents(v.priceCents)}</span>
                   <span style={{ color: '#666' }}>/mo</span>
                   <br />
-                  {v.categoryFull ? (
+                  {v.ownCategory ? (
+                    <span style={{ color: '#6b7280', fontWeight: 600 }}>
+                      Same business — not available
+                    </span>
+                  ) : v.categoryFull ? (
                     <button
                       onClick={() => onNotify(v)}
                       style={btn(waitlisted.has(v.id) ? '#6b7280' : '#111827')}

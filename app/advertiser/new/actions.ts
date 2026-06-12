@@ -40,8 +40,27 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
   if (!input.title.trim()) return { error: 'Give your ad a title.' }
   if (!input.territory_id) return { error: 'Pick a market.' }
 
-  const venueIds = [...new Set((input.venue_ids ?? []).filter(Boolean))]
+  let venueIds = [...new Set((input.venue_ids ?? []).filter(Boolean))]
   if (!venueIds.length) return { error: 'Your cart is empty — pick at least one screen.' }
+
+  const supabase = await createClient()
+
+  // Exclusivity guard (defense-in-depth; the browse map already grays these out):
+  // a venue never runs an ad in its OWN line of business. Drop any picked venue
+  // whose category matches this ad's category.
+  if (input.category_id) {
+    const { data: vCats } = await supabase
+      .from('venues')
+      .select('id, category_id')
+      .in('id', venueIds)
+    const blocked = new Set(
+      (vCats ?? []).filter((v) => v.category_id === input.category_id).map((v) => v.id)
+    )
+    venueIds = venueIds.filter((id) => !blocked.has(id))
+    if (!venueIds.length) {
+      return { error: "Those screens are in your own line of business — competitors can't advertise there. Pick different screens." }
+    }
+  }
 
   // Authoritative re-price from the DB (never trust a client total). Volume,
   // host (20%), and loyalty discounts + free-screen credits are applied here
@@ -49,8 +68,6 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
   const ctx = await resolveAdvertiserContext(profile.id)
   const { totalCents, tiers, quote } = await resolveCartCents(venueIds, contextToQuoteOptions(ctx))
   if (!tiers.length) return { error: 'None of the selected screens are available anymore.' }
-
-  const supabase = await createClient()
 
   const { data: ad, error: adErr } = await supabase
     .from('ads')

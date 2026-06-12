@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Plus, ImageOff, Lock, Gift, Sparkles, MapPin, Trash2 } from 'lucide-react'
+import { Plus, ImageOff, Lock, Gift, Sparkles, MapPin, Trash2, Archive } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { requireProfile } from '@/lib/auth'
 import { Badge } from '@/components/ui/badge'
@@ -43,18 +43,24 @@ function statusLabel(c: CampaignRow): {
 export default async function AdvertiserDashboard() {
   const profile = await requireProfile()
   const supabase = await createClient()
-  const [{ data }, { count: trashedCount }, ctx] = await Promise.all([
+  const [{ data }, { count: trashedCount }, { count: archivedCount }, ctx] = await Promise.all([
     supabase
       .from('campaigns')
       .select(
         '*, ad:ads(title, status, creative_type, creative_url, rejection_reason), targets:campaign_targets(count), subscription:subscriptions(status)'
       )
       .is('deleted_at', null)
+      .is('archived_at', null)
       .order('created_at', { ascending: false }),
     supabase
       .from('campaigns')
       .select('id', { count: 'exact', head: true })
+      .is('archived_at', null)
       .not('deleted_at', 'is', null),
+    supabase
+      .from('campaigns')
+      .select('id', { count: 'exact', head: true })
+      .not('archived_at', 'is', null),
     resolveAdvertiserContext(profile.id),
   ])
   const campaigns = (data ?? []) as CampaignRow[]
@@ -177,15 +183,25 @@ export default async function AdvertiserDashboard() {
       )}
 
       <div className="flex items-center justify-between">
-        <h2 className="font-heading text-lg font-semibold">Campaigns</h2>
-        {(trashedCount ?? 0) > 0 && (
-          <Link
-            href="/advertiser/trash"
-            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-          >
-            <Trash2 className="size-4" /> Trash ({trashedCount})
-          </Link>
-        )}
+        <h2 className="font-heading text-lg font-semibold">Running now</h2>
+        <div className="flex items-center gap-4">
+          {(archivedCount ?? 0) > 0 && (
+            <Link
+              href="/advertiser/past"
+              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+            >
+              <Archive className="size-4" /> Past campaigns ({archivedCount})
+            </Link>
+          )}
+          {(trashedCount ?? 0) > 0 && (
+            <Link
+              href="/advertiser/trash"
+              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+            >
+              <Trash2 className="size-4" /> Trash ({trashedCount})
+            </Link>
+          )}
+        </div>
       </div>
 
       {campaigns.length === 0 ? (

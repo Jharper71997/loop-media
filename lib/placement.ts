@@ -100,15 +100,23 @@ export async function placeCampaign(
   }
   const venues = (venuesData ?? []) as unknown as V[]
 
-  // If the advertiser hand-picked venues, restrict to that set. Defensive: if the
-  // campaign_targets table doesn't exist yet, the query errors and we fall back to
-  // auto-place across all eligible venues (original behavior).
+  // Target-driven: an ad runs ONLY on the screens the advertiser picked
+  // (campaign_targets). No targets = nothing to place (admins assign manually).
   const { data: targetRows } = await admin
     .from('campaign_targets')
     .select('venue_id')
     .eq('campaign_id', campaignId)
   const targetIds = new Set((targetRows ?? []).map((r) => r.venue_id))
-  const scopedVenues = targetIds.size ? venues.filter((v) => targetIds.has(v.id)) : venues
+  if (!targetIds.size) return empty('No screens selected', goal)
+  const scopedVenues = venues.filter((v) => targetIds.has(v.id))
+
+  // Admin overrides: screens an admin pulled this campaign off of. The engine
+  // must not re-add them (that's the point of the manual override).
+  const { data: exclRows } = await admin
+    .from('placement_exclusions')
+    .select('tv_id')
+    .eq('campaign_id', campaignId)
+  const excludedTvs = new Set((exclRows ?? []).map((r) => r.tv_id))
 
   // One read of active placements gives us slot occupancy per TV, which TVs this
   // campaign already runs on, and per-venue category occupancy (distinct OTHER
@@ -144,6 +152,10 @@ export async function placeCampaign(
   type Candidate = { tvId: string; venueId: string; traffic: number; slot: number }
   const candidates: Candidate[] = []
   for (const v of scopedVenues) {
+    // Venue-own-category exclusivity: a venue never shows an ad in its OWN line
+    // of business (a barbershop can't run a barber's ad). Absolute, regardless
+    // of slots — protects the host from direct competitors on their screens.
+    if (ad.category_id && ad.category_id === v.category_id) continue
     // Per-venue category exclusivity: if this ad has a category, the venue can
     // hold at most category_slots DISTINCT advertisers of that category. This
     // advertiser is always allowed to (re)fill its own slot.
@@ -154,6 +166,7 @@ export async function placeCampaign(
     }
     for (const t of v.tvs ?? []) {
       if (myTvs.has(t.id)) continue // already running here
+      if (excludedTvs.has(t.id)) continue // admin pulled this campaign off this screen
       const maxSlots = Math.max(1, Math.floor((t.loop_length_seconds || 360) / (t.slot_seconds || 15)))
       const used = usedByTv.get(t.id) ?? 0
       if (used >= maxSlots) continue // loop full
@@ -181,7 +194,8 @@ export async function placeCampaign(
       capReached = true
       break
     }
-    if (goal > 0 && est >= goal) break
+    // Target-driven: fill every free slot at the picked venues (no goal-based
+    // early stop). screen_cap above is the only ceiling, and carts have none.
     rows.push({
       ad_id: ad.id,
       tv_id: c.tvId,

@@ -24,14 +24,12 @@ const MapCanvas = dynamic(() => import('./MapCanvas').then((m) => m.MapCanvas), 
 
 export function AdminMap({
   venues,
-  center,
   advertisers,
   coverage,
   territoryId,
   caps,
 }: {
   venues: VenuePin[]
-  center: [number, number]
   advertisers: { id: string; name: string }[]
   coverage: Record<string, string[]>
   territoryId: string | null
@@ -42,7 +40,7 @@ export function AdminMap({
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-      <MapCanvas venues={venues} center={center} highlightIds={highlightIds} />
+      <MapCanvas venues={venues} highlightIds={highlightIds} />
 
       <div className="space-y-4">
         {/* Advertiser coverage */}
@@ -116,6 +114,9 @@ export function AdminMap({
             </p>
             <p>
               <span style={{ color: '#d4a333' }}>●</span> selected advertiser&apos;s coverage
+            </p>
+            <p>
+              <span style={{ color: '#d4a333' }}>◌</span> pending venue (added, not yet verified)
             </p>
             <p>Bigger dot = fuller ad loop.</p>
           </CardContent>

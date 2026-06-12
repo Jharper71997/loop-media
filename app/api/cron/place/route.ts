@@ -2,9 +2,12 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { placeCampaign } from '@/lib/placement'
 
-// Nightly recompute: re-run the placement engine for every active campaign so
-// approved ads fill any newly-available / higher-traffic screens up to their
-// goal. Protected by CRON_SECRET (Vercel cron sends it as a Bearer token).
+// Nightly recompute: re-run the placement engine for every active campaign.
+// Placement is target-driven — an ad only fills the screens the advertiser
+// picked (campaign_targets) — so this just backfills newly-available slots at
+// those picked venues (e.g. a screen added to a venue they already chose). It
+// never sprays to un-picked screens and respects admin overrides
+// (placement_exclusions). Protected by CRON_SECRET (Vercel sends it as Bearer).
 // Manual run: curl -H "Authorization: Bearer $CRON_SECRET" .../api/cron/place
 export const dynamic = 'force-dynamic'
 

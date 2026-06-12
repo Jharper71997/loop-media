@@ -336,6 +336,25 @@ function Player({ deviceId, onUnpair }: { deviceId: string; onUnpair: () => void
           <span className="rounded-full bg-amber-500/20 px-2 py-1 text-amber-300">offline · cached</span>
         )}
       </div>
+
+      {/* Which screen this is + an unpair control. Subtle until hovered so it
+          doesn't intrude on the display, but always reachable. */}
+      <div className="group absolute top-3 right-3 flex items-center gap-2 opacity-30 transition-opacity hover:opacity-100">
+        {venueName && (
+          <span className="rounded-full bg-black/60 px-2.5 py-1 text-xs text-white/70">
+            {venueName}
+          </span>
+        )}
+        <button
+          onClick={() => {
+            if (window.confirm('Unpair this screen? It will return to the pairing code entry.'))
+              onUnpair()
+          }}
+          className="rounded-full bg-black/60 px-2.5 py-1 text-xs text-white/70 hover:bg-black/80 hover:text-white"
+        >
+          Unpair
+        </button>
+      </div>
     </div>
   )
 }

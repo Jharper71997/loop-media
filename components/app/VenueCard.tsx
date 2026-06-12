@@ -14,6 +14,7 @@ export type VenueCardData = {
   priceCents: number
   foot_traffic_estimate: number
   categoryFull: boolean
+  ownCategory: boolean
   open: number
 }
 
@@ -60,7 +61,13 @@ export function VenueCard({
       </div>
 
       <div className="shrink-0">
-        {venue.categoryFull ? (
+        {venue.ownCategory ? (
+          // Same line of business as the venue — competitors are never allowed,
+          // so there's nothing to wait for.
+          <Badge variant="secondary" title="A venue won't run ads from its own line of business.">
+            Same business
+          </Badge>
+        ) : venue.categoryFull ? (
           <Button
             variant={waitlisted ? 'secondary' : 'outline'}
             size="sm"

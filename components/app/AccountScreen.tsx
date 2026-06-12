@@ -8,9 +8,11 @@ import { cn } from '@/lib/utils'
 export function AccountScreen({
   email,
   role,
+  links,
 }: {
   email: string
   role: 'advertiser' | 'host' | 'admin'
+  links?: { href: string; label: string }[]
 }) {
   const roleLabel = role === 'host' ? 'Venue host' : role === 'admin' ? 'Admin' : 'Advertiser'
   return (
@@ -30,6 +32,16 @@ export function AccountScreen({
           </div>
         </CardContent>
       </Card>
+
+      {links?.map((l) => (
+        <Link
+          key={l.href}
+          href={l.href}
+          className={cn(buttonVariants({ variant: 'outline', size: 'lg' }), 'w-full')}
+        >
+          {l.label}
+        </Link>
+      ))}
 
       {role === 'admin' && (
         <Link

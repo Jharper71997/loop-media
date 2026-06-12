@@ -14,6 +14,7 @@ import {
 import type { Category } from '@/lib/db.types'
 import { AddCategory } from './AddCategory'
 import { CapInput } from './CapInput'
+import { CategoryRequests, type CategoryRequest } from './CategoryRequests'
 import { deleteCategory } from './actions'
 
 export default async function CategoriesPage() {
@@ -24,6 +25,26 @@ export default async function CategoriesPage() {
 
   const { data: cats } = await supabase.from('categories').select('*').order('name')
   const categories = (cats ?? []) as Category[]
+
+  // Pending "Other" requests from advertisers.
+  const { data: reqData } = await supabase
+    .from('category_requests')
+    .select('id, proposed_name, created_at, advertiser:profiles(email, full_name)')
+    .eq('status', 'pending')
+    .order('created_at', { ascending: false })
+  const requests: CategoryRequest[] = (
+    (reqData ?? []) as unknown as {
+      id: string
+      proposed_name: string
+      created_at: string
+      advertiser: { email: string; full_name: string | null } | null
+    }[]
+  ).map((r) => ({
+    id: r.id,
+    proposed_name: r.proposed_name,
+    created_at: r.created_at,
+    requested_by: r.advertiser?.full_name ?? r.advertiser?.email ?? 'someone',
+  }))
 
   const capByCat = new Map<string, number>()
   if (t) {
@@ -49,6 +70,8 @@ export default async function CategoriesPage() {
       />
 
       <div className="space-y-4 p-6">
+        <CategoryRequests requests={requests} />
+
         {!t && (
           <p className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
             Select a single territory in the sidebar to view and edit its

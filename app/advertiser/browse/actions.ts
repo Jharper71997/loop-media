@@ -26,6 +26,25 @@ export async function joinWaitlist(
   return { ok: true }
 }
 
+// "Other" — the advertiser's business type isn't in the catalog. Record it for
+// admin review (they approve → it becomes a real category, or dismiss).
+export async function requestCategory(
+  name: string
+): Promise<{ ok?: boolean; error?: string }> {
+  const profile = await requireProfile()
+  if (profile.role !== 'advertiser' && profile.role !== 'admin') {
+    return { error: 'Only advertisers can request a category.' }
+  }
+  const trimmed = name.trim()
+  if (!trimmed) return { error: 'Tell us what you sell.' }
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('category_requests')
+    .insert({ advertiser_id: profile.id, proposed_name: trimmed })
+  if (error) return { error: error.message }
+  return { ok: true }
+}
+
 export async function leaveWaitlist(
   venueId: string,
   categoryId: string | null

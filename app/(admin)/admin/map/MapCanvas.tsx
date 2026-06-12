@@ -3,6 +3,8 @@
 import Link from 'next/link'
 import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
+import { US_CENTER, US_ZOOM } from '@/lib/geo'
+import { MapFitBounds } from '@/components/app/MapFitBounds'
 
 export type VenuePin = {
   id: string
@@ -17,6 +19,7 @@ export type VenuePin = {
   unpaired: number
   capacity: number
   used: number
+  pending?: boolean
 }
 
 // Vector CircleMarkers (avoids Leaflet's default-icon bundler issues). When a
@@ -24,19 +27,19 @@ export type VenuePin = {
 // otherwise venues are colored by aggregate screen status.
 export function MapCanvas({
   venues,
-  center,
   highlightIds,
 }: {
   venues: VenuePin[]
-  center: [number, number]
   highlightIds: string[] | null
 }) {
   const highlight = highlightIds ? new Set(highlightIds) : null
+  const geo = venues.filter((v) => v.lat != null && v.lng != null)
+  const points = geo.map((v) => [v.lat as number, v.lng as number] as [number, number])
 
   return (
     <MapContainer
-      center={center}
-      zoom={12}
+      center={US_CENTER}
+      zoom={US_ZOOM}
       scrollWheelZoom
       className="h-[70vh] w-full overflow-hidden rounded-lg"
     >
@@ -44,13 +47,14 @@ export function MapCanvas({
         attribution="&copy; OpenStreetMap contributors"
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
-      {venues
-        .filter((v) => v.lat != null && v.lng != null)
-        .map((v) => {
+      <MapFitBounds points={points} />
+      {geo.map((v) => {
+          // Pending (unverified) venues show as a dashed gold ring so a newly
+          // added location is visible before it's activated.
           const statusColor =
             v.online > 0 ? '#10b981' : v.offline > 0 ? '#ef4444' : '#71717a'
-          let color = statusColor
-          let opacity = 0.6
+          let color = v.pending ? '#d4a333' : statusColor
+          let opacity = v.pending ? 0.15 : 0.6
           if (highlight) {
             if (highlight.has(v.id)) color = '#d4a333'
             else {
@@ -65,10 +69,17 @@ export function MapCanvas({
               key={v.id}
               center={[v.lat as number, v.lng as number]}
               radius={radius}
-              pathOptions={{ color, fillColor: color, fillOpacity: opacity, weight: 2 }}
+              pathOptions={{
+                color,
+                fillColor: color,
+                fillOpacity: opacity,
+                weight: 2,
+                dashArray: v.pending ? '4 3' : undefined,
+              }}
             >
               <Popup>
                 <strong>{v.name}</strong>
+                {v.pending && <span style={{ color: '#b8860b' }}> · pending</span>}
                 <br />
                 {v.category ?? '—'}
                 <br />

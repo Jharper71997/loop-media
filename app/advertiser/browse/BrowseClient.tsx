@@ -3,16 +3,17 @@
 import { useMemo, useState, useEffect, useTransition } from 'react'
 import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
-import { ChevronRight, Store } from 'lucide-react'
+import { ChevronRight, Store, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { StepHeader } from '@/components/app/StepHeader'
 import { StickyCta } from '@/components/app/StickyCta'
 import { VenueCard } from '@/components/app/VenueCard'
 import { formatCents } from '@/lib/format'
 import { quoteCart, volumeDiscount, type PriceTier, type QuoteOptions } from '@/lib/pricing'
-import { joinWaitlist, leaveWaitlist } from './actions'
+import { joinWaitlist, leaveWaitlist, requestCategory } from './actions'
 
 export type BrowseVenue = {
   id: string
@@ -28,6 +29,7 @@ export type BrowseVenue = {
   capacity: number
   open: number
   categoryFull: boolean
+  ownCategory: boolean
   waitlisted: boolean
 }
 
@@ -41,14 +43,6 @@ const MapView = dynamic(() => import('./MapView'), {
     </div>
   ),
 })
-
-function center(venues: BrowseVenue[]): [number, number] {
-  const pts = venues.filter((v) => v.lat != null && v.lng != null)
-  if (!pts.length) return [34.7541, -77.4302] // Jacksonville, NC
-  const lat = pts.reduce((s, v) => s + (v.lat as number), 0) / pts.length
-  const lng = pts.reduce((s, v) => s + (v.lng as number), 0) / pts.length
-  return [lat, lng]
-}
 
 export function BrowseClient({
   venues,
@@ -72,6 +66,7 @@ export function BrowseClient({
   const [waitlisted, setWaitlisted] = useState<Set<string>>(
     () => new Set(venues.filter((v) => v.waitlisted).map((v) => v.id))
   )
+  const [catQuery, setCatQuery] = useState('')
   const [pending, start] = useTransition()
 
   useEffect(() => {
@@ -168,20 +163,71 @@ export function BrowseClient({
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-3">
-          {categories.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => go({ cat: c.id })}
-              className="flex min-h-20 flex-col items-start justify-between rounded-xl border border-border bg-card p-4 text-left transition hover:border-primary/50 active:scale-[0.99]"
-            >
-              <Store className="size-5 text-primary" />
-              <span className="font-medium leading-tight">{c.name}</span>
-            </button>
-          ))}
+        <div className="relative">
+          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            autoFocus
+            value={catQuery}
+            onChange={(e) => setCatQuery(e.target.value)}
+            placeholder="Search your business type…"
+            className="pl-9"
+          />
         </div>
 
-        <Button variant="outline" size="lg" className="w-full" onClick={() => go({ cat: 'all' })}>
+        {(() => {
+          const q = catQuery.trim().toLowerCase()
+          const matches = q ? categories.filter((c) => c.name.toLowerCase().includes(q)) : categories
+          const exact = categories.some((c) => c.name.toLowerCase() === q)
+          return (
+            <>
+              {matches.length > 0 && (
+                <div className="grid grid-cols-2 gap-3">
+                  {matches.map((c) => (
+                    <button
+                      key={c.id}
+                      onClick={() => go({ cat: c.id })}
+                      className="flex min-h-20 flex-col items-start justify-between rounded-xl border border-border bg-card p-4 text-left transition hover:border-primary/50 active:scale-[0.99]"
+                    >
+                      <Store className="size-5 text-primary" />
+                      <span className="font-medium leading-tight">{c.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Not in the catalog → request it (needs Loop Network approval). */}
+              {q && !exact && (
+                <Button
+                  variant="outline"
+                  size="lg"
+                  className="w-full"
+                  disabled={pending}
+                  onClick={() =>
+                    start(async () => {
+                      const res = await requestCategory(catQuery)
+                      if (res.error) {
+                        toast.error(res.error)
+                        return
+                      }
+                      toast.success(
+                        `Thanks — we'll review "${catQuery.trim()}" and add it. Browsing all screens for now.`
+                      )
+                      go({ cat: 'all' })
+                    })
+                  }
+                >
+                  Other: add &ldquo;{catQuery.trim()}&rdquo; (needs our approval)
+                </Button>
+              )}
+
+              {matches.length === 0 && !q && (
+                <p className="text-sm text-muted-foreground">No categories yet.</p>
+              )}
+            </>
+          )
+        })()}
+
+        <Button variant="ghost" size="lg" className="w-full" onClick={() => go({ cat: 'all' })}>
           Not sure yet — show me everything
         </Button>
       </div>
@@ -218,7 +264,6 @@ export function BrowseClient({
         <>
           <MapView
             venues={venues}
-            center={center(venues)}
             cart={cart}
             waitlisted={waitlisted}
             onToggle={toggle}

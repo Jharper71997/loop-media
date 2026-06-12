@@ -63,6 +63,9 @@ export interface Venue {
   territory_id: string
   name: string
   address: string | null
+  city: string | null
+  state: string | null
+  postal_code: string | null
   lat: number | null
   lng: number | null
   venue_type: string | null
@@ -137,6 +140,8 @@ export interface Campaign {
   screen_cap_override: number | null
   monthly_total_cents: number | null
   status: CampaignStatus
+  deleted_at: string | null
+  archived_at: string | null
   created_at: string
   updated_at: string
 }

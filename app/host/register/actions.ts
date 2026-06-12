@@ -8,6 +8,9 @@ import { geocodeAddress } from '@/lib/geocode'
 export interface RegisterVenueInput {
   name: string
   address: string
+  city: string
+  state: string
+  postal_code: string
   territory_id: string
   category_id: string | null
   venue_type: string | null
@@ -27,13 +30,21 @@ export async function requestVenue(input: RegisterVenueInput) {
   if (!input.name.trim()) return { error: 'Enter your venue name.' }
   if (!input.territory_id) return { error: 'Pick your city.' }
 
-  const geo = await geocodeAddress(input.address)
+  const geo = await geocodeAddress({
+    street: input.address,
+    city: input.city,
+    state: input.state,
+    zip: input.postal_code,
+  })
 
   const admin = createAdminClient()
   const { error } = await admin.from('venues').insert({
     territory_id: input.territory_id,
     name: input.name.trim(),
     address: input.address.trim() || null,
+    city: input.city.trim() || null,
+    state: input.state.trim() || null,
+    postal_code: input.postal_code.trim() || null,
     lat: geo?.lat ?? null,
     lng: geo?.lng ?? null,
     venue_type: input.venue_type?.trim() || null,

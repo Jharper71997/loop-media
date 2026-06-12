@@ -5,25 +5,26 @@ import { PageHeader } from '@/components/admin/PageHeader'
 import { AdminMap } from './AdminMap'
 import type { VenuePin } from './MapCanvas'
 
-const FALLBACK_CENTER: [number, number] = [34.7541, -77.4302] // Jacksonville, NC
-
 export default async function MapPage() {
   const profile = await requireAdmin()
   const territory = await getTerritoryContext(profile)
   const t = territory.activeId
   const supabase = await createClient()
 
+  // Active AND pending (inactive) venues — so a newly added location is visible
+  // on the map right away (shown as pending until an admin verifies it).
   let venueQ = supabase
     .from('venues')
     .select(
-      'id, name, lat, lng, foot_traffic_estimate, category:categories(name), tvs(id, status, loop_length_seconds, slot_seconds)'
+      'id, name, status, lat, lng, foot_traffic_estimate, category:categories(name), tvs(id, status, loop_length_seconds, slot_seconds)'
     )
-    .eq('status', 'active')
+    .in('status', ['active', 'inactive'])
   if (t) venueQ = venueQ.eq('territory_id', t)
   const { data: venueData } = await venueQ
   type VRow = {
     id: string
     name: string
+    status: string
     lat: number | null
     lng: number | null
     foot_traffic_estimate: number
@@ -92,17 +93,9 @@ export default async function MapPage() {
       unpaired: v.tvs.filter((tv) => tv.status === 'unpaired').length,
       capacity,
       used: usedByVenue.get(v.id) ?? 0,
+      pending: v.status !== 'active',
     }
   })
-
-  // Center on the mean of geolocated venues.
-  const geo = venues.filter((v) => v.lat != null && v.lng != null)
-  const center: [number, number] = geo.length
-    ? [
-        geo.reduce((s, v) => s + (v.lat as number), 0) / geo.length,
-        geo.reduce((s, v) => s + (v.lng as number), 0) / geo.length,
-      ]
-    : FALLBACK_CENTER
 
   // Category caps panel (only meaningful for a single territory).
   const { data: catData } = await supabase.from('categories').select('id, name').order('name')
@@ -136,7 +129,6 @@ export default async function MapPage() {
         ) : (
           <AdminMap
             venues={venues}
-            center={center}
             advertisers={advertisers}
             coverage={coverage}
             territoryId={t}

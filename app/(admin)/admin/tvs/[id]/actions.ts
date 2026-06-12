@@ -26,15 +26,34 @@ export async function updateTvLoop(
   return { error: null as string | null }
 }
 
-// Pull an ad off this screen (kept in history as ended; frees its slot).
+// Pull an ad off this screen (kept in history as ended; frees its slot). Also
+// record an exclusion so the placement engine won't just re-add it on its next
+// run (the override has to stick). See migration 0013.
 export async function removePlacement(placementId: string, tvId: string) {
   await requireAdmin()
   const supabase = await createClient()
+
+  // Grab the campaign before ending so we can exclude this campaign↔tv pair.
+  const { data: pl } = await supabase
+    .from('ad_placements')
+    .select('campaign_id')
+    .eq('id', placementId)
+    .maybeSingle()
+
   const { error } = await supabase
     .from('ad_placements')
     .update({ status: 'ended', end_date: new Date().toISOString().slice(0, 10) })
     .eq('id', placementId)
   if (error) return { error: error.message }
+
+  if (pl?.campaign_id) {
+    await supabase
+      .from('placement_exclusions')
+      .upsert(
+        { campaign_id: pl.campaign_id, tv_id: tvId },
+        { onConflict: 'campaign_id,tv_id', ignoreDuplicates: true }
+      )
+  }
   revalidatePath(`/admin/tvs/${tvId}`)
   return { error: null as string | null }
 }
@@ -85,6 +104,15 @@ export async function addPlacement(tvId: string, adId: string) {
     status: 'active',
   })
   if (error) return { error: error.message }
+
+  // Re-adding clears any prior admin exclusion for this campaign↔tv pair.
+  if (campaignId) {
+    await supabase
+      .from('placement_exclusions')
+      .delete()
+      .eq('campaign_id', campaignId)
+      .eq('tv_id', tvId)
+  }
   revalidatePath(`/admin/tvs/${tvId}`)
   return { error: null as string | null }
 }

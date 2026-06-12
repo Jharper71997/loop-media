@@ -2,6 +2,7 @@
 
 import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
+import { MapFitBounds } from '@/components/app/MapFitBounds'
 
 export type AdsMapVenue = {
   id: string
@@ -22,6 +23,9 @@ export default function AdsMapView({
   venues: AdsMapVenue[]
   center: [number, number]
 }) {
+  const points = venues
+    .filter((v) => v.lat != null && v.lng != null)
+    .map((v) => [v.lat as number, v.lng as number] as [number, number])
   return (
     <MapContainer
       center={center}
@@ -33,6 +37,7 @@ export default function AdsMapView({
         attribution="&copy; OpenStreetMap contributors"
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
+      <MapFitBounds points={points} />
       {venues
         .filter((v) => v.lat != null && v.lng != null)
         .map((v) => {

@@ -134,6 +134,34 @@ export async function trashCampaign(id: string) {
   return { error: null }
 }
 
+// Archive: END the campaign (stop it running + billing, like cancel) and move
+// it into "Past campaigns", where the advertiser reviews how it performed. The
+// record, creative and history stay. Separate from Trash (delete/restore).
+export async function archiveCampaign(id: string) {
+  const c = await ownCampaign(id)
+  if (!c) return { error: 'Campaign not found.' }
+  const admin = createAdminClient()
+  await admin
+    .from('campaigns')
+    .update({ status: 'canceled', archived_at: new Date().toISOString() })
+    .eq('id', id)
+  if (c.ad_id) await admin.from('ads').update({ status: 'paused' }).eq('id', c.ad_id)
+  await admin.from('ad_placements').update({ status: 'ended' }).eq('campaign_id', id)
+  await admin.from('subscriptions').update({ status: 'canceled' }).eq('campaign_id', id)
+
+  const subId = await stripeSubId(admin, id)
+  if (subId && process.env.STRIPE_SECRET_KEY) {
+    try {
+      await stripe().subscriptions.cancel(subId)
+    } catch {
+      /* best effort */
+    }
+  }
+  revalidate(id)
+  revalidatePath('/advertiser/past')
+  return { error: null }
+}
+
 // Bring a campaign back from Trash. It returns to the list as canceled (billing
 // stayed off) — the advertiser can relaunch it from there.
 export async function restoreCampaign(id: string) {

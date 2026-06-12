@@ -30,15 +30,19 @@ import { saveVenue, type VenueInput } from './actions'
 const NO_CATEGORY = 'none'
 const TIERS: PriceTier[] = ['local', 'standard', 'high', 'premium']
 
+const NO_HOST = 'none'
+
 export function VenueDialog({
   venue,
   categories,
   territories,
+  hosts,
   defaultTerritoryId,
 }: {
   venue?: Venue
   categories: Category[]
   territories: Territory[]
+  hosts: { id: string; email: string; full_name: string | null }[]
   defaultTerritoryId: string
 }) {
   const isEdit = !!venue
@@ -50,10 +54,12 @@ export function VenueDialog({
     territory_id: venue?.territory_id ?? defaultTerritoryId ?? territories[0]?.id ?? '',
     name: venue?.name ?? '',
     address: venue?.address ?? '',
-    lat: venue?.lat ?? null,
-    lng: venue?.lng ?? null,
+    city: venue?.city ?? '',
+    state: venue?.state ?? '',
+    postal_code: venue?.postal_code ?? '',
     venue_type: venue?.venue_type ?? '',
     category_id: venue?.category_id ?? null,
+    host_user_id: venue?.host_user_id ?? null,
     foot_traffic_estimate: venue?.foot_traffic_estimate ?? 0,
     price_tier: venue?.price_tier ?? null,
     category_slots: venue?.category_slots ?? 1,
@@ -207,38 +213,65 @@ export function VenueDialog({
             </p>
           </Field>
 
-          <Field label="Address" className="sm:col-span-2">
-            <Input
-              value={form.address}
-              onChange={(e) => set('address', e.target.value)}
-              placeholder="Street, city, state"
-            />
+          <Field label="Host owner" className="sm:col-span-2">
+            <Select
+              value={form.host_user_id ?? NO_HOST}
+              onValueChange={(v) => set('host_user_id', v === NO_HOST ? null : v)}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue>
+                  {(v: string | null) =>
+                    v && v !== NO_HOST
+                      ? (() => {
+                          const h = hosts.find((x) => x.id === v)
+                          return h ? h.full_name ?? h.email : '—'
+                        })()
+                      : 'Unassigned'}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_HOST}>Unassigned</SelectItem>
+                {hosts.map((h) => (
+                  <SelectItem key={h.id} value={h.id}>
+                    {h.full_name ? `${h.full_name} · ${h.email}` : h.email}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <p className="text-xs text-muted-foreground">
-              Coordinates auto-fill from the address. Set them below to place the pin exactly.
+              The host account that owns this venue — they&apos;ll see it on their dashboard.
             </p>
           </Field>
 
-          <Field label="Latitude">
+          <Field label="Street address" className="sm:col-span-2">
             <Input
-              type="number"
-              step="any"
-              value={form.lat ?? ''}
-              placeholder="auto from address"
-              onChange={(e) =>
-                set('lat', e.target.value === '' ? null : Number(e.target.value))
-              }
+              value={form.address}
+              onChange={(e) => set('address', e.target.value)}
+              placeholder="614 Ensign Pl"
             />
+            <p className="text-xs text-muted-foreground">
+              The map pin is set from the address — no coordinates needed.
+            </p>
           </Field>
-          <Field label="Longitude">
-            <Input
-              type="number"
-              step="any"
-              value={form.lng ?? ''}
-              placeholder="auto from address"
-              onChange={(e) =>
-                set('lng', e.target.value === '' ? null : Number(e.target.value))
-              }
-            />
+
+          <Field label="City">
+            <Input value={form.city} onChange={(e) => set('city', e.target.value)} placeholder="Hebron" />
+          </Field>
+          <Field label="State / ZIP">
+            <div className="flex gap-2">
+              <Input
+                value={form.state}
+                onChange={(e) => set('state', e.target.value.toUpperCase())}
+                placeholder="IN"
+                maxLength={2}
+                className="w-20"
+              />
+              <Input
+                value={form.postal_code}
+                onChange={(e) => set('postal_code', e.target.value)}
+                placeholder="46341"
+              />
+            </div>
           </Field>
 
           <Field label="Contact name">

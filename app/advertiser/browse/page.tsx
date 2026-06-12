@@ -113,10 +113,15 @@ export default async function BrowsePage({
       const used = r.tvs.reduce((sum, t) => sum + (usedByTv.get(t.id) ?? 0), 0)
       const open = Math.max(capacity - used, 0)
 
-      // Category exclusivity for the viewer: full when the venue's slots for the
-      // viewer's category are taken by other advertisers.
+      // Venue-own-category exclusivity: a venue never runs an ad in its OWN line
+      // of business (a barbershop blocks barber ads, period). Absolute.
+      const ownCategory = !!activeCat && activeCat === r.category_id
+      // Slots exclusivity: full when the venue's slots for the viewer's category
+      // are taken by OTHER advertisers.
       const catTaken = activeCat ? catOccupancy.get(r.id)?.get(activeCat)?.size ?? 0 : 0
-      const categoryFull = !!activeCat && catTaken >= (r.category_slots ?? 1)
+      const slotsFull = !!activeCat && catTaken >= (r.category_slots ?? 1)
+      // Either reason grays the venue out and blocks adding it.
+      const categoryFull = ownCategory || slotsFull
 
       return {
         id: r.id,
@@ -132,6 +137,7 @@ export default async function BrowsePage({
         capacity,
         open,
         categoryFull,
+        ownCategory,
         waitlisted: waitlisted.has(r.id),
       }
     })

@@ -60,9 +60,13 @@ export default async function VenueDetail({ params }: { params: Promise<{ id: st
   const liveCount = tvs.filter((t) => !!t.device_id && isTvLive(t.last_heartbeat_at)).length
 
   // For the edit dialog.
-  const { data: cats } = await supabase.from('categories').select('*').order('name')
+  const [{ data: cats }, { data: hostProfiles }] = await Promise.all([
+    supabase.from('categories').select('*').order('name'),
+    supabase.from('profiles').select('id, email, full_name').in('role', ['host', 'admin']).order('email'),
+  ])
   const categories = (cats ?? []) as Category[]
   const territories = territoryCtx.territories as Territory[]
+  const hosts = (hostProfiles ?? []) as { id: string; email: string; full_name: string | null }[]
 
   const tier = venueTier(venue)
   const hasContact = venue.contact_name || venue.contact_email || venue.contact_phone
@@ -79,6 +83,7 @@ export default async function VenueDetail({ params }: { params: Promise<{ id: st
               venue={venue}
               categories={categories}
               territories={territories}
+              hosts={hosts}
               defaultTerritoryId={venue.territory_id}
             />
             <DeleteButton id={venue.id} action={deleteVenue} />

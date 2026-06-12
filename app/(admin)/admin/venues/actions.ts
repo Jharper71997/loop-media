@@ -11,10 +11,12 @@ export interface VenueInput {
   territory_id: string
   name: string
   address: string
-  lat: number | null
-  lng: number | null
+  city: string
+  state: string
+  postal_code: string
   venue_type: string
   category_id: string | null
+  host_user_id: string | null
   foot_traffic_estimate: number
   price_tier: PriceTier | null
   category_slots: number
@@ -27,15 +29,21 @@ export interface VenueInput {
 export async function saveVenue(input: VenueInput) {
   await requireAdmin()
   const supabase = await createClient()
-  const { id, ...payload } = input
+  const { id, ...rest } = input
 
-  // Auto-fill coordinates from the address so admins never type lat/lng.
-  if ((payload.lat == null || payload.lng == null) && payload.address?.trim()) {
-    const geo = await geocodeAddress(payload.address)
-    if (geo) {
-      payload.lat = geo.lat
-      payload.lng = geo.lng
-    }
+  // Coordinates come ONLY from the address (no lat/lng inputs). Re-geocode on
+  // every save so editing the address moves the pin.
+  const geo = await geocodeAddress({
+    street: rest.address,
+    city: rest.city,
+    state: rest.state,
+    zip: rest.postal_code,
+  })
+  const payload = {
+    ...rest,
+    host_user_id: rest.host_user_id || null,
+    lat: geo?.lat ?? null,
+    lng: geo?.lng ?? null,
   }
 
   const { error } = id
@@ -44,6 +52,7 @@ export async function saveVenue(input: VenueInput) {
 
   if (error) return { error: error.message }
   revalidatePath('/admin/venues')
+  revalidatePath('/admin/map')
   return { error: null }
 }
 

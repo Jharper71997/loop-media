@@ -42,14 +42,16 @@ export default async function VenuesPage() {
     .order('name')
   if (t) vq = vq.eq('territory_id', t)
 
-  const [{ data: venues }, { data: categories }] = await Promise.all([
+  const [{ data: venues }, { data: categories }, { data: hostProfiles }] = await Promise.all([
     vq,
     supabase.from('categories').select('*').order('name'),
+    supabase.from('profiles').select('id, email, full_name').in('role', ['host', 'admin']).order('email'),
   ])
 
   const rows = (venues ?? []) as VenueRow[]
   const cats = (categories ?? []) as Category[]
   const territories = territory.territories as Territory[]
+  const hosts = (hostProfiles ?? []) as { id: string; email: string; full_name: string | null }[]
 
   return (
     <>
@@ -60,6 +62,7 @@ export default async function VenuesPage() {
           <VenueDialog
             categories={cats}
             territories={territories}
+            hosts={hosts}
             defaultTerritoryId={t ?? ''}
           />
         }
@@ -109,6 +112,7 @@ export default async function VenuesPage() {
                   venue={v}
                   categories={cats}
                   territories={territories}
+                  hosts={hosts}
                   defaultTerritoryId={t ?? ''}
                 />
                 <DeleteButton id={v.id} action={deleteVenue} />
@@ -178,6 +182,7 @@ export default async function VenuesPage() {
                         venue={v}
                         categories={cats}
                         territories={territories}
+                        hosts={hosts}
                         defaultTerritoryId={t ?? ''}
                       />
                       <DeleteButton id={v.id} action={deleteVenue} />

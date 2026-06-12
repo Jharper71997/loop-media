@@ -27,6 +27,9 @@ export function RegisterVenueForm({
   const router = useRouter()
   const [name, setName] = useState('')
   const [address, setAddress] = useState('')
+  const [city, setCity] = useState('')
+  const [stateVal, setStateVal] = useState('')
+  const [zip, setZip] = useState('')
   const [territoryId, setTerritoryId] = useState(markets[0]?.id ?? '')
   const [categoryId, setCategoryId] = useState<string | null>(null)
   const [venueType, setVenueType] = useState('')
@@ -41,6 +44,9 @@ export function RegisterVenueForm({
       const res = await requestVenue({
         name,
         address,
+        city,
+        state: stateVal,
+        postal_code: zip,
         territory_id: territoryId,
         category_id: categoryId,
         venue_type: venueType || null,
@@ -64,12 +70,32 @@ export function RegisterVenueForm({
       </div>
 
       <div className="space-y-1.5">
-        <Label>Address</Label>
+        <Label>Street address</Label>
         <Input
           value={address}
           onChange={(e) => setAddress(e.target.value)}
-          placeholder="Street, city, state"
+          placeholder="614 Ensign Pl"
         />
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-[2fr_1fr_1fr]">
+        <div className="space-y-1.5">
+          <Label>City</Label>
+          <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="Hebron" />
+        </div>
+        <div className="space-y-1.5">
+          <Label>State</Label>
+          <Input
+            value={stateVal}
+            onChange={(e) => setStateVal(e.target.value.toUpperCase())}
+            placeholder="IN"
+            maxLength={2}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label>ZIP</Label>
+          <Input value={zip} onChange={(e) => setZip(e.target.value)} placeholder="46341" />
+        </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">

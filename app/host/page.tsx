@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Tv as TvIcon, MapPin, Megaphone, Percent } from 'lucide-react'
+import { Tv as TvIcon, MapPin, Megaphone, Percent, Plus } from 'lucide-react'
 import { requireProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { Card, CardContent } from '@/components/ui/card'
@@ -10,6 +10,7 @@ import type { Tv, Venue } from '@/lib/db.types'
 import { OnboardingTour } from '@/components/app/OnboardingTour'
 import { LiveStatus } from '@/components/app/LiveStatus'
 import { AutoRefresh } from '@/components/app/AutoRefresh'
+import { AddScreenButton } from './AddScreenButton'
 
 type VenueWithTvs = Venue & {
   tvs: Tv[]
@@ -66,11 +67,20 @@ export default async function HostHome() {
     <div className="space-y-8">
       <OnboardingTour role="host" />
       <AutoRefresh seconds={20} />
-      <div>
-        <h1 className="font-heading text-2xl font-bold tracking-tight">Your venue</h1>
-        <p className="text-sm text-muted-foreground">
-          Screen status, what&apos;s playing right now, and your free promo slots.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="font-heading text-2xl font-bold tracking-tight">
+            {venues.length > 1 ? 'Your venues' : 'Your venue'}
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Screen status, what&apos;s playing right now, and your free promo slots.
+          </p>
+        </div>
+        {venues.length > 0 && (
+          <Link href="/host/register" className={cn(buttonVariants({ variant: 'outline' }), 'shrink-0')}>
+            <Plus className="size-4" /> Add another location
+          </Link>
+        )}
       </div>
 
       {venues.length === 0 ? (
@@ -128,11 +138,14 @@ export default async function HostHome() {
                         {v.category?.name && <span>· {v.category.name}</span>}
                       </p>
                     </div>
+                    <AddScreenButton venueId={v.id} />
                   </div>
 
                   <div className="mt-4 space-y-2">
                     {v.tvs.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No screens set up here yet.</p>
+                      <p className="text-sm text-muted-foreground">
+                        No screens set up here yet. Add one to get a pairing code.
+                      </p>
                     ) : (
                       v.tvs.map((t) => (
                         <div
