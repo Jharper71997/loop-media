@@ -20,6 +20,19 @@ export async function POST(req: Request) {
     .maybeSingle()
   if (!tv) return NextResponse.json({ error: 'Device not paired.' }, { status: 404 })
 
+  // Only log a play if the ad is actually scheduled on this screen — otherwise a
+  // leaked device_id could inflate proof-of-play counts for any ad.
+  const { data: placement } = await supabase
+    .from('ad_placements')
+    .select('id')
+    .eq('ad_id', adId)
+    .eq('tv_id', tv.id)
+    .eq('status', 'active')
+    .maybeSingle()
+  if (!placement) {
+    return NextResponse.json({ error: 'Ad is not scheduled on this screen.' }, { status: 409 })
+  }
+
   await supabase.from('ad_plays').insert({ ad_id: adId, tv_id: tv.id })
   return NextResponse.json({ ok: true })
 }
