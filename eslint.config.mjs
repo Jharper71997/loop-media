@@ -12,7 +12,17 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // CommonJS one-off helper scripts (require() is intentional there).
+    "scripts/**",
   ]),
+  {
+    rules: {
+      // Reading localStorage/sessionStorage must happen after mount to stay
+      // SSR/hydration-safe, so these setState-in-effect cases are intentional.
+      // Keep visibility as a warning instead of failing the build.
+      "react-hooks/set-state-in-effect": "warn",
+    },
+  },
 ]);
 
 export default eslintConfig;

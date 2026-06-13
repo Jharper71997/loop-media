@@ -48,5 +48,15 @@ export async function GET(req: Request, ctx: { params: Promise<{ code: string }>
     referrer: req.headers.get('referer'),
   })
 
-  return NextResponse.redirect(ad.qr_target_url ? ad.qr_target_url : home, 302)
+  // Only ever redirect to an http(s) destination — never javascript:, data:, etc.
+  let dest = home
+  if (ad.qr_target_url) {
+    try {
+      const u = new URL(ad.qr_target_url)
+      if (u.protocol === 'http:' || u.protocol === 'https:') dest = u
+    } catch {
+      /* malformed target → fall back to home */
+    }
+  }
+  return NextResponse.redirect(dest, 302)
 }
