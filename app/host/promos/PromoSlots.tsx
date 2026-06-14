@@ -70,7 +70,7 @@ export function PromoSlots({
   }
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="grid gap-4 sm:grid-cols-2">
       {promos.map((p) => {
         const b = statusBadge(p.status)
         return (
@@ -209,7 +209,7 @@ function AddPromoCard({
   }
 
   return (
-    <Card className="sm:col-span-2 lg:col-span-1">
+    <Card className="sm:col-span-2">
       <CardContent className="space-y-3 p-4">
         {venues.length > 1 && (
           <div className="space-y-1.5">
