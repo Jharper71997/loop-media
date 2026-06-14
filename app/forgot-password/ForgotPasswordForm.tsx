@@ -44,7 +44,8 @@ export function ForgotPasswordForm() {
           <CardTitle>Check your email</CardTitle>
           <CardDescription>
             If an account exists for {email}, we sent a link to reset your password. It expires
-            soon, so use it right away.
+            soon, so use it right away. <strong>Don&apos;t see it? Check your spam or junk
+            folder.</strong>
           </CardDescription>
         </CardHeader>
         <CardFooter>
