@@ -6,13 +6,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { Combobox, type ComboboxOption } from '@/components/ui/combobox'
 import { requestVenue } from './actions'
 
 const NO_CATEGORY = 'none'
@@ -32,6 +26,11 @@ export function RegisterVenueForm({
   const [venueType, setVenueType] = useState('')
   const [phone, setPhone] = useState('')
   const [pending, start] = useTransition()
+
+  const categoryOptions: ComboboxOption[] = [
+    { value: NO_CATEGORY, label: 'Other / not sure' },
+    ...categories.map((c) => ({ value: c.id, label: c.name })),
+  ]
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -97,27 +96,14 @@ export function RegisterVenueForm({
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
           <Label>Venue category</Label>
-          <Select
+          <Combobox
+            options={categoryOptions}
             value={categoryId ?? NO_CATEGORY}
-            onValueChange={(v) => setCategoryId(v === NO_CATEGORY ? null : v)}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue>
-                {(v: string | null) =>
-                  v && v !== NO_CATEGORY
-                    ? categories.find((c) => c.id === v)?.name ?? '—'
-                    : 'Select type'}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={NO_CATEGORY}>Other / not sure</SelectItem>
-              {categories.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            onValueChange={(v) => setCategoryId(v && v !== NO_CATEGORY ? v : null)}
+            placeholder="Select type"
+            searchPlaceholder="Search categories…"
+            emptyText="No matching category."
+          />
         </div>
 
         <div className="space-y-1.5">

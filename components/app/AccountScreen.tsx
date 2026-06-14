@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { LogOut, ArrowLeft, Mail, ShieldCheck } from 'lucide-react'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { AccountSecurity } from '@/components/app/AccountSecurity'
 import { cn } from '@/lib/utils'
 
 // Shared Account tab for the advertiser + host apps.
@@ -32,6 +33,8 @@ export function AccountScreen({
           </div>
         </CardContent>
       </Card>
+
+      <AccountSecurity email={email} />
 
       {links?.map((l) => (
         <Link
