@@ -16,30 +16,51 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
-export function LoginForm({ next }: { next: string }) {
+export function ForgotPasswordForm() {
   const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  const [sent, setSent] = useState(false)
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
     const supabase = createClient()
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    // The recovery email links back through /auth/callback, which exchanges the
+    // code for a session and forwards to /update-password.
+    const redirectTo = `${window.location.origin}/auth/callback?next=/update-password`
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo })
     setLoading(false)
     if (error) {
       toast.error(error.message)
       return
     }
-    // Hard navigation so the freshly-set session cookie is read server-side.
-    window.location.assign(next || '/')
+    setSent(true)
+  }
+
+  if (sent) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Check your email</CardTitle>
+          <CardDescription>
+            If an account exists for {email}, we sent a link to reset your password. It expires
+            soon, so use it right away.
+          </CardDescription>
+        </CardHeader>
+        <CardFooter>
+          <Link href="/login" className="text-sm text-primary hover:underline">
+            Back to log in
+          </Link>
+        </CardFooter>
+      </Card>
+    )
   }
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Welcome back</CardTitle>
-        <CardDescription>Log in to your Loop Network account.</CardDescription>
+        <CardTitle>Reset your password</CardTitle>
+        <CardDescription>Enter your email and we&apos;ll send you a reset link.</CardDescription>
       </CardHeader>
       <form onSubmit={onSubmit}>
         <CardContent className="space-y-4">
@@ -54,34 +75,15 @@ export function LoginForm({ next }: { next: string }) {
               onChange={(e) => setEmail(e.target.value)}
             />
           </div>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="password">Password</Label>
-              <Link
-                href="/forgot-password"
-                className="text-xs text-muted-foreground hover:text-primary"
-              >
-                Forgot password?
-              </Link>
-            </div>
-            <Input
-              id="password"
-              type="password"
-              autoComplete="current-password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </div>
         </CardContent>
         <CardFooter className="mt-6 flex-col gap-3">
           <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? 'Logging in…' : 'Log in'}
+            {loading ? 'Sending…' : 'Send reset link'}
           </Button>
           <p className="text-center text-sm text-muted-foreground">
-            No account?{' '}
-            <Link href="/signup" className="text-primary hover:underline">
-              Sign up
+            Remembered it?{' '}
+            <Link href="/login" className="text-primary hover:underline">
+              Log in
             </Link>
           </p>
         </CardFooter>
