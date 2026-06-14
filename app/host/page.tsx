@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { headers } from 'next/headers'
 import { Tv as TvIcon, MapPin, Megaphone, Percent, Plus } from 'lucide-react'
 import { requireProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
@@ -12,8 +13,6 @@ import { LiveStatus } from '@/components/app/LiveStatus'
 import { AutoRefresh } from '@/components/app/AutoRefresh'
 import { AddScreenButton } from './AddScreenButton'
 import { TvSetupSteps } from './TvSetupSteps'
-
-const TV_URL = `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/tv`
 
 type VenueWithTvs = Venue & {
   tvs: Tv[]
@@ -32,6 +31,14 @@ const PROMO_SLOTS = 2
 export default async function HostHome() {
   const profile = await requireProfile()
   const supabase = await createClient()
+
+  // Build the /tv link from the domain the host is actually on, at runtime, so
+  // it's always correct regardless of NEXT_PUBLIC_APP_URL (which is frozen at
+  // build time and easy to leave stale across renames/redeploys).
+  const h = await headers()
+  const host = h.get('host')
+  const proto = h.get('x-forwarded-proto') ?? 'https'
+  const tvUrl = host ? `${proto}://${host}/tv` : `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/tv`
 
   const { data: venuesData } = await supabase
     .from('venues')
@@ -159,7 +166,7 @@ export default async function HostHome() {
                               </span>
                               <LiveStatus lastHeartbeat={t.last_heartbeat_at} paired={false} />
                             </div>
-                            <TvSetupSteps code={t.pairing_code} tvUrl={TV_URL} />
+                            <TvSetupSteps code={t.pairing_code} tvUrl={tvUrl} />
                           </div>
                         ) : (
                           <div
