@@ -240,16 +240,23 @@ function AddPromoCard({
         </div>
         <div className="space-y-1.5">
           <Label className="text-xs">15-second image or video</Label>
-          <Input
-            type="file"
-            accept="image/*,video/*"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-          />
-          {file && (
-            <p className="text-xs text-muted-foreground">
-              {file.name} · {(file.size / 1_000_000).toFixed(1)} MB
-            </p>
-          )}
+          <label className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-border bg-muted/30 px-4 py-6 text-center transition hover:border-primary/50">
+            <Upload className="size-5 text-muted-foreground" />
+            <span className="text-sm text-muted-foreground">
+              {file ? file.name : 'Tap to upload an image or video'}
+            </span>
+            {file && (
+              <span className="text-xs text-muted-foreground">
+                {(file.size / 1_000_000).toFixed(1)} MB · tap to replace
+              </span>
+            )}
+            <input
+              type="file"
+              accept="image/*,video/*"
+              className="hidden"
+              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            />
+          </label>
         </div>
         <div className="space-y-1.5">
           <Label className="text-xs">QR scan link (optional)</Label>
