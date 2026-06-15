@@ -5,7 +5,6 @@ import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
 import { ChevronRight, Store, Search } from 'lucide-react'
 import { toast } from 'sonner'
-import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { StepHeader } from '@/components/app/StepHeader'
@@ -46,16 +45,12 @@ const MapView = dynamic(() => import('./MapView'), {
 
 export function BrowseClient({
   venues,
-  markets,
-  activeMarket,
   categories,
   activeCat,
   categoryChosen,
   quoteOpts,
 }: {
   venues: BrowseVenue[]
-  markets: { id: string; name: string }[]
-  activeMarket: string | null
   categories: { id: string; name: string }[]
   activeCat: string | null
   categoryChosen: boolean
@@ -123,11 +118,9 @@ export function BrowseClient({
     })
   }
 
-  const go = (next: { market?: string; cat?: string | null }) => {
-    const m = next.market ?? activeMarket ?? ''
+  const go = (next: { cat?: string | null }) => {
     const c = next.cat === undefined ? activeCat : next.cat
     const params = new URLSearchParams()
-    if (m) params.set('market', m)
     if (c) params.set('cat', c)
     router.push(`/advertiser/browse?${params.toString()}`)
   }
@@ -143,25 +136,6 @@ export function BrowseClient({
           subtitle="We lock in your category so competitors can't share your screens."
           backHref="/advertiser"
         />
-
-        {markets.length > 1 && (
-          <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4">
-            {markets.map((m) => (
-              <button
-                key={m.id}
-                onClick={() => go({ market: m.id, cat: null })}
-                className={cn(
-                  'shrink-0 rounded-full border px-3 py-1.5 text-sm',
-                  m.id === activeMarket
-                    ? 'border-primary bg-primary/10 text-foreground'
-                    : 'border-border text-muted-foreground'
-                )}
-              >
-                {m.name}
-              </button>
-            ))}
-          </div>
-        )}
 
         <div className="relative">
           <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -246,7 +220,7 @@ export function BrowseClient({
         total={4}
         title="Tap the businesses you want"
         subtitle={activeCatName ? `Exclusive for ${activeCatName}` : 'All categories'}
-        backHref={`/advertiser/browse${activeMarket ? `?market=${activeMarket}` : ''}`}
+        backHref="/advertiser/browse"
       />
 
       <button
@@ -258,7 +232,7 @@ export function BrowseClient({
 
       {venues.length === 0 ? (
         <p className="rounded-xl border border-border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
-          No screens in this market yet.
+          No screens available yet. Check back soon.
         </p>
       ) : (
         <>
