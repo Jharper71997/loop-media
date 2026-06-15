@@ -8,7 +8,7 @@ import { BrowseClient, type BrowseVenue } from './BrowseClient'
 export default async function BrowsePage({
   searchParams,
 }: {
-  searchParams: Promise<{ market?: string; cat?: string }>
+  searchParams: Promise<{ cat?: string }>
 }) {
   const profile = await requireProfile()
   const supabase = await createClient()
@@ -23,26 +23,28 @@ export default async function BrowsePage({
     supabase.from('categories').select('id, name').order('name'),
   ])
   const markets = (terr ?? []) as Territory[]
+  const marketIds = markets.map((m) => m.id)
   const categories = (catData ?? []) as { id: string; name: string }[]
 
   const ctx = await resolveAdvertiserContext(profile.id)
   const quoteOpts: QuoteOptions = contextToQuoteOptions(ctx)
 
-  const { market, cat } = await searchParams
-  const activeMarket = markets.find((m) => m.id === market)?.id ?? markets[0]?.id ?? null
+  const { cat } = await searchParams
   const activeCat = categories.find((c) => c.id === cat)?.id ?? null
   // Step 1 of the flow: the category must be chosen (a real id, or 'all' to skip)
-  // before we show the map. Absent param = not chosen yet.
+  // before we show the map. Absent param = not chosen yet. There is no separate
+  // "pick a county/city" step: once they say what they sell, the map shows every
+  // venue across all live markets and they tap wherever they want a screen.
   const categoryChosen = cat != null
 
   let venues: BrowseVenue[] = []
-  if (activeMarket && categoryChosen) {
+  if (marketIds.length && categoryChosen) {
     const { data } = await supabase
       .from('venues')
       .select(
         'id, name, venue_type, category_id, lat, lng, foot_traffic_estimate, price_tier, category_slots, category:categories(name), tvs(id, loop_length_seconds, slot_seconds)'
       )
-      .eq('territory_id', activeMarket)
+      .in('territory_id', marketIds)
       .eq('status', 'active')
       .order('foot_traffic_estimate', { ascending: false })
 
@@ -146,8 +148,6 @@ export default async function BrowsePage({
   return (
     <BrowseClient
       venues={venues}
-      markets={markets.map((m) => ({ id: m.id, name: m.name }))}
-      activeMarket={activeMarket}
       categories={categories}
       activeCat={activeCat}
       categoryChosen={categoryChosen}
