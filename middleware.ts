@@ -15,9 +15,19 @@ function isProtected(pathname: string) {
 export async function middleware(req: NextRequest) {
   let res = NextResponse.next({ request: req })
 
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  // Middleware runs on EVERY route. If the Supabase env is missing/typo'd in
+  // prod, createServerClient throws → MIDDLEWARE_INVOCATION_FAILED → the WHOLE
+  // site 500s, even public pages. Fail open (skip auth refresh) instead so the
+  // outage is contained to login, not the marketing site.
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return res
+  }
+
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabaseUrl,
+    supabaseAnonKey,
     {
       cookies: {
         getAll() {

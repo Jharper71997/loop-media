@@ -41,7 +41,7 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
   if (!input.territory_id) return { error: 'Pick a market.' }
 
   let venueIds = [...new Set((input.venue_ids ?? []).filter(Boolean))]
-  if (!venueIds.length) return { error: 'Your cart is empty — pick at least one screen.' }
+  if (!venueIds.length) return { error: 'Your cart is empty. Pick at least one screen.' }
 
   const supabase = await createClient()
 
@@ -58,9 +58,18 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
     )
     venueIds = venueIds.filter((id) => !blocked.has(id))
     if (!venueIds.length) {
-      return { error: "Those screens are in your own line of business — competitors can't advertise there. Pick different screens." }
+      return { error: "Those screens are in your own line of business, so competitors can't advertise there. Pick different screens." }
     }
   }
+
+  // Authoritative market from the picked venues (the client value only labels the
+  // campaign; a bogus territory_id would pollute revenue-by-territory). Placement
+  // uses the cart, not this field, so deriving it is safe.
+  const { data: vTerr } = await supabase
+    .from('venues')
+    .select('territory_id')
+    .in('id', venueIds)
+  const territoryId = vTerr?.find((v) => v.territory_id)?.territory_id ?? input.territory_id
 
   // Authoritative re-price from the DB (never trust a client total). Volume,
   // host (20%), and loyalty discounts + free-screen credits are applied here
@@ -74,7 +83,7 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
     .insert({
       owner_user_id: profile.id,
       owner_kind: 'advertiser',
-      territory_id: input.territory_id,
+      territory_id: territoryId,
       category_id: input.category_id,
       title: input.title.trim(),
       creative_type: input.creative_type ?? 'image',
@@ -92,7 +101,7 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
       advertiser_id: profile.id,
       ad_id: ad.id,
       package_id: null,
-      territory_id: input.territory_id,
+      territory_id: territoryId,
       monthly_total_cents: totalCents,
       status: 'draft',
     })
@@ -117,7 +126,7 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
       advertiser_id: profile.id,
       campaign_id: campaign.id,
       package_id: null,
-      territory_id: input.territory_id,
+      territory_id: territoryId,
       status: 'incomplete',
     })
     .select('id')
@@ -140,7 +149,7 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
               currency: 'usd',
               unit_amount: totalCents,
               recurring: { interval: 'month' },
-              product_data: { name: `Loop Network — ${screenLabel}` },
+              product_data: { name: `Loop Network: ${screenLabel}` },
             },
           },
           ...(wantsCreative
@@ -151,7 +160,7 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
                     currency: 'usd',
                     unit_amount: CREATIVE_REFRESH_CENTS,
                     recurring: { interval: 'month' as const },
-                    product_data: { name: 'Loop Network — Creative refresh' },
+                    product_data: { name: 'Loop Network: Creative refresh' },
                   },
                 },
                 {
@@ -159,7 +168,7 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
                   price_data: {
                     currency: 'usd',
                     unit_amount: CREATIVE_SETUP_FEE_CENTS,
-                    product_data: { name: 'Loop Network — Creative setup (one-time)' },
+                    product_data: { name: 'Loop Network: Creative setup (one-time)' },
                   },
                 },
               ]

@@ -94,11 +94,12 @@ export async function buildCampaignReport(
   ])
 
   // Distinct running venues + their screens (one venue can host several TVs).
+  // ACTIVE only: paused/pending placements aren't "running", so don't count them.
   const { data: placementsData } = await admin
     .from('ad_placements')
     .select('id, tv:tvs(id, venue:venues(id, name, lat, lng, foot_traffic_estimate))')
     .eq('campaign_id', campaignId)
-    .neq('status', 'ended')
+    .eq('status', 'active')
   type PRow = {
     id: string
     tv: {
@@ -131,6 +132,9 @@ export async function buildCampaignReport(
       })
   }
   const venues = [...venueMap.values()]
+  // Distinct SCREENS (TVs), not venues — the email says "Running on N screens",
+  // and a venue can hold several. tv ids are globally unique, so summing is safe.
+  const screenCount = venues.reduce((s, v) => s + v.tvIds.length, 0)
 
   // Measured QR scans scoped to the report month (attributed to a screen + day).
   let scans: ScanRow[] = []
@@ -154,7 +158,7 @@ export async function buildCampaignReport(
     period,
     estImpressions: estImpressionsPerMonth(venues),
     totalScans: scans.length,
-    locationsCount: venues.length,
+    locationsCount: screenCount,
     locations,
     monthlyTotalCents: campaign.monthly_total_cents ?? null,
   }

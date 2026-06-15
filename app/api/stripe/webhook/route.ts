@@ -37,31 +37,99 @@ export async function POST(req: Request) {
 
   const supabase = createAdminClient()
 
+  // Idempotency: Stripe re-sends events on any non-2xx (and occasionally on
+  // success). Claim the event id first; if it's already recorded, this is a
+  // replay -> no-op. If processing throws below, we delete the claim so Stripe's
+  // retry actually reprocesses.
+  const { error: claimErr } = await supabase
+    .from('processed_stripe_events')
+    .insert({ event_id: event.id, type: event.type })
+  if (claimErr) {
+    // Unique-violation = already processed. Anything else, fail so Stripe retries.
+    if (claimErr.code === '23505') {
+      return NextResponse.json({ received: true, duplicate: true })
+    }
+    return NextResponse.json({ error: 'dedupe store failed' }, { status: 500 })
+  }
+
+  try {
+    await handleEvent(event, supabase)
+  } catch (err) {
+    // Release the claim so the retry reprocesses, then signal failure to Stripe.
+    await supabase.from('processed_stripe_events').delete().eq('event_id', event.id)
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : 'handler failed' },
+      { status: 500 }
+    )
+  }
+
+  return NextResponse.json({ received: true })
+}
+
+async function handleEvent(
+  event: Stripe.Event,
+  supabase: ReturnType<typeof createAdminClient>
+): Promise<void> {
+  const now = new Date().toISOString()
+
   if (event.type === 'checkout.session.completed') {
     const s = event.data.object as Stripe.Checkout.Session
+
+    // Only act on a session that actually paid. Without this, an unpaid/abandoned
+    // or test session could flip campaigns/memberships to active.
+    if (s.payment_status !== 'paid') return
 
     // Paid ad change ($10 one-time): apply the staged creative now that it's paid.
     const adChangeId = s.metadata?.ad_change_id
     if (adChangeId) {
-      const { campaignId: changeCampaign } = await applyAdChange(supabase, adChangeId)
-      if (changeCampaign) {
-        return NextResponse.json({ received: true })
-      }
+      await applyAdChange(supabase, adChangeId)
+      return
     }
 
-    // Unlimited-changes membership purchase: activate the membership row.
+    // Unlimited-changes membership purchase: activate the membership row, but
+    // refuse to create a SECOND active membership (= double $29/mo billing) —
+    // cancel the duplicate Stripe subscription instead.
     const membershipId = s.metadata?.membership_id
     if (membershipId) {
+      const subId = typeof s.subscription === 'string' ? s.subscription : null
+      const { data: m } = await supabase
+        .from('memberships')
+        .select('advertiser_id, kind')
+        .eq('id', membershipId)
+        .maybeSingle()
+      if (!m) return
+      const { data: existing } = await supabase
+        .from('memberships')
+        .select('id')
+        .eq('advertiser_id', m.advertiser_id)
+        .eq('kind', m.kind)
+        .eq('status', 'active')
+        .neq('id', membershipId)
+        .limit(1)
+      if (existing && existing.length) {
+        if (subId) {
+          try {
+            await stripe().subscriptions.cancel(subId)
+          } catch {
+            /* best-effort cancel of the duplicate */
+          }
+        }
+        await supabase
+          .from('memberships')
+          .update({ status: 'canceled', updated_at: now })
+          .eq('id', membershipId)
+        return
+      }
       await supabase
         .from('memberships')
         .update({
           status: 'active',
-          stripe_subscription_id: typeof s.subscription === 'string' ? s.subscription : null,
+          stripe_subscription_id: subId,
           stripe_customer_id: typeof s.customer === 'string' ? s.customer : null,
-          updated_at: new Date().toISOString(),
+          updated_at: now,
         })
         .eq('id', membershipId)
-      return NextResponse.json({ received: true })
+      return
     }
 
     const subscriptionId = s.metadata?.subscription_id
@@ -113,9 +181,7 @@ export async function POST(req: Request) {
     // End a membership if that's what was canceled.
     await supabase
       .from('memberships')
-      .update({ status: 'canceled', updated_at: new Date().toISOString() })
+      .update({ status: 'canceled', updated_at: now })
       .eq('stripe_subscription_id', sub.id)
   }
-
-  return NextResponse.json({ received: true })
 }

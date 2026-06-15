@@ -11,7 +11,11 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 function hashIp(ip: string | null): string | null {
   if (!ip) return null
-  const salt = process.env.CRON_SECRET || 'loop-media'
+  // Dedicated salt; never fall back to a public constant (that made the hashes
+  // trivially reversible) and don't reuse CRON_SECRET for two unrelated jobs.
+  // If no salt is configured, don't store a weakly-hashed IP at all.
+  const salt = process.env.IP_HASH_SALT
+  if (!salt) return null
   return createHash('sha256').update(`${salt}:${ip}`).digest('hex').slice(0, 32)
 }
 
