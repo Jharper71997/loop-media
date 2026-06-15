@@ -267,9 +267,16 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-medium">{p.ad?.title ?? 'Untitled'}</p>
-                      <p className="truncate text-sm text-muted-foreground">
-                        {p.ad ? ownerName.get(p.ad.owner_user_id) ?? '—' : '—'}
-                      </p>
+                      {p.ad?.owner_user_id ? (
+                        <Link
+                          href={`/admin/advertisers/${p.ad.owner_user_id}`}
+                          className="truncate block text-sm text-primary hover:underline"
+                        >
+                          {ownerName.get(p.ad.owner_user_id) ?? 'View advertiser'}
+                        </Link>
+                      ) : (
+                        <p className="truncate text-sm text-muted-foreground">—</p>
+                      )}
                     </div>
                     <RemovePlacementButton id={p.id} tvId={tv.id} />
                   </div>
