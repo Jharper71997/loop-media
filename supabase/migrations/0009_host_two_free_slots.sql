@@ -1,4 +1,4 @@
--- Loop Media — hosts get TWO free promo slots (was three).
+-- Loop Network — hosts get TWO free promo slots (was three).
 -- The per-TV model (Stephen's call) settled on 2 free host ad slots, always.
 -- Re-defines the limit trigger function; existing host ads are untouched.
 

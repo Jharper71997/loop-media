@@ -18,10 +18,16 @@ type AdItem = {
   qr_image: string | null
 }
 
+type FillerCard = {
+  type: 'weather' | 'sports' | 'trivia' | 'event' | 'promo'
+  payload: { headline?: string; sub?: string; foot?: string }
+}
+
 type Manifest = {
   tv: { loop_length_seconds: number; slot_seconds: number }
   venue: { name: string; lat: number | null; lng: number | null; territory: { name: string } | null } | null
   items: AdItem[]
+  filler?: FillerCard[]
   generated_at: string
 }
 
@@ -30,6 +36,7 @@ type Slide =
   | { kind: 'weather' }
   | { kind: 'clock' }
   | { kind: 'promo' }
+  | { kind: 'filler'; card: FillerCard }
 
 const FILLER_SECONDS = 10
 
@@ -46,16 +53,36 @@ function weatherInfo(code: number): { label: string; emoji: string } {
 
 function buildPlaylist(m: Manifest): Slide[] {
   const slot = m.tv.slot_seconds || 15
+  // Custom filler cards rotate in order; weather is interleaved separately.
+  const cards = m.filler ?? []
+  let cardIdx = 0
+  const nextFiller = (): Slide =>
+    cards.length ? { kind: 'filler', card: cards[cardIdx++ % cards.length] } : { kind: 'weather' }
+
   if (!m.items.length) {
-    return [{ kind: 'clock' }, { kind: 'weather' }, { kind: 'promo' }]
+    // No ads sold yet: cycle clock, weather, any authored cards, house promo.
+    const out: Slide[] = [{ kind: 'clock' }, { kind: 'weather' }]
+    for (const card of cards) out.push({ kind: 'filler', card })
+    out.push({ kind: 'promo' })
+    return out
   }
   const out: Slide[] = []
   m.items.forEach((it, i) => {
     out.push({ ...it, kind: 'ad', duration: it.duration || slot })
-    if ((i + 1) % 4 === 0) out.push({ kind: 'weather' })
+    // After every 3rd ad drop in a filler card (authored card or weather).
+    if ((i + 1) % 3 === 0) out.push(nextFiller())
   })
   out.push({ kind: 'promo' })
   return out
+}
+
+// Badge label for an authored filler card.
+function fillerLabel(type: FillerCard['type']): string {
+  if (type === 'trivia') return 'Trivia'
+  if (type === 'event') return "What's on"
+  if (type === 'sports') return 'Game day'
+  if (type === 'promo') return 'Featured'
+  return ''
 }
 
 export function TvPlayer() {
@@ -303,6 +330,30 @@ function Player({ deviceId, onUnpair }: { deviceId: string; onUnpair: () => void
           <div className="mt-3 text-3xl text-white/60">
             {now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
           </div>
+        </FillerFrame>
+      ) : slide.kind === 'filler' ? (
+        <FillerFrame title={venueName}>
+          {fillerLabel(slide.card.type) && (
+            <div
+              className="mb-6 rounded-full px-5 py-1.5 text-2xl font-semibold tracking-wide"
+              style={{ background: GOLD, color: '#000' }}
+            >
+              {fillerLabel(slide.card.type)}
+            </div>
+          )}
+          {slide.card.payload.headline && (
+            <div className="max-w-5xl px-8 text-6xl font-semibold leading-tight">
+              {slide.card.payload.headline}
+            </div>
+          )}
+          {slide.card.payload.sub && (
+            <div className="mt-5 max-w-4xl px-8 text-4xl text-white/70">
+              {slide.card.payload.sub}
+            </div>
+          )}
+          {slide.card.payload.foot && (
+            <div className="mt-4 text-2xl text-white/40">{slide.card.payload.foot}</div>
+          )}
         </FillerFrame>
       ) : (
         <FillerFrame title={venueName}>

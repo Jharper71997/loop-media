@@ -4,8 +4,11 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireProfile } from '@/lib/auth'
-import { stripe } from '@/lib/stripe'
+import { stripe, appUrl } from '@/lib/stripe'
 import { activatePlacementsIfReady } from '@/lib/placement'
+import { hasUnlimitedChanges } from '@/lib/membership'
+import { applyAdChange } from '@/lib/adChanges'
+import { AD_CHANGE_FEE_CENTS, UNLIMITED_CHANGES_CENTS } from '@/lib/fees'
 
 // Verify the signed-in advertiser owns this campaign, then mutate via service
 // role (placements/subscriptions aren't writable under the advertiser's RLS).
@@ -160,6 +163,143 @@ export async function archiveCampaign(id: string) {
   revalidate(id)
   revalidatePath('/advertiser/past')
   return { error: null }
+}
+
+// Swap the creative on an existing campaign. The new file is uploaded client-side
+// to the `creatives` bucket; here we route it through the ad-change policy:
+//
+//   * Members (active unlimited-changes membership) and demo/no-Stripe setups:
+//     the change is applied for free immediately. The ad goes back to review
+//     ('pending'); the TV loop only plays approved ads, so the unreviewed
+//     creative never reaches a screen, and placements + billing stay untouched.
+//   * Everyone else: stage the change and return a $10 Checkout URL. The Stripe
+//     webhook applies the creative once the fee is paid.
+//
+// Returns { applied } (live now) or { checkoutUrl } (pay first) or { error }.
+export async function replaceCreative(
+  id: string,
+  creativeUrl: string,
+  creativeType: 'image' | 'video'
+): Promise<{ error?: string; applied?: boolean; checkoutUrl?: string }> {
+  if (!creativeUrl) return { error: 'No creative was uploaded.' }
+  const c = await ownCampaign(id)
+  if (!c) return { error: 'Campaign not found.' }
+  if (!c.ad_id) return { error: 'This campaign has no ad to replace yet.' }
+
+  const admin = createAdminClient()
+  const profile = await requireProfile()
+  const free = !process.env.STRIPE_SECRET_KEY || (await hasUnlimitedChanges(admin, profile.id))
+
+  // Record the change either way (audit + the webhook needs the row to apply).
+  const { data: change, error: insErr } = await admin
+    .from('ad_change_requests')
+    .insert({
+      campaign_id: id,
+      ad_id: c.ad_id,
+      advertiser_id: profile.id,
+      creative_url: creativeUrl,
+      creative_type: creativeType,
+      fee_cents: free ? 0 : AD_CHANGE_FEE_CENTS,
+      status: free ? 'waived' : 'pending_payment',
+    })
+    .select('id')
+    .single()
+  if (insErr || !change) return { error: 'Could not start the change. Try again.' }
+
+  if (free) {
+    await applyAdChange(admin, change.id)
+    revalidate(id)
+    return { applied: true }
+  }
+
+  // Paid change: $10 one-time Checkout. Reuse the advertiser's existing Stripe
+  // customer (from their campaign subscription) so the charge lands on file.
+  try {
+    const { data: subRow } = await admin
+      .from('subscriptions')
+      .select('stripe_customer_id')
+      .eq('campaign_id', id)
+      .maybeSingle()
+    const base = appUrl()
+    const session = await stripe().checkout.sessions.create({
+      mode: 'payment',
+      ...(subRow?.stripe_customer_id
+        ? { customer: subRow.stripe_customer_id }
+        : { customer_email: profile.email }),
+      line_items: [
+        {
+          quantity: 1,
+          price_data: {
+            currency: 'usd',
+            unit_amount: AD_CHANGE_FEE_CENTS,
+            product_data: { name: 'Loop Network — Ad change' },
+          },
+        },
+      ],
+      metadata: { ad_change_id: change.id, campaign_id: id },
+      success_url: `${base}/advertiser/campaigns/${id}?change=success`,
+      cancel_url: `${base}/advertiser/campaigns/${id}?change=canceled`,
+    })
+    await admin
+      .from('ad_change_requests')
+      .update({ stripe_session_id: session.id })
+      .eq('id', change.id)
+    return { checkoutUrl: session.url ?? undefined }
+  } catch (e) {
+    await admin.from('ad_change_requests').update({ status: 'canceled' }).eq('id', change.id)
+    return { error: e instanceof Error ? e.message : 'Could not start checkout.' }
+  }
+}
+
+// Start the unlimited-changes membership ($X/mo). Creates a draft membership row
+// + a subscription Checkout session; the webhook activates it on payment.
+export async function startMembershipCheckout(): Promise<{
+  error?: string
+  checkoutUrl?: string
+}> {
+  const profile = await requireProfile()
+  const admin = createAdminClient()
+
+  // Already a member? Nothing to buy.
+  if (await hasUnlimitedChanges(admin, profile.id)) {
+    return { error: 'You already have the unlimited-changes membership.' }
+  }
+  if (!process.env.STRIPE_SECRET_KEY) {
+    return { error: 'Payments are not configured.' }
+  }
+
+  const { data: membership, error: insErr } = await admin
+    .from('memberships')
+    .insert({ advertiser_id: profile.id, kind: 'unlimited_changes', status: 'incomplete' })
+    .select('id')
+    .single()
+  if (insErr || !membership) return { error: 'Could not start membership. Try again.' }
+
+  try {
+    const base = appUrl()
+    const session = await stripe().checkout.sessions.create({
+      mode: 'subscription',
+      customer_email: profile.email,
+      line_items: [
+        {
+          quantity: 1,
+          price_data: {
+            currency: 'usd',
+            unit_amount: UNLIMITED_CHANGES_CENTS,
+            recurring: { interval: 'month' },
+            product_data: { name: 'Loop Network — Unlimited ad changes' },
+          },
+        },
+      ],
+      metadata: { membership_id: membership.id, advertiser_id: profile.id },
+      success_url: `${base}/advertiser?membership=success`,
+      cancel_url: `${base}/advertiser?membership=canceled`,
+    })
+    return { checkoutUrl: session.url ?? undefined }
+  } catch (e) {
+    await admin.from('memberships').update({ status: 'canceled' }).eq('id', membership.id)
+    return { error: e instanceof Error ? e.message : 'Could not start checkout.' }
+  }
 }
 
 // Bring a campaign back from Trash. It returns to the list as canceled (billing

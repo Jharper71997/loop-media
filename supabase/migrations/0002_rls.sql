@@ -1,4 +1,4 @@
--- Loop Media — Row Level Security
+-- Loop Network — Row Level Security
 --
 -- Roles: admin (global = territory_id null, sees all; territory-scoped = sees
 -- own territory), advertiser (own rows), host (own venue + promos). The TV

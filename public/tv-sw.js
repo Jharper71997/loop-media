@@ -1,4 +1,4 @@
-// Loop Media TV display service worker.
+// Loop Network TV display service worker.
 // Caches creative media (and Supabase storage objects) cache-first so the loop
 // keeps playing if the venue's WiFi drops. App code itself is always fetched
 // fresh when online.

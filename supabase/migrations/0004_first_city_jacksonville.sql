@@ -1,4 +1,4 @@
--- Loop Media: first launch market is Jacksonville, NC (Eastern time).
+-- Loop Network: first launch market is Jacksonville, NC (Eastern time).
 -- Renames the seeded demo territory and repositions its demo venues.
 -- Append-only: on a fresh DB this runs after 0003 (which seeds Crown Point).
 

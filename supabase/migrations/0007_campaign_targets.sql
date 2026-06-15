@@ -1,4 +1,4 @@
--- Loop Media — per-campaign screen targeting.
+-- Loop Network — per-campaign screen targeting.
 -- When an advertiser hand-picks venues, the placement engine restricts to this
 -- set (still honoring exclusivity, caps, and slot availability). No rows for a
 -- campaign = auto-place across all eligible screens (the original behavior).

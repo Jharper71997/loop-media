@@ -16,7 +16,15 @@ import {
   type RunningVenue,
   type ScanRow,
 } from '@/lib/analytics'
+import {
+  summarizeUptime,
+  venueBusinessHours,
+  formatUptimePct,
+  UPTIME_WINDOW_DAYS,
+} from '@/lib/uptime'
 import { CampaignControls } from './CampaignControls'
+import { ReplaceCreative } from './ReplaceCreative'
+import { MembershipUpsell } from './MembershipUpsell'
 import CampaignMap from './CampaignMap'
 import type { CampaignMapVenue } from './CampaignMapView'
 
@@ -30,11 +38,11 @@ export default async function CampaignDetail({
   searchParams,
 }: {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ checkout?: string }>
+  searchParams: Promise<{ checkout?: string; change?: string }>
 }) {
-  await requireProfile()
+  const profile = await requireProfile()
   const { id } = await params
-  const { checkout } = await searchParams
+  const { checkout, change } = await searchParams
   const supabase = await createClient()
 
   const { data } = await supabase
@@ -45,9 +53,26 @@ export default async function CampaignDetail({
   if (!data) notFound()
   const c = data as unknown as CampaignFull
 
+  // Does this advertiser hold the unlimited-changes membership? (RLS scopes the
+  // memberships table to their own rows.) Drives whether a creative swap is free.
+  const { data: membership } = await supabase
+    .from('memberships')
+    .select('current_period_end')
+    .eq('kind', 'unlimited_changes')
+    .eq('status', 'active')
+    .order('current_period_end', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  const isMember =
+    !!membership &&
+    (!membership.current_period_end ||
+      new Date(membership.current_period_end).getTime() >= Date.now())
+
   const { data: placementsData } = await supabase
     .from('ad_placements')
-    .select('id, tv:tvs(id, venue:venues(id, name, lat, lng, foot_traffic_estimate))')
+    .select(
+      'id, tv:tvs(id, venue:venues(id, name, lat, lng, foot_traffic_estimate, business_open, business_close, business_days))'
+    )
     .eq('campaign_id', id)
     .neq('status', 'ended')
   type PRow = {
@@ -60,6 +85,9 @@ export default async function CampaignDetail({
         lat: number | null
         lng: number | null
         foot_traffic_estimate: number
+        business_open: string | null
+        business_close: string | null
+        business_days: number[] | null
       } | null
     } | null
   }
@@ -67,13 +95,14 @@ export default async function CampaignDetail({
 
   // Distinct running venues + the screens at each (one venue can host several TVs).
   const venueMap = new Map<string, RunningVenue>()
+  const venueHours = new Map<string, ReturnType<typeof venueBusinessHours>>()
   for (const p of placements) {
     const v = p.tv?.venue
     const tvId = p.tv?.id
     if (!v || !tvId) continue
     const existing = venueMap.get(v.id)
     if (existing) existing.tvIds.push(tvId)
-    else
+    else {
       venueMap.set(v.id, {
         venueId: v.id,
         name: v.name,
@@ -82,8 +111,38 @@ export default async function CampaignDetail({
         footTraffic: v.foot_traffic_estimate ?? 0,
         tvIds: [tvId],
       })
+      venueHours.set(v.id, venueBusinessHours(v))
+    }
   }
   const venues = [...venueMap.values()]
+
+  // Uptime over the last 30 days for the screens this ad runs on (RLS lets the
+  // advertiser read uptime for their own placements). Per venue: aggregate its
+  // screens' measured + expected seconds, then a venue is "below SLA" if short.
+  const runningTvIds = venues.flatMap((v) => v.tvIds)
+  const uptimeByVenue = new Map<string, { pct: number; breach: boolean; hasData: boolean }>()
+  if (runningTvIds.length) {
+    const upSince = new Date()
+    upSince.setUTCDate(upSince.getUTCDate() - UPTIME_WINDOW_DAYS)
+    const { data: upData } = await supabase
+      .from('tv_uptime_days')
+      .select('tv_id, day, seconds')
+      .in('tv_id', runningTvIds)
+      .gte('day', upSince.toISOString().slice(0, 10))
+    const byTv = new Map<string, { day: string; seconds: number }[]>()
+    for (const r of (upData ?? []) as { tv_id: string; day: string; seconds: number }[]) {
+      const list = byTv.get(r.tv_id) ?? []
+      list.push({ day: r.day, seconds: r.seconds })
+      byTv.set(r.tv_id, list)
+    }
+    for (const v of venues) {
+      const bh = venueHours.get(v.venueId) ?? venueBusinessHours({})
+      const rows = v.tvIds.flatMap((id) => byTv.get(id) ?? [])
+      const s = summarizeUptime(rows, bh)
+      uptimeByVenue.set(v.venueId, { pct: s.pct, breach: s.breach, hasData: s.hasData })
+    }
+  }
+  const breachedVenues = venues.filter((v) => uptimeByVenue.get(v.venueId)?.breach).length
 
   // Measured QR scans over the reporting window (attributed to a screen + day).
   let scans: ScanRow[] = []
@@ -145,6 +204,22 @@ export default async function CampaignDetail({
           Checkout canceled. Your campaign is saved as a draft — resume payment anytime.
         </div>
       )}
+      {change === 'success' && (
+        <div className="rounded-lg border border-emerald-600/40 bg-emerald-600/10 px-4 py-3 text-sm text-emerald-300">
+          Payment received. Your new creative is pending review and replaces the current one once approved.
+        </div>
+      )}
+      {change === 'canceled' && (
+        <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+          Change canceled. Your current creative keeps running and you were not charged.
+        </div>
+      )}
+      {breachedVenues > 0 && (
+        <div className="rounded-lg border border-amber-600/40 bg-amber-600/10 px-4 py-3 text-sm text-amber-300">
+          {breachedVenues} of your screen{breachedVenues === 1 ? '' : 's'} ran below our 80%
+          uptime guarantee this month. We&apos;re on it, and we&apos;ll make it right.
+        </div>
+      )}
 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-center gap-2">
@@ -178,9 +253,15 @@ export default async function CampaignDetail({
               </div>
             )}
           </div>
-          <CardContent className="p-4 text-sm text-muted-foreground">
-            {locations} screen{locations === 1 ? '' : 's'}
-            {c.monthly_total_cents != null && <> · {formatCents(c.monthly_total_cents)}/mo</>}
+          <CardContent className="space-y-3 p-4">
+            <p className="text-sm text-muted-foreground">
+              {locations} screen{locations === 1 ? '' : 's'}
+              {c.monthly_total_cents != null && <> · {formatCents(c.monthly_total_cents)}/mo</>}
+            </p>
+            {c.ad_id && c.status !== 'canceled' && (
+              <ReplaceCreative campaignId={c.id} userId={profile.id} isMember={isMember} />
+            )}
+            {c.ad_id && c.status !== 'canceled' && !isMember && <MembershipUpsell />}
           </CardContent>
         </Card>
 
@@ -296,6 +377,16 @@ export default async function CampaignDetail({
                         {formatNumber(r.scans)}{' '}
                         <span className="text-muted-foreground/70">scans · 30d</span>
                       </span>
+                      {(() => {
+                        const u = uptimeByVenue.get(r.venueId)
+                        if (!u || !u.hasData) return null
+                        return (
+                          <span className={u.breach ? 'text-amber-400' : ''}>
+                            {formatUptimePct(u.pct)}{' '}
+                            <span className="text-muted-foreground/70">uptime · 30d</span>
+                          </span>
+                        )
+                      })()}
                     </div>
                   </div>
                 ))}

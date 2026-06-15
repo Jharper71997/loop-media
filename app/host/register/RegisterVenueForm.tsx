@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Combobox, type ComboboxOption } from '@/components/ui/combobox'
+import { BusinessHoursPicker, type BusinessHoursValue } from '@/components/app/BusinessHoursPicker'
 import { requestVenue } from './actions'
 
 const NO_CATEGORY = 'none'
@@ -25,6 +26,11 @@ export function RegisterVenueForm({
   const [categoryId, setCategoryId] = useState<string | null>(null)
   const [venueType, setVenueType] = useState('')
   const [phone, setPhone] = useState('')
+  const [hours, setHours] = useState<BusinessHoursValue>({
+    open: '10:00',
+    close: '22:00',
+    days: [0, 1, 2, 3, 4, 5, 6],
+  })
   const [pending, start] = useTransition()
 
   const categoryOptions: ComboboxOption[] = [
@@ -47,6 +53,9 @@ export function RegisterVenueForm({
         venue_type: venueType || null,
         foot_traffic_estimate: 0,
         contact_phone: phone || null,
+        business_open: hours.open,
+        business_close: hours.close,
+        business_days: hours.days,
       })
       if (res.error) {
         toast.error(res.error)
@@ -124,6 +133,11 @@ export function RegisterVenueForm({
           onChange={(e) => setPhone(e.target.value)}
           placeholder="So we can reach you about setup"
         />
+      </div>
+
+      <div className="space-y-2 rounded-lg border border-border p-4">
+        <Label className="text-sm font-medium">When are you open?</Label>
+        <BusinessHoursPicker value={hours} onChange={setHours} />
       </div>
 
       <p className="text-xs text-muted-foreground">

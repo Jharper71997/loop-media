@@ -1,4 +1,4 @@
--- Loop Media — core schema (tables, enums, indexes, triggers)
+-- Loop Network — core schema (tables, enums, indexes, triggers)
 -- Apply in order: 0001_init.sql -> 0002_rls.sql -> 0003_seed.sql
 
 create extension if not exists pgcrypto;  -- gen_random_uuid()
@@ -33,7 +33,7 @@ end; $$;
 -- ============================================================
 -- TENANCY
 -- ============================================================
--- Parent "Loop Media Holdings" row (parent_id null, is_holding true) sits above
+-- Parent "Loop Network Holdings" row (parent_id null, is_holding true) sits above
 -- child city LLCs (parent_id -> holdings). Everything scopes to a territory.
 create table territories (
   id         uuid primary key default gen_random_uuid(),

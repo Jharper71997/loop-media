@@ -18,8 +18,8 @@ function loadEnv() {
 async function main() {
   const env = loadEnv()
   const url = env.NEXT_PUBLIC_SUPABASE_URL
-  const email = 'host@loopmedia.app'
-  const password = 'LoopMedia2026!'
+  const email = 'host@loopnetwork.app'
+  const password = 'LoopNetwork2026!'
 
   const admin = createClient(url, env.SUPABASE_SERVICE_ROLE_KEY, {
     auth: { autoRefreshToken: false, persistSession: false },
@@ -73,7 +73,7 @@ async function main() {
     .select('name, foot_traffic_estimate, tvs(status, pairing_code)')
     .eq('host_user_id', uid)
   console.log('Host can read own venue(s):', JSON.stringify(mine, null, 2))
-  console.log('\nHost flow OK. Demo host login: host@loopmedia.app / LoopMedia2026!')
+  console.log('\nHost flow OK. Demo host login: host@loopnetwork.app / LoopNetwork2026!')
 }
 
 main().catch((e) => {
