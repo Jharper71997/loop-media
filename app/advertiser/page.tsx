@@ -40,7 +40,12 @@ function statusLabel(c: CampaignRow): {
   return { label: 'Draft', variant: 'secondary' }
 }
 
-export default async function AdvertiserDashboard() {
+export default async function AdvertiserDashboard({
+  searchParams,
+}: {
+  searchParams: Promise<{ membership?: string }>
+}) {
+  const { membership } = await searchParams
   const profile = await requireProfile()
   const supabase = await createClient()
   const [{ data }, { count: trashedCount }, { count: archivedCount }, ctx] = await Promise.all([
@@ -127,6 +132,16 @@ export default async function AdvertiserDashboard() {
   return (
     <div className="space-y-6">
       <OnboardingTour role="advertiser" />
+      {membership === 'success' && (
+        <div className="rounded-lg border border-emerald-600/40 bg-emerald-600/10 px-4 py-3 text-sm text-emerald-300">
+          You&apos;re in. Unlimited ad changes are now included on your account.
+        </div>
+      )}
+      {membership === 'canceled' && (
+        <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+          Membership checkout canceled. You were not charged.
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="font-heading text-2xl font-bold tracking-tight">Your ads</h1>

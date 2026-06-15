@@ -1,4 +1,4 @@
-# Loop Media — Data Model
+# Loop Network — Data Model
 
 Source of truth: [`supabase/migrations/0001_init.sql`](../supabase/migrations/0001_init.sql).
 TypeScript mirror: [`lib/db.types.ts`](../lib/db.types.ts). This Mermaid diagram renders on GitHub

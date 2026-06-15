@@ -1,4 +1,4 @@
--- Loop Media — per-TV à la carte pricing model.
+-- Loop Network — per-TV à la carte pricing model.
 --
 -- Pivots the product from CPM packages + impression-goal auto-placement to the
 -- model Stephen described: each venue carries a price TIER, advertisers tap

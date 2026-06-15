@@ -24,7 +24,7 @@ const admin = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_RO
 })
 
 async function demoCampaign() {
-  const { data: adv } = await admin.from('profiles').select('id').eq('email', 'advertiser@loopmedia.app').single()
+  const { data: adv } = await admin.from('profiles').select('id').eq('email', 'advertiser@loopnetwork.app').single()
   const { data: camp } = await admin
     .from('campaigns')
     .select('id, ad_id, target_impressions, package_id, territory_id, status')

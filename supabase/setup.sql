@@ -1,4 +1,4 @@
--- Loop Media — core schema (tables, enums, indexes, triggers)
+-- Loop Network — core schema (tables, enums, indexes, triggers)
 -- Apply in order: 0001_init.sql -> 0002_rls.sql -> 0003_seed.sql
 
 create extension if not exists pgcrypto;  -- gen_random_uuid()
@@ -33,7 +33,7 @@ end; $$;
 -- ============================================================
 -- TENANCY
 -- ============================================================
--- Parent "Loop Media Holdings" row (parent_id null, is_holding true) sits above
+-- Parent "Loop Network Holdings" row (parent_id null, is_holding true) sits above
 -- child city LLCs (parent_id -> holdings). Everything scopes to a territory.
 create table territories (
   id         uuid primary key default gen_random_uuid(),
@@ -306,7 +306,7 @@ end; $$;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function handle_new_user();
--- Loop Media — Row Level Security
+-- Loop Network — Row Level Security
 --
 -- Roles: admin (global = territory_id null, sees all; territory-scoped = sees
 -- own territory), advertiser (own rows), host (own venue + promos). The TV
@@ -460,12 +460,12 @@ create policy qr_select on qr_scans for select to authenticated using (
 create policy filler_select on filler_content for select to authenticated using (true);
 create policy filler_admin_write on filler_content for all to authenticated
   using (admin_can_territory(territory_id)) with check (admin_can_territory(territory_id));
--- Loop Media — demo seed (one territory, categories + caps, packages, venues + TVs)
+-- Loop Network — demo seed (one territory, categories + caps, packages, venues + TVs)
 -- Safe to re-run: guarded with ON CONFLICT / NOT EXISTS.
 
 -- ---------- territories: Holdings parent + one demo city ----------
 insert into territories (name, slug, is_holding, timezone, status)
-values ('Loop Media Holdings', 'holdings', true, 'America/Chicago', 'active')
+values ('Loop Network Holdings', 'holdings', true, 'America/Chicago', 'active')
 on conflict (slug) do nothing;
 
 insert into territories (name, slug, parent_id, timezone, status)
@@ -551,7 +551,7 @@ on conflict (pairing_code) do nothing;
 --   update profiles set role = 'admin',
 --     territory_id = (select id from territories where slug = 'crown-point')
 --   where email = 'citymanager@example.com';
--- Loop Media: first launch market is Jacksonville, NC (Eastern time).
+-- Loop Network: first launch market is Jacksonville, NC (Eastern time).
 -- Renames the seeded demo territory and repositions its demo venues.
 -- Append-only: on a fresh DB this runs after 0003 (which seeds Crown Point).
 

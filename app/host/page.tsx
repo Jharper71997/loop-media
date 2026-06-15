@@ -245,7 +245,7 @@ export default async function HostHome() {
               </div>
             </div>
             <Link href="/advertiser/browse" className={cn(buttonVariants(), 'shrink-0')}>
-              <MapPin className="size-4" /> Browse screens
+              <MapPin className="size-4" /> Buy ads on other screens
             </Link>
           </section>
         </>

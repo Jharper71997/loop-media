@@ -1,9 +1,9 @@
--- Loop Media — demo seed (one territory, categories + caps, packages, venues + TVs)
+-- Loop Network — demo seed (one territory, categories + caps, packages, venues + TVs)
 -- Safe to re-run: guarded with ON CONFLICT / NOT EXISTS.
 
 -- ---------- territories: Holdings parent + one demo city ----------
 insert into territories (name, slug, is_holding, timezone, status)
-values ('Loop Media Holdings', 'holdings', true, 'America/Chicago', 'active')
+values ('Loop Network Holdings', 'holdings', true, 'America/Chicago', 'active')
 on conflict (slug) do nothing;
 
 insert into territories (name, slug, parent_id, timezone, status)

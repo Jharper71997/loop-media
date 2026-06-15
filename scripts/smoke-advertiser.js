@@ -18,8 +18,8 @@ function loadEnv() {
 async function main() {
   const env = loadEnv()
   const url = env.NEXT_PUBLIC_SUPABASE_URL
-  const email = 'advertiser@loopmedia.app'
-  const password = 'LoopMedia2026!'
+  const email = 'advertiser@loopnetwork.app'
+  const password = 'LoopNetwork2026!'
 
   const admin = createClient(url, env.SUPABASE_SERVICE_ROLE_KEY, {
     auth: { autoRefreshToken: false, persistSession: false },
@@ -102,7 +102,7 @@ async function main() {
     .from('campaigns')
     .select('id, status, target_impressions, ad:ads(title, status)')
   console.log('Advertiser can read own campaigns:', JSON.stringify(mine, null, 2))
-  console.log('\nRLS chain OK. Demo advertiser login: advertiser@loopmedia.app / LoopMedia2026!')
+  console.log('\nRLS chain OK. Demo advertiser login: advertiser@loopnetwork.app / LoopNetwork2026!')
 }
 
 main().catch((e) => {

@@ -1,4 +1,4 @@
-# Loop Media
+# Loop Network
 
 Local indoor digital advertising network. TVs in high-dwell venues play a continuous loop of
 15-second ads from local businesses; advertisers buy *reach* across a city's screens — "Facebook

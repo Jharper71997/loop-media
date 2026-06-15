@@ -23,7 +23,7 @@ export async function GET(req: Request) {
   const supabase = createAdminClient()
   const { data: tvRow } = await supabase
     .from('tvs')
-    .select('id, loop_length_seconds, slot_seconds, venue:venues(name, lat, lng, territory:territories(name))')
+    .select('id, loop_length_seconds, slot_seconds, venue:venues(name, lat, lng, territory:territories(id, name))')
     .eq('device_id', device)
     .maybeSingle()
 
@@ -39,7 +39,7 @@ export async function GET(req: Request) {
       name: string
       lat: number | null
       lng: number | null
-      territory: { name: string } | null
+      territory: { id: string; name: string } | null
     } | null
   }
 
@@ -100,10 +100,28 @@ export async function GET(req: Request) {
     })
   )
 
+  // Custom filler cards (trivia / local events / sports / promos) the admin
+  // authored for this territory. Active and unexpired only. The TV interleaves
+  // them with ads + the built-in weather/clock slides.
+  let filler: { type: string; payload: Record<string, unknown> }[] = []
+  const territoryId = tv.venue?.territory?.id
+  if (territoryId) {
+    const { data: fillerData } = await supabase
+      .from('filler_content')
+      .select('type, payload, expires_at')
+      .eq('territory_id', territoryId)
+      .eq('active', true)
+      .order('created_at', { ascending: false })
+    filler = ((fillerData ?? []) as { type: string; payload: Record<string, unknown>; expires_at: string | null }[])
+      .filter((f) => !f.expires_at || new Date(f.expires_at).getTime() > Date.now())
+      .map((f) => ({ type: f.type, payload: f.payload }))
+  }
+
   return NextResponse.json({
     tv: { loop_length_seconds: tv.loop_length_seconds, slot_seconds: tv.slot_seconds },
     venue: tv.venue,
     items,
+    filler,
     generated_at: now,
   })
 }

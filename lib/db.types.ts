@@ -78,6 +78,9 @@ export interface Venue {
   contact_phone: string | null
   host_user_id: string | null
   status: VenueStatus
+  business_open: string | null
+  business_close: string | null
+  business_days: number[] | null
   created_at: string
   updated_at: string
 }

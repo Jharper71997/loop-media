@@ -15,6 +15,9 @@ export interface RegisterVenueInput {
   venue_type: string | null
   foot_traffic_estimate: number
   contact_phone: string | null
+  business_open?: string
+  business_close?: string
+  business_days?: number[]
 }
 
 function slugify(s: string): string {
@@ -90,6 +93,10 @@ export async function requestVenue(input: RegisterVenueInput) {
     contact_phone: input.contact_phone?.trim() || null,
     host_user_id: profile.id,
     status: 'inactive',
+    business_open: input.business_open || '10:00',
+    business_close: input.business_close || '22:00',
+    business_days:
+      input.business_days && input.business_days.length ? input.business_days : [0, 1, 2, 3, 4, 5, 6],
   })
   if (error) return { error: error.message }
 

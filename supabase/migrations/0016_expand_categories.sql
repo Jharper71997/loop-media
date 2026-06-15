@@ -1,4 +1,4 @@
--- Loop Media — expand the venue category catalog.
+-- Loop Network — expand the venue category catalog.
 --
 -- 0003_seed only seeded 8 categories for the Crown Point demo. Hosts register in
 -- any city and need a real, broad list to classify their space. This adds the

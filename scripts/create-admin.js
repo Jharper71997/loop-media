@@ -38,7 +38,7 @@ async function main() {
     email,
     password,
     email_confirm: true,
-    user_metadata: { full_name: 'Loop Media Admin', role: 'admin' },
+    user_metadata: { full_name: 'Loop Network Admin', role: 'admin' },
   })
   if (createErr && !/already|registered|exists/i.test(createErr.message)) {
     throw createErr
