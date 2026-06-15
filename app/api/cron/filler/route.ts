@@ -52,9 +52,10 @@ function dayOfYear(d: Date): number {
 export async function GET(req: Request) {
   const secret = process.env.CRON_SECRET
   const auth = req.headers.get('authorization')
-  const url = new URL(req.url)
-  // ?force=1 also allowed for manual testing without the Bearer (no secret set).
-  if (secret && auth !== `Bearer ${secret}` && url.searchParams.get('force') !== '1') {
+  // Fail closed: always require the Bearer (matches place/reports crons). The
+  // old `?force=1` query bypassed auth entirely, letting anyone wipe + reseed
+  // filler on every screen. Manual runs must pass the Bearer.
+  if (!secret || auth !== `Bearer ${secret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

@@ -1,11 +1,15 @@
 // Shared TV helpers.
 
-// Human-friendly pairing code, e.g. "LM-K7P2Q" (no ambiguous 0/O/1/I). Used by
-// the admin TV tools and host self-provisioning.
+import { randomInt } from 'node:crypto'
+
+// Human-friendly pairing code, e.g. "LM-K7P2Q8" (no ambiguous 0/O/1/I). Used by
+// the admin TV tools and host self-provisioning. Uses CSPRNG (randomInt), not
+// Math.random, and 6 chars (~1B keyspace) so codes aren't brute-forceable; the
+// pair endpoint also consumes a code on use so it's effectively single-shot.
 export function genPairingCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
   let s = ''
-  for (let i = 0; i < 5; i++) s += chars[Math.floor(Math.random() * chars.length)]
+  for (let i = 0; i < 6; i++) s += chars[randomInt(chars.length)]
   return `LM-${s}`
 }
 

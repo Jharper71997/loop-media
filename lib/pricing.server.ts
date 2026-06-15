@@ -45,6 +45,14 @@ export interface AdvertiserContext {
   isHost: boolean
 }
 
+// Full CALENDAR months between two dates (not 30-day buckets, which unlocked the
+// 12-month loyalty tier ~5 days early).
+function fullMonthsBetween(a: Date, b: Date): number {
+  let m = (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth())
+  if (b.getDate() < a.getDate()) m -= 1 // haven't reached the anniversary day yet
+  return Math.max(0, m)
+}
+
 export async function resolveAdvertiserContext(userId: string): Promise<AdvertiserContext> {
   const supabase = await createClient()
 
@@ -64,9 +72,7 @@ export async function resolveAdvertiserContext(userId: string): Promise<Advertis
   ])
 
   const since = subs?.[0]?.created_at ? new Date(subs[0].created_at) : null
-  const monthsActive = since
-    ? Math.max(0, Math.floor((Date.now() - since.getTime()) / (30 * 86400000)))
-    : 0
+  const monthsActive = since ? fullMonthsBetween(since, new Date()) : 0
 
   let screensRunning = 0
   const campIds = (camps ?? []).map((c) => c.id)
