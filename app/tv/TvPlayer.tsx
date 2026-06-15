@@ -183,7 +183,24 @@ function Player({ deviceId, onUnpair }: { deviceId: string; onUnpair: () => void
   const [now, setNow] = useState(() => new Date())
   const [weather, setWeather] = useState<{ temp: number; code: number } | null>(null)
   const [fatal, setFatal] = useState<string | null>(null)
+  const [isFullscreen, setIsFullscreen] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Fullscreen so the screen looks like a real display, not a browser tab.
+  // Browsers require a user gesture, so we go fullscreen on the first tap/click
+  // anywhere (and expose a button). No-ops on TV browsers that lack the API.
+  const goFullscreen = useCallback(() => {
+    const el = document.documentElement as HTMLElement & {
+      webkitRequestFullscreen?: () => Promise<void>
+    }
+    const req = el.requestFullscreen ?? el.webkitRequestFullscreen
+    if (req) req.call(el).catch(() => {})
+  }, [])
+  useEffect(() => {
+    const sync = () => setIsFullscreen(!!document.fullscreenElement)
+    document.addEventListener('fullscreenchange', sync)
+    return () => document.removeEventListener('fullscreenchange', sync)
+  }, [])
 
   const loadLoop = useCallback(async () => {
     try {
@@ -211,12 +228,54 @@ function Player({ deviceId, onUnpair }: { deviceId: string; onUnpair: () => void
     }
   }, [deviceId, onUnpair])
 
-  // Initial load + periodic resync (5 min).
+  // Initial load + periodic resync (45s) so a newly approved ad shows up on the
+  // screen within a minute without anyone touching the TV. Also re-sync whenever
+  // the tab regains focus/visibility (e.g. someone wakes the screen).
   useEffect(() => {
     loadLoop()
-    const id = setInterval(loadLoop, 5 * 60 * 1000)
-    return () => clearInterval(id)
+    const id = setInterval(loadLoop, 45 * 1000)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') loadLoop()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', loadLoop)
+    return () => {
+      clearInterval(id)
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', loadLoop)
+    }
   }, [loadLoop])
+
+  // Keep the screen awake. Best-effort: stops the browser/device from dimming
+  // or sleeping where the Wake Lock API is supported, and re-acquires the lock
+  // when the tab becomes visible again (the OS drops it on blur). This does NOT
+  // override a TV's built-in screensaver / ambient mode / auto power-off, which
+  // must be turned off in the TV's own settings.
+  useEffect(() => {
+    type WakeLockSentinel = { release: () => Promise<void> }
+    type WakeLockNav = { wakeLock?: { request: (t: 'screen') => Promise<WakeLockSentinel> } }
+    const wl = (navigator as Navigator & WakeLockNav).wakeLock
+    if (!wl) return
+    let sentinel: WakeLockSentinel | null = null
+    let released = false
+    const acquire = async () => {
+      try {
+        sentinel = await wl.request('screen')
+      } catch {
+        /* not granted (e.g. tab not visible) */
+      }
+    }
+    acquire()
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && !released) acquire()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      released = true
+      document.removeEventListener('visibilitychange', onVisible)
+      sentinel?.release().catch(() => {})
+    }
+  }, [])
 
   // Heartbeat (30s).
   useEffect(() => {
@@ -297,7 +356,12 @@ function Player({ deviceId, onUnpair }: { deviceId: string; onUnpair: () => void
   const w = weather ? weatherInfo(weather.code) : null
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden bg-black text-white">
+    <div
+      className="relative h-screen w-screen overflow-hidden bg-black text-white"
+      onClick={() => {
+        if (!document.fullscreenElement) goFullscreen()
+      }}
+    >
       {slide.kind === 'ad' ? (
         slide.creative_type === 'video' ? (
           <video
@@ -396,8 +460,20 @@ function Player({ deviceId, onUnpair }: { deviceId: string; onUnpair: () => void
             {venueName}
           </span>
         )}
+        {!isFullscreen && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              goFullscreen()
+            }}
+            className="rounded-full bg-black/60 px-2.5 py-1 text-xs text-white/70 hover:bg-black/80 hover:text-white"
+          >
+            Fullscreen
+          </button>
+        )}
         <button
-          onClick={() => {
+          onClick={(e) => {
+            e.stopPropagation()
             if (window.confirm('Unpair this screen? It will return to the pairing code entry.'))
               onUnpair()
           }}
