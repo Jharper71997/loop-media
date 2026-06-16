@@ -31,12 +31,21 @@ type CampaignRow = {
 function statusLabel(c: CampaignRow): {
   label: string
   variant: 'default' | 'secondary' | 'destructive' | 'outline'
+  hint?: string
 } {
   if (c.ad?.status === 'rejected') return { label: 'Rejected', variant: 'destructive' }
   if (c.ad?.status === 'pending') return { label: 'Pending review', variant: 'secondary' }
   if (c.status === 'active') return { label: 'Active', variant: 'default' }
   if (c.status === 'paused') return { label: 'Paused', variant: 'outline' }
   if (c.status === 'canceled') return { label: 'Canceled', variant: 'destructive' }
+  // Draft — give a specific reason so advertisers know what to do next
+  const sub = c.subscription?.[0]?.status
+  if (!sub || sub === 'incomplete')
+    return { label: 'Payment needed', variant: 'outline', hint: 'Finish checkout to go live' }
+  if (sub === 'past_due')
+    return { label: 'Payment past due', variant: 'destructive', hint: 'Update your payment method' }
+  if (!c.ad?.creative_url)
+    return { label: 'Missing creative', variant: 'outline', hint: 'Upload your ad to continue' }
   return { label: 'Draft', variant: 'secondary' }
 }
 
@@ -269,6 +278,9 @@ export default async function AdvertiserDashboard({
                     </div>
                     {c.ad?.status === 'rejected' && c.ad.rejection_reason && (
                       <p className="text-xs text-destructive">Reason: {c.ad.rejection_reason}</p>
+                    )}
+                    {s.hint && (
+                      <p className="text-xs text-amber-500">{s.hint}</p>
                     )}
                   </CardContent>
                 </Card>
