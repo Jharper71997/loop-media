@@ -11,7 +11,13 @@ import { StepHeader } from '@/components/app/StepHeader'
 import { StickyCta } from '@/components/app/StickyCta'
 import { VenueCard } from '@/components/app/VenueCard'
 import { formatCents } from '@/lib/format'
-import { quoteCart, volumeDiscount, type PriceTier, type QuoteOptions } from '@/lib/pricing'
+import {
+  quoteCart,
+  volumeDiscount,
+  type PriceTier,
+  type QuoteOptions,
+  type PricingConfig,
+} from '@/lib/pricing'
 import { joinWaitlist, leaveWaitlist, requestCategory } from './actions'
 
 export type BrowseVenue = {
@@ -49,12 +55,14 @@ export function BrowseClient({
   activeCat,
   categoryChosen,
   quoteOpts,
+  pricingConfig,
 }: {
   venues: BrowseVenue[]
   categories: { id: string; name: string }[]
   activeCat: string | null
   categoryChosen: boolean
   quoteOpts?: QuoteOptions
+  pricingConfig?: PricingConfig
 }) {
   const router = useRouter()
   const [cart, setCart] = useState<string[]>([])
@@ -82,8 +90,8 @@ export function BrowseClient({
     [cart, byId]
   )
   const quote = useMemo(
-    () => quoteCart(cartVenues.map((v) => v.tier), quoteOpts),
-    [cartVenues, quoteOpts]
+    () => quoteCart(cartVenues.map((v) => v.tier), quoteOpts, pricingConfig),
+    [cartVenues, quoteOpts, pricingConfig]
   )
 
   const inCart = (id: string) => cart.includes(id)

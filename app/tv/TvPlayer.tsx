@@ -114,27 +114,74 @@ export function TvPlayer() {
 /* ---------------- Pairing ---------------- */
 
 function Pairing({ onPaired }: { onPaired: (deviceId: string) => void }) {
-  const [code, setCode] = useState('')
+  // A provisioned screen carries its pairing code in the kiosk URL
+  // (/tv?code=LM-XXXXX) so it pairs itself on first boot with no human input.
+  // Read it synchronously so we show a quiet "pairing…" state — not the manual
+  // form — while the auto-pair runs. After the first success the device_id lives
+  // in localStorage and this screen never reaches pairing again, so the code in
+  // the URL is harmless (and is consumed one-time server-side regardless).
+  const presetCode =
+    typeof window === 'undefined'
+      ? ''
+      : (new URLSearchParams(window.location.search).get('code') ?? '').trim().toUpperCase()
+
+  const [code, setCode] = useState(presetCode)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [autoPairing, setAutoPairing] = useState(!!presetCode)
+  const attempted = useRef(false)
+
+  const pair = useCallback(
+    async (pairingCode: string) => {
+      setBusy(true)
+      setError(null)
+      try {
+        const res = await fetch('/api/tv/pair', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ pairing_code: pairingCode }),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || 'Pairing failed')
+        onPaired(data.device_id)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Pairing failed')
+        setBusy(false)
+        // Auto-pair failed (e.g. code already consumed): reveal the manual form
+        // so it can still be paired by hand on the bench.
+        setAutoPairing(false)
+      }
+    },
+    [onPaired]
+  )
+
+  // Fire the preset auto-pair exactly once, on first boot.
+  useEffect(() => {
+    if (attempted.current || !presetCode) return
+    attempted.current = true
+    pair(presetCode)
+  }, [presetCode, pair])
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
-    setBusy(true)
-    setError(null)
-    try {
-      const res = await fetch('/api/tv/pair', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ pairing_code: code }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Pairing failed')
-      onPaired(data.device_id)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Pairing failed')
-      setBusy(false)
-    }
+    await pair(code)
+  }
+
+  // Quiet status while a provisioned screen pairs itself (no keyboard involved).
+  if (autoPairing) {
+    return (
+      <div className="flex h-screen w-screen flex-col items-center justify-center bg-black text-white">
+        <Image
+          src="/loop-network-logo.png"
+          alt="Loop Network"
+          width={220}
+          height={220}
+          priority
+          className="mb-4 h-40 w-auto"
+        />
+        <p className="text-white/50">Pairing this screen…</p>
+      </div>
+    )
   }
 
   return (

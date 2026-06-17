@@ -16,6 +16,8 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { formatNumber, formatCents } from '@/lib/format'
 import { suggestTier, tierPriceCents, TIER_LABEL } from '@/lib/pricing'
+import { getPricingConfig } from '@/lib/pricing.server'
+import { isVenueListable } from '@/lib/venue'
 import type { Category, Territory, Venue, PriceTier } from '@/lib/db.types'
 import { VenueDialog } from './VenueDialog'
 import { VisibilityToggle } from './VisibilityToggle'
@@ -35,6 +37,7 @@ export default async function VenuesPage() {
   const territory = await getTerritoryContext(profile)
   const t = territory.activeId
   const supabase = await createClient()
+  const pricingConfig = await getPricingConfig()
 
   let vq = supabase
     .from('venues')
@@ -64,6 +67,7 @@ export default async function VenuesPage() {
             territories={territories}
             hosts={hosts}
             defaultTerritoryId={t ?? ''}
+            pricingConfig={pricingConfig}
           />
         }
       />
@@ -92,9 +96,15 @@ export default async function VenuesPage() {
                   )}
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <Badge variant={v.status === 'active' ? 'default' : 'secondary'}>
-                    {v.status === 'active' ? 'On map' : 'Hidden'}
-                  </Badge>
+                  {v.status !== 'active' ? (
+                    <Badge variant="secondary">Hidden</Badge>
+                  ) : isVenueListable(v) ? (
+                    <Badge>On map</Badge>
+                  ) : (
+                    <Badge variant="outline" className="border-amber-500/50 text-amber-600">
+                      Needs data
+                    </Badge>
+                  )}
                   <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
                 </div>
               </Link>
@@ -103,7 +113,7 @@ export default async function VenuesPage() {
                 {!t && <span>{v.territory?.name ?? '—'}</span>}
                 <span>{formatNumber(v.foot_traffic_estimate)}/mo traffic</span>
                 <span className="font-medium text-primary">
-                  {TIER_LABEL[venueTier(v)]} · {formatCents(tierPriceCents(venueTier(v)))}/mo
+                  {TIER_LABEL[venueTier(v)]} · {formatCents(tierPriceCents(venueTier(v), pricingConfig))}/mo
                 </span>
               </div>
               <div className="mt-3 flex justify-end gap-1">
@@ -114,6 +124,7 @@ export default async function VenuesPage() {
                   territories={territories}
                   hosts={hosts}
                   defaultTerritoryId={t ?? ''}
+                  pricingConfig={pricingConfig}
                 />
                 <DeleteButton id={v.id} action={deleteVenue} />
               </div>
@@ -165,15 +176,21 @@ export default async function VenuesPage() {
                     {formatNumber(v.foot_traffic_estimate)}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
-                    <span className="font-medium">{formatCents(tierPriceCents(venueTier(v)))}</span>
+                    <span className="font-medium">{formatCents(tierPriceCents(venueTier(v), pricingConfig))}</span>
                     <span className="block text-xs text-muted-foreground">
                       {TIER_LABEL[venueTier(v)]}
                     </span>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={v.status === 'active' ? 'default' : 'secondary'}>
-                      {v.status === 'active' ? 'On map' : 'Hidden'}
-                    </Badge>
+                    {v.status !== 'active' ? (
+                      <Badge variant="secondary">Hidden</Badge>
+                    ) : isVenueListable(v) ? (
+                      <Badge>On map</Badge>
+                    ) : (
+                      <Badge variant="outline" className="border-amber-500/50 text-amber-600">
+                        Needs data
+                      </Badge>
+                    )}
                   </TableCell>
                   <TableCell>
                     <div className="flex justify-end gap-1">
@@ -184,6 +201,7 @@ export default async function VenuesPage() {
                         territories={territories}
                         hosts={hosts}
                         defaultTerritoryId={t ?? ''}
+                        pricingConfig={pricingConfig}
                       />
                       <DeleteButton id={v.id} action={deleteVenue} />
                     </div>

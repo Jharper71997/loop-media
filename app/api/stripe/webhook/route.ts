@@ -66,6 +66,42 @@ export async function POST(req: Request) {
   return NextResponse.json({ received: true })
 }
 
+type PaymentInsert = {
+  stripe_ref: string | null | undefined
+  amount_cents: number
+  currency: string
+  source: string
+  advertiser_id?: string | null
+  campaign_id?: string | null
+  territory_id?: string | null
+  stripe_customer_id?: string | null
+  paid_at: string
+}
+
+// Insert a factual cash record. stripe_ref is unique, so Stripe retries and the
+// duplicate invoice.paid / payment_succeeded pair can't double-count (conflict is
+// ignored). Skips zero-amount events.
+async function recordPayment(
+  supabase: ReturnType<typeof createAdminClient>,
+  p: PaymentInsert
+): Promise<void> {
+  if (!p.stripe_ref || p.amount_cents <= 0) return
+  await supabase.from('payments').upsert(
+    {
+      stripe_ref: p.stripe_ref,
+      amount_cents: p.amount_cents,
+      currency: p.currency,
+      source: p.source,
+      advertiser_id: p.advertiser_id ?? null,
+      campaign_id: p.campaign_id ?? null,
+      territory_id: p.territory_id ?? null,
+      stripe_customer_id: p.stripe_customer_id ?? null,
+      paid_at: p.paid_at,
+    },
+    { onConflict: 'stripe_ref', ignoreDuplicates: true }
+  )
+}
+
 async function handleEvent(
   event: Stripe.Event,
   supabase: ReturnType<typeof createAdminClient>
@@ -83,6 +119,15 @@ async function handleEvent(
     const adChangeId = s.metadata?.ad_change_id
     if (adChangeId) {
       await applyAdChange(supabase, adChangeId)
+      await recordPayment(supabase, {
+        stripe_ref: s.id,
+        amount_cents: s.amount_total ?? 0,
+        currency: s.currency ?? 'usd',
+        source: 'ad_change',
+        advertiser_id: s.metadata?.advertiser_id ?? null,
+        stripe_customer_id: typeof s.customer === 'string' ? s.customer : null,
+        paid_at: now,
+      })
       return
     }
 
@@ -183,5 +228,53 @@ async function handleEvent(
       .from('memberships')
       .update({ status: 'canceled', updated_at: now })
       .eq('stripe_subscription_id', sub.id)
+  } else if (event.type === 'invoice.paid') {
+    // The money-in event for recurring revenue: every paid invoice (first charge,
+    // renewals, and the embedded one-time setup fee) lands here.
+    const inv = event.data.object as Stripe.Invoice
+    const amount = inv.amount_paid ?? 0
+    if (amount <= 0) return
+    const subId =
+      typeof (inv as unknown as { subscription?: string | null }).subscription === 'string'
+        ? ((inv as unknown as { subscription?: string }).subscription as string)
+        : null
+    // Attribute to our campaign subscription or a membership via the Stripe sub id.
+    let advertiserId: string | null = null
+    let campaignId: string | null = null
+    let territoryId: string | null = null
+    let source = 'subscription'
+    if (subId) {
+      const { data: subRow } = await supabase
+        .from('subscriptions')
+        .select('advertiser_id, campaign_id, territory_id')
+        .eq('stripe_subscription_id', subId)
+        .maybeSingle()
+      if (subRow) {
+        advertiserId = subRow.advertiser_id
+        campaignId = subRow.campaign_id
+        territoryId = subRow.territory_id
+      } else {
+        const { data: memRow } = await supabase
+          .from('memberships')
+          .select('advertiser_id')
+          .eq('stripe_subscription_id', subId)
+          .maybeSingle()
+        if (memRow) {
+          advertiserId = memRow.advertiser_id
+          source = 'membership'
+        }
+      }
+    }
+    await recordPayment(supabase, {
+      stripe_ref: inv.id,
+      amount_cents: amount,
+      currency: inv.currency ?? 'usd',
+      source,
+      advertiser_id: advertiserId,
+      campaign_id: campaignId,
+      territory_id: territoryId,
+      stripe_customer_id: typeof inv.customer === 'string' ? inv.customer : null,
+      paid_at: now,
+    })
   }
 }

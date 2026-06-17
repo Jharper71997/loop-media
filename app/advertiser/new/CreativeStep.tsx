@@ -22,7 +22,7 @@ import { StepHeader } from '@/components/app/StepHeader'
 import { StickyCta } from '@/components/app/StickyCta'
 import { formatCents } from '@/lib/format'
 import { CREATIVE_SETUP_FEE_CENTS, CREATIVE_REFRESH_CENTS } from '@/lib/fees'
-import { quoteCart, type QuoteOptions } from '@/lib/pricing'
+import { quoteCart, type QuoteOptions, type PricingConfig } from '@/lib/pricing'
 import { CART_KEY } from '../browse/BrowseClient'
 import { submitCampaign, type NewCampaignInput } from './actions'
 import type { CartVenue } from './types'
@@ -34,11 +34,13 @@ export function CreativeStep({
   categories,
   venues,
   quoteOpts,
+  pricingConfig,
 }: {
   userId: string
   categories: { id: string; name: string }[]
   venues: CartVenue[]
   quoteOpts?: QuoteOptions
+  pricingConfig?: PricingConfig
 }) {
   const router = useRouter()
   const byId = useMemo(() => new Map(venues.map((v) => [v.id, v])), [venues])
@@ -63,7 +65,10 @@ export function CreativeStep({
     () => cartIds.map((id) => byId.get(id)).filter(Boolean) as CartVenue[],
     [cartIds, byId]
   )
-  const quote = useMemo(() => quoteCart(cart.map((v) => v.tier), quoteOpts), [cart, quoteOpts])
+  const quote = useMemo(
+    () => quoteCart(cart.map((v) => v.tier), quoteOpts, pricingConfig),
+    [cart, quoteOpts, pricingConfig]
+  )
   const territoryId = cart[0]?.territoryId ?? ''
   const totalWithCreative = quote.totalCents + (mode === 'help' ? CREATIVE_REFRESH_CENTS : 0)
 

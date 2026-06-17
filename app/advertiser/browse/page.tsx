@@ -2,7 +2,12 @@ import { requireProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import type { Territory, PriceTier } from '@/lib/db.types'
 import { suggestTier, tierPriceCents, type QuoteOptions } from '@/lib/pricing'
-import { resolveAdvertiserContext, contextToQuoteOptions } from '@/lib/pricing.server'
+import {
+  resolveAdvertiserContext,
+  contextToQuoteOptions,
+  getPricingConfig,
+} from '@/lib/pricing.server'
+import { isVenueListable } from '@/lib/venue'
 import { BrowseClient, type BrowseVenue } from './BrowseClient'
 
 export default async function BrowsePage({
@@ -27,6 +32,7 @@ export default async function BrowsePage({
   const categories = (catData ?? []) as { id: string; name: string }[]
 
   const ctx = await resolveAdvertiserContext(profile.id)
+  const pricingConfig = await getPricingConfig()
   const quoteOpts: QuoteOptions = contextToQuoteOptions(ctx)
 
   const { cat } = await searchParams
@@ -134,7 +140,7 @@ export default async function BrowsePage({
         lat: r.lat,
         lng: r.lng,
         tier,
-        priceCents: tierPriceCents(tier),
+        priceCents: tierPriceCents(tier, pricingConfig),
         screens: r.tvs.length,
         capacity,
         open,
@@ -143,6 +149,10 @@ export default async function BrowsePage({
         waitlisted: waitlisted.has(r.id),
       }
     })
+
+    // Only surface venues with real data (known traffic + a map location).
+    // Incomplete venues stay hidden from advertisers — no made-up numbers.
+    venues = venues.filter((v) => isVenueListable(v))
   }
 
   return (
@@ -152,6 +162,7 @@ export default async function BrowsePage({
       activeCat={activeCat}
       categoryChosen={categoryChosen}
       quoteOpts={quoteOpts}
+      pricingConfig={pricingConfig}
     />
   )
 }

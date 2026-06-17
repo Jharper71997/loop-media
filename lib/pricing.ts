@@ -12,12 +12,29 @@
 
 export type PriceTier = 'local' | 'standard' | 'high' | 'premium'
 
-// Stephen's anchors: gym = $75 (High). The rest set around it.
-export const TIER_PRICE_CENTS: Record<PriceTier, number> = {
-  premium: 9500, // 1,500+ people/day
-  high: 7500, //    800–1,500  ← gym anchor
-  standard: 5500, // 400–800
-  local: 4000, //   under 400
+// All editable pricing knobs in one object. The DB row (pricing_config) overrides
+// these per deployment via getPricingConfig(); this is the fallback when the DB is
+// unreachable, and the seed values for migration 0023.
+export interface PricingConfig {
+  tierPriceCents: Record<PriceTier, number>
+  minMonthlyCents: number
+  hostDiscount: number // host advertising elsewhere -> fraction off (0.2 = 20%)
+  loyalty12moDiscount: number // 12 months active -> extra fraction off
+  maxDiscount: number // safety cap on combined discounts
+}
+
+// $75 screen floor: every screen is at least $75/mo. Edit live at /admin/pricing.
+export const DEFAULT_PRICING_CONFIG: PricingConfig = {
+  tierPriceCents: {
+    premium: 12000, // 1,500+ people/day
+    high: 9500, //    800-1,500
+    standard: 8500, // 400-800
+    local: 7500, //   under 400  (floor)
+  },
+  minMonthlyCents: 20000, // $200/mo to open an account (~3 screens)
+  hostDiscount: 0.2,
+  loyalty12moDiscount: 0.05,
+  maxDiscount: 0.35,
 }
 
 export const TIER_LABEL: Record<PriceTier, string> = {
@@ -27,21 +44,19 @@ export const TIER_LABEL: Record<PriceTier, string> = {
   local: 'Local',
 }
 
-// Account floor: $200/mo to open an account (~3 Standard screens).
-export const MIN_MONTHLY_CENTS = 20000
+// Back-compat re-exports: some call sites import these directly. They mirror
+// DEFAULT_PRICING_CONFIG; price-accurate code should take a PricingConfig instead.
+export const TIER_PRICE_CENTS = DEFAULT_PRICING_CONFIG.tierPriceCents
+export const MIN_MONTHLY_CENTS = DEFAULT_PRICING_CONFIG.minMonthlyCents
+export const HOST_DISCOUNT = DEFAULT_PRICING_CONFIG.hostDiscount
+export const LOYALTY_12MO_DISCOUNT = DEFAULT_PRICING_CONFIG.loyalty12moDiscount
+export const MAX_DISCOUNT = DEFAULT_PRICING_CONFIG.maxDiscount
 
-// Hosts advertising elsewhere in the network get 20% off the per-TV rate.
-export const HOST_DISCOUNT = 0.2
-
-// 12-months-active loyalty perk: an extra 5% off everything.
-export const LOYALTY_12MO_DISCOUNT = 0.05
-
-// Stacked-discount safety cap so margin never collapses when host + max volume +
-// loyalty all land on one account. Named knob — raise/lower with Stephen.
-export const MAX_DISCOUNT = 0.35
-
-export function tierPriceCents(tier: PriceTier): number {
-  return TIER_PRICE_CENTS[tier]
+export function tierPriceCents(
+  tier: PriceTier,
+  config: PricingConfig = DEFAULT_PRICING_CONFIG
+): number {
+  return config.tierPriceCents[tier]
 }
 
 // Starting tier suggestion from a foot-traffic estimate (~monthly visitors).
@@ -86,27 +101,32 @@ export interface Quote {
 }
 
 // Quote a cart of venue tiers. `tiers` is one entry per screen in the cart.
-export function quoteCart(tiers: PriceTier[], opts: QuoteOptions = {}): Quote {
+export function quoteCart(
+  tiers: PriceTier[],
+  opts: QuoteOptions = {},
+  config: PricingConfig = DEFAULT_PRICING_CONFIG
+): Quote {
+  const price = config.tierPriceCents
   const totalScreens = tiers.length
-  const listCents = tiers.reduce((s, t) => s + TIER_PRICE_CENTS[t], 0)
+  const listCents = tiers.reduce((s, t) => s + price[t], 0)
 
   // Comp the cheapest screens first (best advertiser experience).
-  const sorted = [...tiers].sort((a, b) => TIER_PRICE_CENTS[a] - TIER_PRICE_CENTS[b])
+  const sorted = [...tiers].sort((a, b) => price[a] - price[b])
   const freeScreens = Math.min(Math.max(opts.freeScreens ?? 0, 0), totalScreens)
-  const compedCents = sorted.slice(0, freeScreens).reduce((s, t) => s + TIER_PRICE_CENTS[t], 0)
+  const compedCents = sorted.slice(0, freeScreens).reduce((s, t) => s + price[t], 0)
   const subtotalCents = listCents - compedCents
   const billableScreens = totalScreens - freeScreens
 
   const volumePct = volumeDiscount(totalScreens)
-  const hostPct = opts.isHost ? HOST_DISCOUNT : 0
-  const loyaltyPct = opts.loyalty12mo ? LOYALTY_12MO_DISCOUNT : 0
-  const discountPct = Math.min(volumePct + hostPct + loyaltyPct, MAX_DISCOUNT)
+  const hostPct = opts.isHost ? config.hostDiscount : 0
+  const loyaltyPct = opts.loyalty12mo ? config.loyalty12moDiscount : 0
+  const discountPct = Math.min(volumePct + hostPct + loyaltyPct, config.maxDiscount)
 
   const discountedCents = Math.round(subtotalCents * (1 - discountPct))
 
   // Floor only applies to a non-empty cart.
-  const floorApplied = totalScreens > 0 && discountedCents < MIN_MONTHLY_CENTS
-  const totalCents = totalScreens === 0 ? 0 : Math.max(discountedCents, MIN_MONTHLY_CENTS)
+  const floorApplied = totalScreens > 0 && discountedCents < config.minMonthlyCents
+  const totalCents = totalScreens === 0 ? 0 : Math.max(discountedCents, config.minMonthlyCents)
 
   return {
     screens: billableScreens,

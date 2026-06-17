@@ -83,7 +83,7 @@ export function MapCanvas({
                 <br />
                 {v.category ?? '—'}
                 <br />
-                {v.footTraffic.toLocaleString()} visits/mo
+                {v.footTraffic > 0 ? `${v.footTraffic.toLocaleString()} visits/mo` : 'Traffic not set'}
                 <br />
                 {v.used}/{v.capacity} slots filled · {v.screensTotal} screen
                 {v.screensTotal === 1 ? '' : 's'}

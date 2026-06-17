@@ -13,6 +13,7 @@ import {
   Tags,
   Users,
   DollarSign,
+  Coins,
   Map,
   Package,
   Activity,
@@ -60,6 +61,7 @@ const GROUPS: NavGroup[] = [
       { href: '/admin/tvs', label: 'TVs', icon: Tv },
       { href: '/admin/categories', label: 'Categories & caps', icon: Tags },
       { href: '/admin/packages', label: 'Packages', icon: Package },
+      { href: '/admin/pricing', label: 'Tier pricing', icon: Coins },
     ],
   },
   {

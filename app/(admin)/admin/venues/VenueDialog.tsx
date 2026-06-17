@@ -23,7 +23,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import type { Category, Territory, Venue, PriceTier } from '@/lib/db.types'
-import { TIER_LABEL, TIER_PRICE_CENTS, suggestTier } from '@/lib/pricing'
+import { TIER_LABEL, TIER_PRICE_CENTS, suggestTier, type PricingConfig } from '@/lib/pricing'
 import { formatCents } from '@/lib/format'
 import { saveVenue, type VenueInput } from './actions'
 
@@ -38,16 +38,20 @@ export function VenueDialog({
   territories,
   hosts,
   defaultTerritoryId,
+  pricingConfig,
 }: {
   venue?: Venue
   categories: Category[]
   territories: Territory[]
   hosts: { id: string; email: string; full_name: string | null }[]
   defaultTerritoryId: string
+  pricingConfig?: PricingConfig
 }) {
   const isEdit = !!venue
   const [open, setOpen] = useState(false)
   const [pending, start] = useTransition()
+  // Tier prices for the dropdown labels — DB config when provided, else defaults.
+  const prices = pricingConfig?.tierPriceCents ?? TIER_PRICE_CENTS
 
   const [form, setForm] = useState<VenueInput>({
     id: venue?.id,
@@ -184,17 +188,17 @@ export function VenueDialog({
                 <SelectValue>
                   {(v: string | null) =>
                     v && v !== 'auto'
-                      ? `${TIER_LABEL[v as PriceTier]} · ${formatCents(TIER_PRICE_CENTS[v as PriceTier])}/mo`
+                      ? `${TIER_LABEL[v as PriceTier]} · ${formatCents(prices[v as PriceTier])}/mo`
                       : `Auto (${TIER_LABEL[suggestTier(form.foot_traffic_estimate)]})`}
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="auto">
-                  Auto from foot traffic ({formatCents(TIER_PRICE_CENTS[suggestTier(form.foot_traffic_estimate)])}/mo)
+                  Auto from foot traffic ({formatCents(prices[suggestTier(form.foot_traffic_estimate)])}/mo)
                 </SelectItem>
                 {TIERS.map((t) => (
                   <SelectItem key={t} value={t}>
-                    {TIER_LABEL[t]} · {formatCents(TIER_PRICE_CENTS[t])}/mo
+                    {TIER_LABEL[t]} · {formatCents(prices[t])}/mo
                   </SelectItem>
                 ))}
               </SelectContent>

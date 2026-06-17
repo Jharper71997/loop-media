@@ -39,14 +39,29 @@ export default async function RevenuePage() {
   const { data } = await q
   const subs = (data ?? []) as unknown as SubRow[]
 
+  // Factual cash collected, from the Stripe payments ledger (webhook-written).
+  // Empty until Stripe is connected, so this reads $0 rather than contracted value.
+  let pq = supabase.from('payments').select('advertiser_id, amount_cents, paid_at')
+  if (t) pq = pq.eq('territory_id', t)
+  const { data: payData } = await pq
+  const payments = (payData ?? []) as {
+    advertiser_id: string | null
+    amount_cents: number
+    paid_at: string
+  }[]
+  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()
+  const collectedAllTime = payments.reduce((acc, p) => acc + (p.amount_cents ?? 0), 0)
+  const collectedThisMonth = payments
+    .filter((p) => p.paid_at >= monthStart)
+    .reduce((acc, p) => acc + (p.amount_cents ?? 0), 0)
+  const payingAdvertisers = new Set(payments.map((p) => p.advertiser_id).filter(Boolean)).size
+
   // Monthly price per subscription = the cart total frozen at checkout.
   const priceById = new Map<string, number>()
   for (const s of subs) priceById.set(s.id, s.campaign?.monthly_total_cents ?? 0)
 
   const active = subs.filter((s) => s.status === 'active')
   const mrr = active.reduce((sum, s) => sum + (priceById.get(s.id) ?? 0), 0)
-  const activeAdvertisers = new Set(active.map((s) => s.advertiser_id)).size
-  const arpu = activeAdvertisers ? Math.round(mrr / activeAdvertisers) : 0
 
   const counts = subs.reduce<Record<string, number>>((acc, s) => {
     acc[s.status] = (acc[s.status] ?? 0) + 1
@@ -66,10 +81,10 @@ export default async function RevenuePage() {
   const needsActivation = subs.filter((s) => s.campaign?.status === 'draft')
 
   const stats = [
-    { label: 'MRR', value: formatCents(mrr), icon: DollarSign },
-    { label: 'Active subscriptions', value: formatNumber(active.length), icon: TrendingUp },
-    { label: 'Active advertisers', value: formatNumber(activeAdvertisers), icon: Users },
-    { label: 'ARPU', value: formatCents(arpu), icon: DollarSign },
+    { label: 'Collected this month', value: formatCents(collectedThisMonth), icon: DollarSign },
+    { label: 'Collected all-time', value: formatCents(collectedAllTime), icon: TrendingUp },
+    { label: 'Paying advertisers', value: formatNumber(payingAdvertisers), icon: Users },
+    { label: 'Contracted MRR (projected)', value: formatCents(mrr), icon: DollarSign },
   ]
 
   return (
@@ -95,6 +110,14 @@ export default async function RevenuePage() {
             </Card>
           ))}
         </div>
+
+        <p className="text-xs text-muted-foreground">
+          <span className="font-medium text-foreground">Collected</span> is money actually received
+          through Stripe.{' '}
+          <span className="font-medium text-foreground">Contracted MRR</span> is the recurring value
+          of active subscriptions — projected, not cash. Subscriptions activated in demo mode or by
+          hand have no payment behind them yet.
+        </p>
 
         {/* Subscription status mix */}
         <Card>

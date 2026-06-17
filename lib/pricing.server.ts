@@ -1,15 +1,59 @@
 // Server-only pricing helpers. Kept apart from lib/pricing.ts (which is pure and
 // client-safe) so importing the cart math into a Client Component never drags
 // next/headers into the browser bundle.
+import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import {
   quoteCart,
   suggestTier,
   loyaltyCredits,
+  DEFAULT_PRICING_CONFIG,
   type PriceTier,
+  type PricingConfig,
   type Quote,
   type QuoteOptions,
 } from '@/lib/pricing'
+
+// Read the editable pricing knobs from the DB (admin-tunable at /admin/pricing).
+// Falls back to DEFAULT_PRICING_CONFIG if the row/table is missing. Cached per
+// request so a page that prices many venues only hits the DB once.
+export const getPricingConfig = cache(async (): Promise<PricingConfig> => {
+  try {
+    const supabase = await createClient()
+    const { data } = await supabase
+      .from('pricing_config')
+      .select(
+        'local_price_cents, standard_price_cents, high_price_cents, premium_price_cents, min_monthly_cents, host_discount_pct, loyalty_12mo_discount_pct, max_discount_pct'
+      )
+      .eq('id', 'default')
+      .maybeSingle()
+    const row = data as {
+      local_price_cents: number
+      standard_price_cents: number
+      high_price_cents: number
+      premium_price_cents: number
+      min_monthly_cents: number
+      host_discount_pct: number | string
+      loyalty_12mo_discount_pct: number | string
+      max_discount_pct: number | string
+    } | null
+    if (!row) return DEFAULT_PRICING_CONFIG
+    return {
+      tierPriceCents: {
+        local: row.local_price_cents,
+        standard: row.standard_price_cents,
+        high: row.high_price_cents,
+        premium: row.premium_price_cents,
+      },
+      minMonthlyCents: row.min_monthly_cents,
+      hostDiscount: Number(row.host_discount_pct),
+      loyalty12moDiscount: Number(row.loyalty_12mo_discount_pct),
+      maxDiscount: Number(row.max_discount_pct),
+    }
+  } catch {
+    return DEFAULT_PRICING_CONFIG
+  }
+})
 
 // Re-price a set of picked venues from the DB (never trust a client-supplied
 // total). Returns the authoritative cents to bill, plus the per-venue tiers.
@@ -17,8 +61,9 @@ export async function resolveCartCents(
   venueIds: string[],
   opts: QuoteOptions = {}
 ): Promise<{ totalCents: number; tiers: PriceTier[]; quote: Quote }> {
+  const config = await getPricingConfig()
   const ids = [...new Set(venueIds.filter(Boolean))]
-  if (!ids.length) return { totalCents: 0, tiers: [], quote: quoteCart([], opts) }
+  if (!ids.length) return { totalCents: 0, tiers: [], quote: quoteCart([], opts, config) }
 
   const supabase = await createClient()
   const { data } = await supabase
@@ -31,7 +76,7 @@ export async function resolveCartCents(
     (v: { price_tier: PriceTier | null; foot_traffic_estimate: number }) =>
       v.price_tier ?? suggestTier(v.foot_traffic_estimate)
   )
-  const quote = quoteCart(tiers, opts)
+  const quote = quoteCart(tiers, opts, config)
   return { totalCents: quote.totalCents, tiers, quote }
 }
 

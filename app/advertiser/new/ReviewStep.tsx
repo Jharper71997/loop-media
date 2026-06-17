@@ -8,16 +8,24 @@ import { buttonVariants } from '@/components/ui/button'
 import { StepHeader } from '@/components/app/StepHeader'
 import { StickyCta } from '@/components/app/StickyCta'
 import { formatCents } from '@/lib/format'
-import { quoteCart, TIER_LABEL, MIN_MONTHLY_CENTS, type QuoteOptions } from '@/lib/pricing'
+import {
+  quoteCart,
+  TIER_LABEL,
+  MIN_MONTHLY_CENTS,
+  type QuoteOptions,
+  type PricingConfig,
+} from '@/lib/pricing'
 import { CART_KEY } from '../browse/BrowseClient'
 import type { CartVenue } from './types'
 
 export function ReviewStep({
   venues,
   quoteOpts,
+  pricingConfig,
 }: {
   venues: CartVenue[]
   quoteOpts?: QuoteOptions
+  pricingConfig?: PricingConfig
 }) {
   const byId = useMemo(() => new Map(venues.map((v) => [v.id, v])), [venues])
   const [cartIds, setCartIds] = useState<string[]>([])
@@ -33,7 +41,10 @@ export function ReviewStep({
     () => cartIds.map((id) => byId.get(id)).filter(Boolean) as CartVenue[],
     [cartIds, byId]
   )
-  const quote = useMemo(() => quoteCart(cart.map((v) => v.tier), quoteOpts), [cart, quoteOpts])
+  const quote = useMemo(
+    () => quoteCart(cart.map((v) => v.tier), quoteOpts, pricingConfig),
+    [cart, quoteOpts, pricingConfig]
+  )
 
   function remove(id: string) {
     const next = cartIds.filter((x) => x !== id)
@@ -105,7 +116,11 @@ export function ReviewStep({
             />
           )}
           {quote.floorApplied && (
-            <Row label="Account minimum" value={`$${(MIN_MONTHLY_CENTS / 100).toFixed(0)}`} muted />
+            <Row
+              label="Account minimum"
+              value={`$${((pricingConfig?.minMonthlyCents ?? MIN_MONTHLY_CENTS) / 100).toFixed(0)}`}
+              muted
+            />
           )}
           <div className="flex items-center justify-between border-t border-border pt-2 font-heading text-base font-bold">
             <span>Total</span>

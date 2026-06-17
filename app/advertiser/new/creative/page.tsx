@@ -3,7 +3,11 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import type { PriceTier } from '@/lib/db.types'
 import { suggestTier, tierPriceCents, type QuoteOptions } from '@/lib/pricing'
-import { resolveAdvertiserContext, contextToQuoteOptions } from '@/lib/pricing.server'
+import {
+  resolveAdvertiserContext,
+  contextToQuoteOptions,
+  getPricingConfig,
+} from '@/lib/pricing.server'
 import { CreativeStep } from '../CreativeStep'
 import type { CartVenue } from '../types'
 
@@ -14,13 +18,14 @@ export default async function CreativePage() {
   }
   const supabase = await createClient()
 
-  const [{ data: cats }, { data: venueRows }, ctx] = await Promise.all([
+  const [{ data: cats }, { data: venueRows }, ctx, pricingConfig] = await Promise.all([
     supabase.from('categories').select('id, name').order('name'),
     supabase
       .from('venues')
       .select('id, territory_id, name, category_id, foot_traffic_estimate, price_tier')
       .eq('status', 'active'),
     resolveAdvertiserContext(profile.id),
+    getPricingConfig(),
   ])
 
   type VRow = {
@@ -40,7 +45,7 @@ export default async function CreativePage() {
       categoryId: r.category_id,
       footTraffic: r.foot_traffic_estimate,
       tier,
-      priceCents: tierPriceCents(tier),
+      priceCents: tierPriceCents(tier, pricingConfig),
     }
   })
 
@@ -51,6 +56,7 @@ export default async function CreativePage() {
       categories={(cats ?? []) as { id: string; name: string }[]}
       venues={venues}
       quoteOpts={quoteOpts}
+      pricingConfig={pricingConfig}
     />
   )
 }
