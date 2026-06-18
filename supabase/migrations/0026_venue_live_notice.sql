@@ -14,7 +14,7 @@ alter table public.venue_live_notice_log enable row level security;
 -- Backfill: any venue whose screen has ALREADY checked in is not "new" — seed
 -- it as announced so the first cron run only emails about screens that go live
 -- AFTER this migration, never the ones already up.
-insert into public.venue_live_notice_log (venue_id, sent_count)
+insert into public.venue_live_notice_log (venue_id)
 select distinct venue_id
 from public.tvs
 where last_heartbeat_at is not null
