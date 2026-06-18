@@ -21,9 +21,17 @@ export function genDeviceId(): string {
   return randomUUID()
 }
 
-// The kiosk URL we bake into a provisioned Pi for a given device.
+// The kiosk URL for an already-paired screen, keyed on its device id. Use this
+// to re-image a replacement Pi for the SAME screen without re-pairing.
 export function kioskUrl(origin: string, deviceId: string): string {
   return `${origin.replace(/\/$/, '')}/tv?device=${encodeURIComponent(deviceId)}`
+}
+
+// The setup URL a technician opens on a fresh Pi: it carries the pairing code so
+// the screen pairs itself on first boot (or the tech can type the code into the
+// player's pairing form). The code is consumed server-side on first use.
+export function pairingUrl(origin: string, code: string): string {
+  return `${origin.replace(/\/$/, '')}/tv?code=${encodeURIComponent(code)}`
 }
 
 // Default loop config for a freshly provisioned screen (360s loop / 15s slots).

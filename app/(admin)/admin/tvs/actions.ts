@@ -3,7 +3,13 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/auth'
-import { genDeviceId } from '@/lib/tv'
+import { genPairingCode } from '@/lib/tv'
+
+// pairing_code is UNIQUE, so a fresh code can (rarely) collide. Insert/update
+// with a few retries on the unique violation (Postgres 23505) before giving up.
+function isCodeCollision(err: { code?: string; message?: string } | null): boolean {
+  return err?.code === '23505' || (err?.message ?? '').toLowerCase().includes('pairing_code')
+}
 
 export async function createTv(input: {
   venue_id: string
@@ -13,40 +19,55 @@ export async function createTv(input: {
   await requireAdmin()
   const supabase = await createClient()
 
-  // The screen is born already identified: we program the Pi with this device's
-  // kiosk URL before shipping it, so there's no pairing step. It comes up
-  // "offline" until its first heartbeat, then flips to live on its own.
-  const { error } = await supabase.from('tvs').insert({
-    venue_id: input.venue_id,
-    device_id: genDeviceId(),
-    status: 'offline',
-    loop_length_seconds: input.loop_length_seconds,
-    slot_seconds: input.slot_seconds,
-  })
-  if (error) return { error: error.message }
-  revalidatePath('/admin/tvs')
-  return { error: null }
+  // A technician sets up the Pi on-site and pairs the screen with this code
+  // (typed into the player, or via the /tv?code=… setup link). Pairing mints the
+  // device_id server-side and consumes the code. The screen is "unpaired" until
+  // then, then flips to live on its first heartbeat.
+  let lastError: { message: string } | null = null
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const { error } = await supabase.from('tvs').insert({
+      venue_id: input.venue_id,
+      pairing_code: genPairingCode(),
+      status: 'unpaired',
+      loop_length_seconds: input.loop_length_seconds,
+      slot_seconds: input.slot_seconds,
+    })
+    if (!error) {
+      revalidatePath('/admin/tvs')
+      return { error: null }
+    }
+    lastError = error
+    if (!isCodeCollision(error)) break
+  }
+  return { error: lastError?.message ?? 'Could not create the screen.' }
 }
 
-// Re-provision a screen: issue a fresh device identity (so the old Pi/URL stops
-// counting) and clear its history. Copy the new kiosk URL onto the replacement
-// Pi. Also clears any legacy pairing code.
-export async function resetDevice(id: string) {
+// Regenerate a screen's pairing code: issue a fresh code, drop any current
+// device binding (so the old Pi stops counting), and clear its history. Use this
+// to re-pair a screen — the technician pairs the Pi again with the new code.
+export async function regeneratePairingCode(id: string) {
   await requireAdmin()
   const supabase = await createClient()
-  const { error } = await supabase
-    .from('tvs')
-    .update({
-      device_id: genDeviceId(),
-      pairing_code: null,
-      status: 'offline',
-      last_heartbeat_at: null,
-      last_sync_at: null,
-    })
-    .eq('id', id)
-  if (error) return { error: error.message }
-  revalidatePath('/admin/tvs')
-  return { error: null }
+  let lastError: { message: string } | null = null
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const { error } = await supabase
+      .from('tvs')
+      .update({
+        pairing_code: genPairingCode(),
+        device_id: null,
+        status: 'unpaired',
+        last_heartbeat_at: null,
+        last_sync_at: null,
+      })
+      .eq('id', id)
+    if (!error) {
+      revalidatePath('/admin/tvs')
+      return { error: null }
+    }
+    lastError = error
+    if (!isCodeCollision(error)) break
+  }
+  return { error: lastError?.message ?? 'Could not regenerate the pairing code.' }
 }
 
 export async function deleteTv(id: string) {

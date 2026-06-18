@@ -49,7 +49,7 @@ export function TvDialog({ venues }: { venues: VenueOption[] }) {
         toast.error(res.error)
         return
       }
-      toast.success('Screen created — copy its link onto the Pi.')
+      toast.success('Screen created — give the technician its pairing code.')
       setOpen(false)
       setVenueId('')
     })
@@ -64,8 +64,8 @@ export function TvDialog({ venues }: { venues: VenueOption[] }) {
         <DialogHeader>
           <DialogTitle>New TV</DialogTitle>
           <DialogDescription>
-            Creates a screen with a link to program onto its Pi before you ship it. No pairing
-            needed — it goes live on its own once it&apos;s plugged in.
+            Creates a screen with a pairing code. A technician sets up the Pi on-site and pairs it
+            with the code, then it goes live on its first heartbeat.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-4">

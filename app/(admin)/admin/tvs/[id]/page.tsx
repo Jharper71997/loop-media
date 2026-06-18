@@ -5,7 +5,7 @@ import { ArrowLeft, ImageOff } from 'lucide-react'
 import { requireAdmin } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { kioskUrl } from '@/lib/tv'
+import { kioskUrl, pairingUrl } from '@/lib/tv'
 import { PageHeader } from '@/components/admin/PageHeader'
 import { DeleteButton } from '@/components/admin/DeleteButton'
 import { Card, CardContent } from '@/components/ui/card'
@@ -217,16 +217,39 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
           </Card>
         </div>
 
-        {/* Provisioning: the link we bake into the Pi before shipping it */}
-        {tv.device_id && (
+        {/* Setup: pairing code for a technician on-site, or the device link to
+            re-image a replacement Pi for an already-paired screen. */}
+        {(tv.device_id || tv.pairing_code) && (
           <Card>
             <CardContent className="space-y-2 p-5">
-              <p className="text-sm font-medium">Provisioning</p>
-              <p className="text-xs text-muted-foreground">
-                Program this link into the Pi&apos;s kiosk browser before shipping. It identifies
-                this screen, so it goes live on its own with no pairing.
-              </p>
-              <CopyField value={kioskUrl(origin, tv.device_id)} label="Copy screen link" />
+              <p className="text-sm font-medium">Setup</p>
+              {tv.device_id ? (
+                <>
+                  <p className="text-xs text-muted-foreground">
+                    This screen is paired. To re-image a replacement Pi for the same screen,
+                    program this kiosk link onto it — no re-pairing needed.
+                  </p>
+                  <CopyField value={kioskUrl(origin, tv.device_id)} label="Copy screen link" />
+                </>
+              ) : (
+                <>
+                  <p className="text-xs text-muted-foreground">
+                    Give the technician this pairing code. On the Pi, open the player and enter it,
+                    or set the kiosk URL to the setup link below to pair automatically.
+                  </p>
+                  <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-center">
+                    <p className="font-heading text-2xl font-bold tracking-[0.25em] tabular-nums">
+                      {tv.pairing_code}
+                    </p>
+                  </div>
+                  {tv.pairing_code && (
+                    <CopyField
+                      value={pairingUrl(origin, tv.pairing_code)}
+                      label="Copy setup link"
+                    />
+                  )}
+                </>
+              )}
 
               {provisioning &&
                 (provisioning.network_type === 'ethernet' ? (

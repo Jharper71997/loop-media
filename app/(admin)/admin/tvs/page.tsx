@@ -82,7 +82,7 @@ export default async function TvsPage() {
         <div className="space-y-2.5 md:hidden">
           {rows.length === 0 && (
             <p className="rounded-xl border border-border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
-              No TVs yet. Create one and copy its screen link onto the Pi.
+              No TVs yet. Create one to get a pairing code for the technician.
             </p>
           )}
           {rows.map((tv) => (
@@ -128,7 +128,7 @@ export default async function TvsPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Venue</TableHead>
-                <TableHead>Screen link</TableHead>
+                <TableHead>Pairing code / link</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Last seen</TableHead>
                 <TableHead className="text-right">Loop</TableHead>
@@ -139,7 +139,7 @@ export default async function TvsPage() {
               {rows.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
-                    No TVs yet. Create one and copy its screen link onto the Pi.
+                    No TVs yet. Create one to get a pairing code for the technician.
                   </TableCell>
                 </TableRow>
               )}
