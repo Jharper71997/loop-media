@@ -22,6 +22,13 @@ type TvFull = Tv & {
   venue: { id: string; name: string; territory_id: string } | null
 }
 
+type ProvisioningInfo = {
+  wifi_ssid: string | null
+  wifi_password: string | null
+  network_type: string | null
+  network_note: string | null
+}
+
 function formatDuration(seconds: number): string {
   const h = Math.floor(seconds / 3600)
   const m = Math.floor((seconds % 3600) / 60)
@@ -51,19 +58,14 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
 
   // Network details live in a service-role-only table (the WiFi password is a
   // secret), so read them with the admin client — this page is requireAdmin-gated.
-  let provisioning: {
-    wifi_ssid: string | null
-    wifi_password: string | null
-    network_type: string | null
-    network_note: string | null
-  } | null = null
+  let provisioning: ProvisioningInfo | null = null
   if (tv.venue?.id) {
     const { data: prov } = await createAdminClient()
       .from('venue_provisioning')
       .select('wifi_ssid, wifi_password, network_type, network_note')
       .eq('venue_id', tv.venue.id)
       .maybeSingle()
-    provisioning = (prov as typeof provisioning) ?? null
+    provisioning = (prov as ProvisioningInfo | null) ?? null
   }
 
   const maxSlots = Math.max(1, Math.floor(tv.loop_length_seconds / tv.slot_seconds))
