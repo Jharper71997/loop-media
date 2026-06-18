@@ -17,7 +17,10 @@ export default async function HostLayout({
   return (
     <>
       {profile.role === 'admin' && <AdminPreviewBanner surface="host" />}
-      <AppShell role="host">{children}</AppShell>
+      {/* Hosts can also advertise (20% off), so give them a way over to it. */}
+      <AppShell role="host" crossLink={{ href: '/advertiser', label: 'Advertise →' }}>
+        {children}
+      </AppShell>
     </>
   )
 }

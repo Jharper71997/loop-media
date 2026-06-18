@@ -10,7 +10,7 @@ export async function joinWaitlist(
   categoryId: string | null
 ): Promise<{ ok?: boolean; error?: string }> {
   const profile = await requireProfile()
-  if (profile.role !== 'advertiser' && profile.role !== 'admin') {
+  if (!['advertiser', 'admin', 'host'].includes(profile.role)) {
     return { error: 'Only advertisers can join a waitlist.' }
   }
   const supabase = await createClient()
@@ -32,7 +32,7 @@ export async function requestCategory(
   name: string
 ): Promise<{ ok?: boolean; error?: string }> {
   const profile = await requireProfile()
-  if (profile.role !== 'advertiser' && profile.role !== 'admin') {
+  if (!['advertiser', 'admin', 'host'].includes(profile.role)) {
     return { error: 'Only advertisers can request a category.' }
   }
   const trimmed = name.trim()

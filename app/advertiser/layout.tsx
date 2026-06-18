@@ -18,7 +18,13 @@ export default async function AdvertiserLayout({
   return (
     <>
       {profile.role === 'admin' && <AdminPreviewBanner surface="advertiser" />}
-      <AppShell role="advertiser">{children}</AppShell>
+      {/* A host advertising here gets a way back to their venue dashboard. */}
+      <AppShell
+        role="advertiser"
+        crossLink={profile.role === 'host' ? { href: '/host', label: '← My venue' } : undefined}
+      >
+        {children}
+      </AppShell>
     </>
   )
 }

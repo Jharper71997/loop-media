@@ -12,9 +12,13 @@ import { BottomNav, type AppRole } from './BottomNav'
 // (browse + new) hides the tab bar so its own sticky CTA owns the bottom.
 export function AppShell({
   role,
+  crossLink,
   children,
 }: {
   role: AppRole
+  // Optional link to the user's OTHER surface (a host who also advertises gets
+  // "Advertise" on their venue side and "My venue" on the advertiser side).
+  crossLink?: { href: string; label: string }
   children: React.ReactNode
 }) {
   const pathname = usePathname()
@@ -40,11 +44,21 @@ export function AppShell({
               <span className="text-muted-foreground">NETWORK</span>
             </span>
           </Link>
-          <form action="/auth/signout" method="post">
-            <Button type="submit" variant="ghost" size="icon-sm" aria-label="Sign out">
-              <LogOut className="size-4" />
-            </Button>
-          </form>
+          <div className="flex items-center gap-1.5">
+            {crossLink && (
+              <Link
+                href={crossLink.href}
+                className="rounded-full border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary/20"
+              >
+                {crossLink.label}
+              </Link>
+            )}
+            <form action="/auth/signout" method="post">
+              <Button type="submit" variant="ghost" size="icon-sm" aria-label="Sign out">
+                <LogOut className="size-4" />
+              </Button>
+            </form>
+          </div>
         </div>
       </header>
 
