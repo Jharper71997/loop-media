@@ -33,6 +33,7 @@ export type BrowseVenue = {
   screens: number
   capacity: number
   open: number
+  comingSoon: boolean
   categoryFull: boolean
   ownCategory: boolean
   waitlisted: boolean
@@ -99,7 +100,7 @@ export function BrowseClient({
     const v = byId.get(id)
     if (!v) return
     if (inCart(id)) setCart((c) => c.filter((x) => x !== id))
-    else if (!v.categoryFull && v.open > 0) setCart((c) => [...c, id])
+    else if (!v.categoryFull && v.open > 0 && !v.comingSoon) setCart((c) => [...c, id])
   }
 
   function notify(v: BrowseVenue) {

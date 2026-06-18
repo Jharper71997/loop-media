@@ -41,14 +41,16 @@ export default function MapView({
         .filter((v) => v.lat != null && v.lng != null)
         .map((v) => {
           const inCart = cart.includes(v.id)
-          // gold = in cart, gray = category taken, red = slots full, green = open
+          // gold = in cart, slate = coming soon, gray = category taken, red = full, green = open
           const color = inCart
             ? '#d4af37'
-            : v.categoryFull
-              ? '#9ca3af'
-              : v.open === 0
-                ? '#ef4444'
-                : '#10b981'
+            : v.comingSoon
+              ? '#94a3b8'
+              : v.categoryFull
+                ? '#9ca3af'
+                : v.open === 0
+                  ? '#ef4444'
+                  : '#10b981'
           return (
             <CircleMarker
               key={v.id}
@@ -57,8 +59,9 @@ export default function MapView({
               pathOptions={{
                 color,
                 fillColor: color,
-                fillOpacity: inCart ? 0.85 : 0.6,
+                fillOpacity: inCart ? 0.85 : v.comingSoon ? 0.3 : 0.6,
                 weight: inCart ? 3 : 2,
+                dashArray: v.comingSoon ? '4 3' : undefined,
               }}
             >
               <Popup>
@@ -74,6 +77,16 @@ export default function MapView({
                     <span style={{ color: '#6b7280', fontWeight: 600 }}>
                       Same business — not available
                     </span>
+                  ) : v.comingSoon ? (
+                    <>
+                      <span style={{ color: '#64748b', fontWeight: 600 }}>Coming soon</span>
+                      <button
+                        onClick={() => onNotify(v)}
+                        style={btn(waitlisted.has(v.id) ? '#6b7280' : '#111827')}
+                      >
+                        {waitlisted.has(v.id) ? '✓ Notify on' : '🔔 Notify me'}
+                      </button>
+                    </>
                   ) : v.categoryFull ? (
                     <button
                       onClick={() => onNotify(v)}

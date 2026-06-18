@@ -18,6 +18,11 @@ export interface RegisterVenueInput {
   business_open?: string
   business_close?: string
   business_days?: number[]
+  // Network details so we can program the venue's Pi before shipping it.
+  network_type?: 'wifi' | 'ethernet'
+  wifi_ssid?: string | null
+  wifi_password?: string | null
+  network_note?: string | null
 }
 
 function slugify(s: string): string {
@@ -76,29 +81,45 @@ export async function requestVenue(input: RegisterVenueInput) {
     zip: input.postal_code,
   })
 
-  const { error } = await admin.from('venues').insert({
-    territory_id: territoryId,
-    name: input.name.trim(),
-    address: input.address.trim() || null,
-    city: input.city.trim() || null,
-    state: input.state.trim() || null,
-    postal_code: input.postal_code.trim() || null,
-    lat: geo?.lat ?? null,
-    lng: geo?.lng ?? null,
-    venue_type: input.venue_type?.trim() || null,
-    category_id: input.category_id,
-    foot_traffic_estimate: Math.max(0, Math.round(input.foot_traffic_estimate || 0)),
-    contact_name: profile.full_name || null,
-    contact_email: profile.email,
-    contact_phone: input.contact_phone?.trim() || null,
-    host_user_id: profile.id,
-    status: 'inactive',
-    business_open: input.business_open || '10:00',
-    business_close: input.business_close || '22:00',
-    business_days:
-      input.business_days && input.business_days.length ? input.business_days : [0, 1, 2, 3, 4, 5, 6],
+  const { data: venue, error } = await admin
+    .from('venues')
+    .insert({
+      territory_id: territoryId,
+      name: input.name.trim(),
+      address: input.address.trim() || null,
+      city: input.city.trim() || null,
+      state: input.state.trim() || null,
+      postal_code: input.postal_code.trim() || null,
+      lat: geo?.lat ?? null,
+      lng: geo?.lng ?? null,
+      venue_type: input.venue_type?.trim() || null,
+      category_id: input.category_id,
+      foot_traffic_estimate: Math.max(0, Math.round(input.foot_traffic_estimate || 0)),
+      contact_name: profile.full_name || null,
+      contact_email: profile.email,
+      contact_phone: input.contact_phone?.trim() || null,
+      host_user_id: profile.id,
+      status: 'inactive',
+      business_open: input.business_open || '10:00',
+      business_close: input.business_close || '22:00',
+      business_days:
+        input.business_days && input.business_days.length ? input.business_days : [0, 1, 2, 3, 4, 5, 6],
+    })
+    .select('id')
+    .single()
+  if (error || !venue) return { error: error?.message ?? 'Could not save your venue.' }
+
+  // Store network details (incl. the WiFi password, a secret) in the
+  // service-role-only venue_provisioning table so we can program the Pi later.
+  const networkType = input.network_type === 'ethernet' ? 'ethernet' : 'wifi'
+  await admin.from('venue_provisioning').upsert({
+    venue_id: venue.id,
+    network_type: networkType,
+    wifi_ssid: networkType === 'wifi' ? input.wifi_ssid?.trim() || null : null,
+    wifi_password: networkType === 'wifi' ? input.wifi_password || null : null,
+    network_note: input.network_note?.trim() || null,
+    updated_at: new Date().toISOString(),
   })
-  if (error) return { error: error.message }
 
   revalidatePath('/host')
   return { error: null }

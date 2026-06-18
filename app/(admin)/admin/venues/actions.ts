@@ -39,11 +39,13 @@ export async function saveVenue(input: VenueInput) {
     state: rest.state,
     zip: rest.postal_code,
   })
+  // Only write coordinates when geocoding actually returned them. A transient
+  // geocode failure must NOT null out an existing venue's pin — that would drop
+  // it off the advertiser map (and out of the coming-soon list).
   const payload = {
     ...rest,
     host_user_id: rest.host_user_id || null,
-    lat: geo?.lat ?? null,
-    lng: geo?.lng ?? null,
+    ...(geo ? { lat: geo.lat, lng: geo.lng } : {}),
   }
 
   const { error } = id

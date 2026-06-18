@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/auth'
-import { genPairingCode } from '@/lib/tv'
+import { genDeviceId } from '@/lib/tv'
 
 export async function createTv(input: {
   venue_id: string
@@ -13,30 +13,36 @@ export async function createTv(input: {
   await requireAdmin()
   const supabase = await createClient()
 
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const { error } = await supabase.from('tvs').insert({
-      venue_id: input.venue_id,
-      pairing_code: genPairingCode(),
-      status: 'unpaired',
-      loop_length_seconds: input.loop_length_seconds,
-      slot_seconds: input.slot_seconds,
-    })
-    if (!error) {
-      revalidatePath('/admin/tvs')
-      return { error: null }
-    }
-    if (!/duplicate|unique/i.test(error.message)) return { error: error.message }
-  }
-  return { error: 'Could not generate a unique pairing code. Try again.' }
+  // The screen is born already identified: we program the Pi with this device's
+  // kiosk URL before shipping it, so there's no pairing step. It comes up
+  // "offline" until its first heartbeat, then flips to live on its own.
+  const { error } = await supabase.from('tvs').insert({
+    venue_id: input.venue_id,
+    device_id: genDeviceId(),
+    status: 'offline',
+    loop_length_seconds: input.loop_length_seconds,
+    slot_seconds: input.slot_seconds,
+  })
+  if (error) return { error: error.message }
+  revalidatePath('/admin/tvs')
+  return { error: null }
 }
 
-// Reset a TV so it can be paired with a fresh device: new code, clear device.
-export async function regeneratePairingCode(id: string) {
+// Re-provision a screen: issue a fresh device identity (so the old Pi/URL stops
+// counting) and clear its history. Copy the new kiosk URL onto the replacement
+// Pi. Also clears any legacy pairing code.
+export async function resetDevice(id: string) {
   await requireAdmin()
   const supabase = await createClient()
   const { error } = await supabase
     .from('tvs')
-    .update({ pairing_code: genPairingCode(), device_id: null, status: 'unpaired' })
+    .update({
+      device_id: genDeviceId(),
+      pairing_code: null,
+      status: 'offline',
+      last_heartbeat_at: null,
+      last_sync_at: null,
+    })
     .eq('id', id)
   if (error) return { error: error.message }
   revalidatePath('/admin/tvs')

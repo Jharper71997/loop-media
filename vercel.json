@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/filler",
       "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/screen-live",
+      "schedule": "0 15 * * *"
     }
   ]
 }

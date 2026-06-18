@@ -16,6 +16,7 @@ export type VenueCardData = {
   categoryFull: boolean
   ownCategory: boolean
   open: number
+  comingSoon: boolean
 }
 
 // One tappable business in the build flow. Tapping the card adds/removes when
@@ -35,7 +36,7 @@ export function VenueCard({
   onToggle: () => void
   onNotify: () => void
 }) {
-  const addable = !venue.categoryFull && venue.open > 0
+  const addable = !venue.categoryFull && venue.open > 0 && !venue.comingSoon
   return (
     <div
       role={addable ? 'button' : undefined}
@@ -54,6 +55,11 @@ export function VenueCard({
         <div className="mt-0.5 text-xs text-muted-foreground">
           {TIER_LABEL[venue.tier]}
         </div>
+        {venue.comingSoon && (
+          <span className="mt-1 inline-block rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+            Coming soon
+          </span>
+        )}
         <div className="mt-1 font-heading text-lg font-bold tabular-nums">
           {formatCents(venue.priceCents)}
           <span className="text-xs font-normal text-muted-foreground">/mo</span>
@@ -67,6 +73,27 @@ export function VenueCard({
           <Badge variant="secondary" title="A venue won't run ads from its own line of business.">
             Same business
           </Badge>
+        ) : venue.comingSoon ? (
+          // Onboarded but its screen isn't live yet — offer the notify waitlist.
+          <Button
+            variant={waitlisted ? 'secondary' : 'outline'}
+            size="sm"
+            disabled={pending}
+            onClick={(e) => {
+              e.stopPropagation()
+              onNotify()
+            }}
+          >
+            {waitlisted ? (
+              <>
+                <BellRing className="size-4" /> Waitlisted
+              </>
+            ) : (
+              <>
+                <Bell className="size-4" /> Notify me
+              </>
+            )}
+          </Button>
         ) : venue.categoryFull ? (
           <Button
             variant={waitlisted ? 'secondary' : 'outline'}

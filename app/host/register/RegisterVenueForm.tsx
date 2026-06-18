@@ -26,6 +26,10 @@ export function RegisterVenueForm({
   const [categoryId, setCategoryId] = useState<string | null>(null)
   const [venueType, setVenueType] = useState('')
   const [phone, setPhone] = useState('')
+  const [networkType, setNetworkType] = useState<'wifi' | 'ethernet'>('wifi')
+  const [ssid, setSsid] = useState('')
+  const [wifiPassword, setWifiPassword] = useState('')
+  const [networkNote, setNetworkNote] = useState('')
   const [hours, setHours] = useState<BusinessHoursValue>({
     open: '10:00',
     close: '22:00',
@@ -56,12 +60,16 @@ export function RegisterVenueForm({
         business_open: hours.open,
         business_close: hours.close,
         business_days: hours.days,
+        network_type: networkType,
+        wifi_ssid: ssid || null,
+        wifi_password: wifiPassword || null,
+        network_note: networkNote || null,
       })
       if (res.error) {
         toast.error(res.error)
         return
       }
-      toast.success('Venue submitted — Loop Network will review and set it live.')
+      toast.success('Venue submitted — we’ll review it and set up your player.')
       router.push('/host')
     })
   }
@@ -140,9 +148,59 @@ export function RegisterVenueForm({
         <BusinessHoursPicker value={hours} onChange={setHours} />
       </div>
 
+      <div className="space-y-3 rounded-lg border border-border p-4">
+        <Label className="text-sm font-medium">How will the screen get online?</Label>
+        <p className="text-xs text-muted-foreground">
+          We ship you a plug-and-play player. Tell us how it connects so we can set it up before it
+          arrives. Your WiFi password is stored privately and only used to program your device.
+        </p>
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            variant={networkType === 'wifi' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setNetworkType('wifi')}
+          >
+            WiFi
+          </Button>
+          <Button
+            type="button"
+            variant={networkType === 'ethernet' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setNetworkType('ethernet')}
+          >
+            Wired (Ethernet)
+          </Button>
+        </div>
+        {networkType === 'wifi' && (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label>WiFi network name (SSID)</Label>
+              <Input value={ssid} onChange={(e) => setSsid(e.target.value)} placeholder="MyVenue-WiFi" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>WiFi password</Label>
+              <Input
+                value={wifiPassword}
+                onChange={(e) => setWifiPassword(e.target.value)}
+                placeholder="Network password"
+              />
+            </div>
+          </div>
+        )}
+        <div className="space-y-1.5">
+          <Label>Anything we should know? (optional)</Label>
+          <Input
+            value={networkNote}
+            onChange={(e) => setNetworkNote(e.target.value)}
+            placeholder="e.g. guest network, where the TV is, login portal"
+          />
+        </div>
+      </div>
+
       <p className="text-xs text-muted-foreground">
-        No hardware to ship, you use a TV you already have. After we verify your details, your
-        dashboard gives you a pairing code and steps to open the loop on your venue&apos;s screen.
+        We ship you a plug-and-play player, already set up for your screen. Plug it into your TV&apos;s
+        HDMI and power, and the loop starts on its own — no pairing, no codes.
       </p>
 
       <Button type="submit" size="lg" disabled={pending}>

@@ -8,6 +8,7 @@ import {
   getPricingConfig,
 } from '@/lib/pricing.server'
 import { isVenueListable } from '@/lib/venue'
+import { isTvLive } from '@/lib/format'
 import { BrowseClient, type BrowseVenue } from './BrowseClient'
 
 export default async function BrowsePage({
@@ -48,7 +49,7 @@ export default async function BrowsePage({
     const { data } = await supabase
       .from('venues')
       .select(
-        'id, name, venue_type, category_id, lat, lng, foot_traffic_estimate, price_tier, category_slots, category:categories(name), tvs(id, loop_length_seconds, slot_seconds)'
+        'id, name, venue_type, category_id, lat, lng, foot_traffic_estimate, price_tier, category_slots, category:categories(name), tvs(id, last_heartbeat_at, loop_length_seconds, slot_seconds)'
       )
       .in('territory_id', marketIds)
       .eq('status', 'active')
@@ -65,7 +66,7 @@ export default async function BrowsePage({
       price_tier: PriceTier | null
       category_slots: number
       category: { name: string } | null
-      tvs: { id: string; loop_length_seconds: number; slot_seconds: number }[]
+      tvs: { id: string; last_heartbeat_at: string | null; loop_length_seconds: number; slot_seconds: number }[]
     }
     const rows = (data ?? []) as unknown as Row[]
 
@@ -120,6 +121,9 @@ export default async function BrowsePage({
       )
       const used = r.tvs.reduce((sum, t) => sum + (usedByTv.get(t.id) ?? 0), 0)
       const open = Math.max(capacity - used, 0)
+      // Coming soon = no screen has checked in recently (the Pi isn't online yet).
+      // Flips to live automatically once any TV at the venue heartbeats (<95s).
+      const comingSoon = !r.tvs.some((t) => isTvLive(t.last_heartbeat_at))
 
       // Venue-own-category exclusivity: a venue never runs an ad in its OWN line
       // of business (a barbershop blocks barber ads, period). Absolute.
@@ -144,6 +148,7 @@ export default async function BrowsePage({
         screens: r.tvs.length,
         capacity,
         open,
+        comingSoon,
         categoryFull,
         ownCategory,
         waitlisted: waitlisted.has(r.id),

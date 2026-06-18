@@ -1,10 +1,13 @@
 import Link from 'next/link'
+import { headers } from 'next/headers'
 import { requireAdmin } from '@/lib/auth'
 import { getTerritoryContext } from '@/lib/territory'
 import { createClient } from '@/lib/supabase/server'
+import { kioskUrl } from '@/lib/tv'
 import { PageHeader } from '@/components/admin/PageHeader'
 import { DeleteButton } from '@/components/admin/DeleteButton'
 import { LiveStatus } from '@/components/app/LiveStatus'
+import { CopyField } from '@/components/app/CopyField'
 import { AutoRefresh } from '@/components/app/AutoRefresh'
 import {
   Table,
@@ -27,6 +30,14 @@ export default async function TvsPage() {
   const territory = await getTerritoryContext(profile)
   const t = territory.activeId
   const supabase = await createClient()
+
+  // Build the kiosk-URL origin from the live request so the link a provisioner
+  // copies is always for the domain they're on (NEXT_PUBLIC_APP_URL is frozen at
+  // build time and easy to leave stale across renames).
+  const h = await headers()
+  const reqHost = h.get('host')
+  const proto = h.get('x-forwarded-proto') ?? 'https'
+  const origin = reqHost ? `${proto}://${reqHost}` : (process.env.NEXT_PUBLIC_APP_URL ?? '')
 
   let venueQ = supabase.from('venues').select('id, name').order('name')
   if (t) venueQ = venueQ.eq('territory_id', t)
@@ -71,7 +82,7 @@ export default async function TvsPage() {
         <div className="space-y-2.5 md:hidden">
           {rows.length === 0 && (
             <p className="rounded-xl border border-border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
-              No TVs yet. Create one and share its pairing code.
+              No TVs yet. Create one and copy its screen link onto the Pi.
             </p>
           )}
           {rows.map((tv) => (
@@ -86,10 +97,18 @@ export default async function TvsPage() {
                   adsRunning={adsByTv.get(tv.id) ?? 0}
                 />
               </div>
-              <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
-                <code className="rounded bg-muted px-2 py-1 font-mono">{tv.pairing_code ?? '—'}</code>
+              <div className="mt-2 flex flex-col gap-1.5 text-xs text-muted-foreground">
+                {tv.device_id ? (
+                  <CopyField
+                    value={kioskUrl(origin, tv.device_id)}
+                    display={`/tv?device=…${tv.device_id.slice(-6)}`}
+                    label="Copy link"
+                  />
+                ) : (
+                  <code className="rounded bg-muted px-2 py-1 font-mono">{tv.pairing_code ?? '—'}</code>
+                )}
                 <span>
-                  · {Math.round(tv.loop_length_seconds / 60)}m / {tv.slot_seconds}s
+                  {Math.round(tv.loop_length_seconds / 60)}m / {tv.slot_seconds}s
                 </span>
               </div>
               <div className="mt-1 text-xs text-muted-foreground">
@@ -109,7 +128,7 @@ export default async function TvsPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Venue</TableHead>
-                <TableHead>Pairing code</TableHead>
+                <TableHead>Screen link</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Last seen</TableHead>
                 <TableHead className="text-right">Loop</TableHead>
@@ -120,7 +139,7 @@ export default async function TvsPage() {
               {rows.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
-                    No TVs yet. Create one and share its pairing code with the venue.
+                    No TVs yet. Create one and copy its screen link onto the Pi.
                   </TableCell>
                 </TableRow>
               )}
@@ -132,9 +151,17 @@ export default async function TvsPage() {
                     </Link>
                   </TableCell>
                   <TableCell>
-                    <code className="rounded bg-muted px-2 py-1 font-mono text-sm">
-                      {tv.pairing_code ?? '—'}
-                    </code>
+                    {tv.device_id ? (
+                      <CopyField
+                        value={kioskUrl(origin, tv.device_id)}
+                        display={`/tv?device=…${tv.device_id.slice(-6)}`}
+                        label="Copy link"
+                      />
+                    ) : (
+                      <code className="rounded bg-muted px-2 py-1 font-mono text-sm">
+                        {tv.pairing_code ?? '—'}
+                      </code>
+                    )}
                   </TableCell>
                   <TableCell>
                     <LiveStatus

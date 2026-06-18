@@ -1,13 +1,17 @@
 import Link from 'next/link'
+import { headers } from 'next/headers'
 import { notFound } from 'next/navigation'
 import { ArrowLeft, ImageOff } from 'lucide-react'
 import { requireAdmin } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { kioskUrl } from '@/lib/tv'
 import { PageHeader } from '@/components/admin/PageHeader'
 import { DeleteButton } from '@/components/admin/DeleteButton'
 import { Card, CardContent } from '@/components/ui/card'
 import { formatDateTime, timeAgo, formatNumber } from '@/lib/format'
 import { LiveStatus } from '@/components/app/LiveStatus'
+import { CopyField } from '@/components/app/CopyField'
 import { AutoRefresh } from '@/components/app/AutoRefresh'
 import type { Tv } from '@/lib/db.types'
 import { RegenerateButton } from '../RegenerateButton'
@@ -31,6 +35,12 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
   const { id } = await params
   const supabase = await createClient()
 
+  // Kiosk-URL origin from the live request (see admin/tvs list for why).
+  const h = await headers()
+  const reqHost = h.get('host')
+  const proto = h.get('x-forwarded-proto') ?? 'https'
+  const origin = reqHost ? `${proto}://${reqHost}` : (process.env.NEXT_PUBLIC_APP_URL ?? '')
+
   const { data: tvData } = await supabase
     .from('tvs')
     .select('*, venue:venues(id, name, territory_id)')
@@ -38,6 +48,23 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
     .maybeSingle()
   if (!tvData) notFound()
   const tv = tvData as unknown as TvFull
+
+  // Network details live in a service-role-only table (the WiFi password is a
+  // secret), so read them with the admin client — this page is requireAdmin-gated.
+  let provisioning: {
+    wifi_ssid: string | null
+    wifi_password: string | null
+    network_type: string | null
+    network_note: string | null
+  } | null = null
+  if (tv.venue?.id) {
+    const { data: prov } = await createAdminClient()
+      .from('venue_provisioning')
+      .select('wifi_ssid, wifi_password, network_type, network_note')
+      .eq('venue_id', tv.venue.id)
+      .maybeSingle()
+    provisioning = (prov as typeof provisioning) ?? null
+  }
 
   const maxSlots = Math.max(1, Math.floor(tv.loop_length_seconds / tv.slot_seconds))
 
@@ -183,13 +210,55 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
               <p className="mt-1 font-heading text-2xl font-bold tabular-nums">
                 {used}/{maxSlots}
               </p>
-              <p className="text-xs text-muted-foreground">
-                {open} open · code{' '}
-                <code className="rounded bg-muted px-1 font-mono">{tv.pairing_code ?? '—'}</code>
-              </p>
+              <p className="text-xs text-muted-foreground">{open} open</p>
             </CardContent>
           </Card>
         </div>
+
+        {/* Provisioning: the link we bake into the Pi before shipping it */}
+        {tv.device_id && (
+          <Card>
+            <CardContent className="space-y-2 p-5">
+              <p className="text-sm font-medium">Provisioning</p>
+              <p className="text-xs text-muted-foreground">
+                Program this link into the Pi&apos;s kiosk browser before shipping. It identifies
+                this screen, so it goes live on its own with no pairing.
+              </p>
+              <CopyField value={kioskUrl(origin, tv.device_id)} label="Copy screen link" />
+
+              {provisioning &&
+                (provisioning.network_type === 'ethernet' ? (
+                  <p className="pt-1 text-xs text-muted-foreground">
+                    Network: Wired (Ethernet)
+                    {provisioning.network_note ? ` · ${provisioning.network_note}` : ''}
+                  </p>
+                ) : (
+                  (provisioning.wifi_ssid || provisioning.wifi_password) && (
+                    <div className="space-y-1.5 pt-1">
+                      <p className="text-xs font-medium text-muted-foreground">WiFi to program</p>
+                      {provisioning.wifi_ssid && (
+                        <CopyField
+                          value={provisioning.wifi_ssid}
+                          display={`SSID: ${provisioning.wifi_ssid}`}
+                          label="Copy SSID"
+                        />
+                      )}
+                      {provisioning.wifi_password && (
+                        <CopyField
+                          value={provisioning.wifi_password}
+                          display="Password: ••••••••"
+                          label="Copy password"
+                        />
+                      )}
+                      {provisioning.network_note && (
+                        <p className="text-xs text-muted-foreground">{provisioning.network_note}</p>
+                      )}
+                    </div>
+                  )
+                ))}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Plays per ad */}
         <Card>

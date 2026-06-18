@@ -83,6 +83,13 @@ export function VenueDialog({
       toast.error('Name and territory are required.')
       return
     }
+    // A live venue with no foot traffic is hidden from the advertiser map
+    // (isVenueListable). Catch it here so "Active" actually shows up — as a
+    // coming-soon pin until its screen heartbeats.
+    if (form.status === 'active' && (!form.foot_traffic_estimate || form.foot_traffic_estimate <= 0)) {
+      toast.error('Set foot traffic above 0 so this venue shows on the advertiser map.')
+      return
+    }
     start(async () => {
       const res = await saveVenue(form)
       if (res.error) {
@@ -177,6 +184,9 @@ export function VenueDialog({
               value={form.foot_traffic_estimate}
               onChange={(e) => set('foot_traffic_estimate', Number(e.target.value) || 0)}
             />
+            <p className="text-xs text-muted-foreground">
+              Must be above 0 for the venue to appear on the advertiser map.
+            </p>
           </Field>
 
           <Field label="Price tier">

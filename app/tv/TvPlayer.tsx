@@ -90,7 +90,17 @@ export function TvPlayer() {
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
-    setDeviceId(localStorage.getItem(DEVICE_KEY))
+    // A provisioned screen carries its identity in the kiosk URL
+    // (/tv?device=<uuid>) because we program the Pi before shipping it. Read it
+    // first so the screen runs as a known device with zero pairing, then persist
+    // it so it survives later boots even if the URL is ever plain /tv. Falls back
+    // to a previously stored id, then to the manual/?code= pairing path.
+    const urlDevice = new URLSearchParams(window.location.search).get('device')?.trim()
+    const id = urlDevice || localStorage.getItem(DEVICE_KEY)
+    if (id) {
+      localStorage.setItem(DEVICE_KEY, id)
+      setDeviceId(id)
+    }
     setReady(true)
     // Cache creative media for offline playback.
     if ('serviceWorker' in navigator) {
@@ -426,7 +436,7 @@ function Player({ deviceId, onUnpair }: { deviceId: string; onUnpair: () => void
           <img src={slide.creative_url} alt={slide.title} className="h-full w-full object-contain" />
         )
       ) : slide.kind === 'weather' ? (
-        <FillerFrame title={venueName}>
+        <FillerFrame title="Loop Network">
           <div className="text-[12rem] leading-none">{w?.emoji ?? '🌡️'}</div>
           <div className="mt-4 text-7xl font-semibold">
             {weather ? `${weather.temp}°F` : '—'}
@@ -434,7 +444,7 @@ function Player({ deviceId, onUnpair }: { deviceId: string; onUnpair: () => void
           <div className="mt-2 text-3xl text-white/60">{w?.label ?? 'Weather'}</div>
         </FillerFrame>
       ) : slide.kind === 'clock' ? (
-        <FillerFrame title={venueName}>
+        <FillerFrame title="Loop Network">
           <div className="text-9xl font-semibold tabular-nums">
             {now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
           </div>
@@ -443,7 +453,7 @@ function Player({ deviceId, onUnpair }: { deviceId: string; onUnpair: () => void
           </div>
         </FillerFrame>
       ) : slide.kind === 'filler' ? (
-        <FillerFrame title={venueName}>
+        <FillerFrame title="Loop Network">
           {fillerLabel(slide.card.type) && (
             <div
               className="mb-6 rounded-full px-5 py-1.5 text-2xl font-semibold tracking-wide"
@@ -467,7 +477,7 @@ function Player({ deviceId, onUnpair }: { deviceId: string; onUnpair: () => void
           )}
         </FillerFrame>
       ) : (
-        <FillerFrame title={venueName}>
+        <FillerFrame title="Loop Network">
           <Image
             src="/loop-network-logo.png"
             alt="Loop Network"
@@ -475,8 +485,16 @@ function Player({ deviceId, onUnpair }: { deviceId: string; onUnpair: () => void
             height={260}
             className="h-48 w-auto"
           />
-          <div className="mt-6 text-3xl text-white/70">Your ad could be here.</div>
-          <div className="mt-2 text-xl text-white/40">Reach customers across {venueName || 'this venue'}.</div>
+          <div className="mt-6 text-4xl font-semibold text-white">Advertise on this screen</div>
+          <div className="mt-3 text-2xl text-white/70">
+            Reach everyone who walks through the door.
+          </div>
+          <div
+            className="mt-7 rounded-full px-6 py-2 text-2xl font-semibold"
+            style={{ background: GOLD, color: '#000' }}
+          >
+            Get your business on Loop Network
+          </div>
         </FillerFrame>
       )}
 

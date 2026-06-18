@@ -4,7 +4,7 @@ import { useTransition } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { regeneratePairingCode } from './actions'
+import { resetDevice } from './actions'
 
 export function RegenerateButton({ id }: { id: string }) {
   const [pending, start] = useTransition()
@@ -13,15 +13,19 @@ export function RegenerateButton({ id }: { id: string }) {
       variant="ghost"
       size="icon-sm"
       disabled={pending}
-      aria-label="Regenerate pairing code"
-      title="New pairing code (unpairs current device)"
+      aria-label="Re-provision screen"
+      title="New screen link (use when replacing the device)"
       onClick={() => {
-        if (!window.confirm('Generate a new code? The current device will be unpaired.'))
+        if (
+          !window.confirm(
+            'Issue a new screen link? The current device stops counting until you re-program a Pi with the new link.'
+          )
+        )
           return
         start(async () => {
-          const res = await regeneratePairingCode(id)
+          const res = await resetDevice(id)
           if (res.error) toast.error(res.error)
-          else toast.success('New pairing code generated')
+          else toast.success('New screen link issued — copy it onto the replacement Pi')
         })
       }}
     >
