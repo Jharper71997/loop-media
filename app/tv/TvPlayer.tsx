@@ -60,10 +60,11 @@ function buildPlaylist(m: Manifest): Slide[] {
     cards.length ? { kind: 'filler', card: cards[cardIdx++ % cards.length] } : { kind: 'weather' }
 
   if (!m.items.length) {
-    // No ads sold yet: cycle clock, weather, any authored cards, house promo.
-    const out: Slide[] = [{ kind: 'clock' }, { kind: 'weather' }]
+    // No ads sold yet: lead with the Loop Network house ad ("promote your local
+    // business"), then ambient weather + any authored cards. No bare clock/date
+    // screen — every empty slot should be selling the network, not telling time.
+    const out: Slide[] = [{ kind: 'promo' }, { kind: 'weather' }]
     for (const card of cards) out.push({ kind: 'filler', card })
-    out.push({ kind: 'promo' })
     return out
   }
   const out: Slide[] = []
