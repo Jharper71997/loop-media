@@ -1,11 +1,10 @@
-// A venue is only shown to advertisers once it has the real data that makes it
-// legitimate inventory: known foot traffic (drives impressions + price) and a
-// map location. Until then it's "incomplete" — visible to admins to fill in, but
-// hidden from advertisers so we never publish made-up numbers like "0 visits/mo".
+// A venue is shown to advertisers once it has a map location (lat/lng) so we can
+// place its dot. Foot traffic / impressions are NOT required — a venue can go
+// live with zero impressions; we simply don't surface an impressions figure for
+// it. (Until coords are set it's "incomplete": visible to admins to fill in.)
 export function isVenueListable(v: {
-  foot_traffic_estimate: number
   lat: number | null
   lng: number | null
 }): boolean {
-  return v.foot_traffic_estimate > 0 && v.lat != null && v.lng != null
+  return v.lat != null && v.lng != null
 }
