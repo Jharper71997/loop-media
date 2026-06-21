@@ -41,7 +41,7 @@ const STEPS: Record<'advertiser' | 'host', { steps: Step[]; cta: string; href: s
       {
         icon: Tag,
         title: 'The more you add, the less you pay',
-        body: 'Volume discounts kick in as you add screens, and $200 a month gets you started.',
+        body: 'Every screen is just $50 a month, and volume discounts kick in as you add more.',
       },
       {
         icon: Upload,

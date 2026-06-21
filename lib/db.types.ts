@@ -40,6 +40,9 @@ export interface Profile {
   phone: string | null
   role: UserRole
   territory_id: string | null
+  // The advertiser's own line of business, captured once (browse Step 1) and
+  // reused so we never re-ask on later campaigns. Null for hosts/admins.
+  category_id: string | null
   created_at: string
 }
 

@@ -3,7 +3,7 @@
 // Per-TV à la carte: every venue has a price TIER; the advertiser taps venues
 // into a cart and the monthly bill is the sum of the picked venues' tier prices,
 // less a volume discount (more screens → lower rate), less host / loyalty
-// discounts, floored at the $200/mo account minimum. Free-screen credits earned
+// discounts, floored at the $50/mo account minimum (one screen). Free-screen credits earned
 // from loyalty milestones comp the advertiser's cheapest screens.
 //
 // Everything in this file is PURE and client-safe (no server imports) so the
@@ -23,15 +23,16 @@ export interface PricingConfig {
   maxDiscount: number // safety cap on combined discounts
 }
 
-// $75 screen floor: every screen is at least $75/mo. Edit live at /admin/pricing.
+// Flat $50/TV: every screen is $50/mo regardless of tier. Edit live at
+// /admin/pricing once the pricing_config row exists (otherwise this is the rate).
 export const DEFAULT_PRICING_CONFIG: PricingConfig = {
   tierPriceCents: {
-    premium: 12000, // 1,500+ people/day
-    high: 9500, //    800-1,500
-    standard: 8500, // 400-800
-    local: 7500, //   under 400  (floor)
+    premium: 5000,
+    high: 5000,
+    standard: 5000,
+    local: 5000,
   },
-  minMonthlyCents: 20000, // $200/mo to open an account (~3 screens)
+  minMonthlyCents: 5000, // one screen = $50 (no multi-screen minimum)
   hostDiscount: 0.2,
   loyalty12moDiscount: 0.05,
   maxDiscount: 0.35,

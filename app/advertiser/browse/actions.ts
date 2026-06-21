@@ -3,6 +3,18 @@
 import { createClient } from '@/lib/supabase/server'
 import { requireProfile } from '@/lib/auth'
 
+// Save the advertiser's chosen line of business to their profile so we ask it
+// ONCE (here, in browse Step 1) and reuse it on the creative step + every future
+// campaign. Called when they pick a real category; 'all'/no-category is ignored
+// so it doesn't wipe a previously saved one.
+export async function rememberCategory(categoryId: string | null): Promise<void> {
+  if (!categoryId || categoryId === 'all') return
+  const profile = await requireProfile()
+  if (!['advertiser', 'host'].includes(profile.role)) return
+  const supabase = await createClient()
+  await supabase.from('profiles').update({ category_id: categoryId }).eq('id', profile.id)
+}
+
 // "Notify me" — join the waitlist for a (venue, category) that's currently full
 // for this advertiser's category. When a slot frees up, an admin/cron can notify.
 export async function joinWaitlist(

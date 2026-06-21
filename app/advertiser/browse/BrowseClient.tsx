@@ -18,7 +18,7 @@ import {
   type QuoteOptions,
   type PricingConfig,
 } from '@/lib/pricing'
-import { joinWaitlist, leaveWaitlist, requestCategory } from './actions'
+import { joinWaitlist, leaveWaitlist, requestCategory, rememberCategory } from './actions'
 
 export type BrowseVenue = {
   id: string
@@ -129,6 +129,9 @@ export function BrowseClient({
 
   const go = (next: { cat?: string | null }) => {
     const c = next.cat === undefined ? activeCat : next.cat
+    // Save a real category pick to the profile so we never ask again (next visit
+    // or the creative step reuse it). 'all'/clearing is left as-is.
+    if (next.cat && next.cat !== 'all') void rememberCategory(next.cat)
     const params = new URLSearchParams()
     if (c) params.set('cat', c)
     router.push(`/advertiser/browse?${params.toString()}`)

@@ -36,7 +36,11 @@ export default async function BrowsePage({
   const pricingConfig = await getPricingConfig()
   const quoteOpts: QuoteOptions = contextToQuoteOptions(ctx)
 
-  const { cat } = await searchParams
+  const { cat: catParam } = await searchParams
+  // Fall back to the category saved on this advertiser's profile last time, so a
+  // returning advertiser lands straight on the map with their line of business
+  // already locked in — no re-picking. An explicit ?cat= (incl. 'all') still wins.
+  const cat = catParam ?? profile.category_id ?? undefined
   const activeCat = categories.find((c) => c.id === cat)?.id ?? null
   // Step 1 of the flow: the category must be chosen (a real id, or 'all' to skip)
   // before we show the map. Absent param = not chosen yet. There is no separate

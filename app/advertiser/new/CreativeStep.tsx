@@ -11,13 +11,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { StepHeader } from '@/components/app/StepHeader'
 import { StickyCta } from '@/components/app/StickyCta'
 import { formatCents } from '@/lib/format'
@@ -27,17 +20,17 @@ import { CART_KEY } from '../browse/BrowseClient'
 import { submitCampaign, type NewCampaignInput } from './actions'
 import type { CartVenue } from './types'
 
-const NO_CATEGORY = 'none'
-
 export function CreativeStep({
   userId,
   categories,
+  defaultCategoryId,
   venues,
   quoteOpts,
   pricingConfig,
 }: {
   userId: string
   categories: { id: string; name: string }[]
+  defaultCategoryId?: string | null
   venues: CartVenue[]
   quoteOpts?: QuoteOptions
   pricingConfig?: PricingConfig
@@ -46,7 +39,10 @@ export function CreativeStep({
   const byId = useMemo(() => new Map(venues.map((v) => [v.id, v])), [venues])
 
   const [cartIds, setCartIds] = useState<string[]>([])
-  const [categoryId, setCategoryId] = useState<string | null>(null)
+  // Reuse the line of business they already picked in browse Step 1 (saved on
+  // their profile) — we don't re-ask the category here.
+  const categoryId = defaultCategoryId ?? null
+  const categoryName = categoryId ? categories.find((c) => c.id === categoryId)?.name : null
   const [title, setTitle] = useState('')
   const [qrUrl, setQrUrl] = useState('')
   const [mode, setMode] = useState<'upload' | 'help'>('upload')
@@ -149,30 +145,12 @@ export function CreativeStep({
         <Input className="h-11" value={title} onChange={(e) => setTitle(e.target.value)} required />
       </div>
 
-      <div className="space-y-1.5">
-        <Label>Your business category</Label>
-        <Select
-          value={categoryId ?? NO_CATEGORY}
-          onValueChange={(v) => setCategoryId(v === NO_CATEGORY ? null : v)}
-        >
-          <SelectTrigger className="h-11 w-full">
-            <SelectValue>
-              {(v: string | null) =>
-                v && v !== NO_CATEGORY
-                  ? categories.find((c) => c.id === v)?.name ?? '—'
-                  : 'Select (for exclusivity)'}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={NO_CATEGORY}>None</SelectItem>
-            {categories.map((c) => (
-              <SelectItem key={c.id} value={c.id}>
-                {c.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      {categoryName && (
+        <div className="flex items-center justify-between rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm">
+          <span className="text-muted-foreground">Category (locked for exclusivity)</span>
+          <span className="font-medium">{categoryName}</span>
+        </div>
+      )}
 
       <div className="space-y-1.5">
         <Label>Link when scanned (optional)</Label>

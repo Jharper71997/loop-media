@@ -81,7 +81,7 @@ export default async function PricingPage() {
           <div>
             <h2 className="text-sm font-medium">Screen price by tier ($/mo)</h2>
             <p className="text-xs text-muted-foreground">
-              Auto-assigned from a venue&apos;s foot traffic. Floor is $75 — no screen can go below
+              Auto-assigned from a venue&apos;s foot traffic. Floor is $25 — no screen can go below
               it.
             </p>
           </div>

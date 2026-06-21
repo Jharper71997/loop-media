@@ -54,6 +54,7 @@ export default async function CreativePage() {
     <CreativeStep
       userId={profile.id}
       categories={(cats ?? []) as { id: string; name: string }[]}
+      defaultCategoryId={profile.category_id}
       venues={venues}
       quoteOpts={quoteOpts}
       pricingConfig={pricingConfig}

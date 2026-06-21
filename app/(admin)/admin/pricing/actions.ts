@@ -35,10 +35,11 @@ function clampPct(value: number | null): number {
   return Math.min(Math.max(value ?? 0, 0), 100) / 100
 }
 
-// Tier price entered in dollars; stored as cents. Hard $75/screen floor.
+// Tier price entered in dollars; stored as cents. Hard $25/screen floor (the
+// flat rate is $50/screen; the floor only stops fat-finger sub-$25 prices).
 export async function setTierPrice(tier: PriceTier, value: number | null) {
   await requireAdmin()
-  if ((value ?? 0) < 75) return { error: "Screens can't be priced below $75." }
+  if ((value ?? 0) < 25) return { error: "Screens can't be priced below $25." }
   return updateConfig({ [TIER_COLUMN[tier]]: Math.round((value as number) * 100) })
 }
 

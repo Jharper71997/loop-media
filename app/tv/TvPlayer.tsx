@@ -246,6 +246,16 @@ function Player({ deviceId, onUnpair }: { deviceId: string; onUnpair: () => void
   const [fatal, setFatal] = useState<string | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // The screen-label + Unpair controls stay hidden during playback (a TV has no
+  // mouse hover) so the display is clean. A tap/remote-click reveals them for a
+  // few seconds — long enough to unpair or go fullscreen — then they hide again.
+  const [controlsShown, setControlsShown] = useState(false)
+  const controlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const revealControls = useCallback(() => {
+    setControlsShown(true)
+    if (controlsTimer.current) clearTimeout(controlsTimer.current)
+    controlsTimer.current = setTimeout(() => setControlsShown(false), 5000)
+  }, [])
 
   // Fullscreen so the screen looks like a real display, not a browser tab.
   // Browsers require a user gesture, so we go fullscreen on the first tap/click
@@ -421,6 +431,7 @@ function Player({ deviceId, onUnpair }: { deviceId: string; onUnpair: () => void
       className="relative h-screen w-screen overflow-hidden bg-black text-white"
       onClick={() => {
         if (!document.fullscreenElement) goFullscreen()
+        revealControls()
       }}
     >
       {slide.kind === 'ad' ? (
@@ -527,9 +538,13 @@ function Player({ deviceId, onUnpair }: { deviceId: string; onUnpair: () => void
         )}
       </div>
 
-      {/* Which screen this is + an unpair control. Subtle until hovered so it
-          doesn't intrude on the display, but always reachable. */}
-      <div className="group absolute top-3 right-3 flex items-center gap-2 opacity-30 transition-opacity hover:opacity-100">
+      {/* Which screen this is + an unpair control. Hidden during playback (TVs
+          can't hover); a tap/remote-click reveals it for a few seconds. */}
+      <div
+        className={`absolute top-3 right-3 flex items-center gap-2 transition-opacity duration-300 ${
+          controlsShown ? 'opacity-100' : 'pointer-events-none opacity-0'
+        }`}
+      >
         {venueName && (
           <span className="rounded-full bg-black/60 px-2.5 py-1 text-xs text-white/70">
             {venueName}
