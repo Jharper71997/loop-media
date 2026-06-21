@@ -54,7 +54,7 @@ export async function placeCampaign(
 
   const { data: ad } = await admin
     .from('ads')
-    .select('id, category_id, status')
+    .select('id, category_id, status, owner_user_id')
     .eq('id', camp.ad_id)
     .maybeSingle()
   if (!ad) return empty('Ad not found', camp.target_impressions)
@@ -87,7 +87,7 @@ export async function placeCampaign(
   const { data: venuesData } = await admin
     .from('venues')
     .select(
-      'id, category_id, category_slots, foot_traffic_estimate, status, tvs(id, status, loop_length_seconds, slot_seconds)'
+      'id, category_id, category_slots, foot_traffic_estimate, status, host_user_id, tvs(id, status, loop_length_seconds, slot_seconds)'
     )
     .eq('territory_id', camp.territory_id)
     .eq('status', 'active')
@@ -96,6 +96,7 @@ export async function placeCampaign(
     category_id: string | null
     category_slots: number | null
     foot_traffic_estimate: number
+    host_user_id: string | null
     tvs: { id: string; loop_length_seconds: number; slot_seconds: number }[]
   }
   const venues = (venuesData ?? []) as unknown as V[]
@@ -152,10 +153,16 @@ export async function placeCampaign(
   type Candidate = { tvId: string; venueId: string; traffic: number; slot: number }
   const candidates: Candidate[] = []
   for (const v of scopedVenues) {
-    // Venue-own-category exclusivity: a venue never shows an ad in its OWN line
-    // of business (a barbershop can't run a barber's ad). Absolute, regardless
-    // of slots — protects the host from direct competitors on their screens.
-    if (ad.category_id && ad.category_id === v.category_id) continue
+    // Venue-own-category exclusivity: a venue never shows a COMPETITOR's ad in
+    // its OWN line of business (protects the host from direct competitors). The
+    // venue's own owner is exempt — a host may run their own promo on their own
+    // screen even in their category.
+    if (
+      ad.category_id &&
+      ad.category_id === v.category_id &&
+      ad.owner_user_id !== v.host_user_id
+    )
+      continue
     // Per-venue category exclusivity: if this ad has a category, the venue can
     // hold at most category_slots DISTINCT advertisers of that category. This
     // advertiser is always allowed to (re)fill its own slot.

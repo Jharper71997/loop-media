@@ -51,10 +51,14 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
   if (input.category_id) {
     const { data: vCats } = await supabase
       .from('venues')
-      .select('id, category_id')
+      .select('id, category_id, host_user_id')
       .in('id', venueIds)
+    // Block same-category venues this buyer does NOT own (competitors), but let
+    // the venue's own owner promote themselves on their own screen.
     const blocked = new Set(
-      (vCats ?? []).filter((v) => v.category_id === input.category_id).map((v) => v.id)
+      (vCats ?? [])
+        .filter((v) => v.category_id === input.category_id && v.host_user_id !== profile.id)
+        .map((v) => v.id)
     )
     venueIds = venueIds.filter((id) => !blocked.has(id))
     if (!venueIds.length) {

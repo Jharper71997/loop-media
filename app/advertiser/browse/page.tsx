@@ -49,7 +49,7 @@ export default async function BrowsePage({
     const { data } = await supabase
       .from('venues')
       .select(
-        'id, name, venue_type, category_id, lat, lng, foot_traffic_estimate, price_tier, category_slots, category:categories(name), tvs(id, last_heartbeat_at, loop_length_seconds, slot_seconds)'
+        'id, name, venue_type, category_id, host_user_id, lat, lng, foot_traffic_estimate, price_tier, category_slots, category:categories(name), tvs(id, last_heartbeat_at, loop_length_seconds, slot_seconds)'
       )
       .in('territory_id', marketIds)
       .eq('status', 'active')
@@ -60,6 +60,7 @@ export default async function BrowsePage({
       name: string
       venue_type: string | null
       category_id: string | null
+      host_user_id: string | null
       lat: number | null
       lng: number | null
       foot_traffic_estimate: number
@@ -125,9 +126,11 @@ export default async function BrowsePage({
       // Flips to live automatically once any TV at the venue heartbeats (<95s).
       const comingSoon = !r.tvs.some((t) => isTvLive(t.last_heartbeat_at))
 
-      // Venue-own-category exclusivity: a venue never runs an ad in its OWN line
-      // of business (a barbershop blocks barber ads, period). Absolute.
-      const ownCategory = !!activeCat && activeCat === r.category_id
+      // Venue-own-category exclusivity: a venue never runs a COMPETITOR's ad in
+      // its own line of business (a barbershop blocks other barbers). But the
+      // venue's OWN owner may promote themselves on their own screen.
+      const ownCategory =
+        !!activeCat && activeCat === r.category_id && r.host_user_id !== profile.id
       // Slots exclusivity: full when the venue's slots for the viewer's category
       // are taken by OTHER advertisers.
       const catTaken = activeCat ? catOccupancy.get(r.id)?.get(activeCat)?.size ?? 0 : 0

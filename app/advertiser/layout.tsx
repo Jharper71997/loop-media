@@ -15,13 +15,18 @@ export default async function AdvertiserLayout({
     redirect(homeForRole(profile.role))
   }
 
+  // A host who advertises keeps their OWN shell (host nav + logo → /host) so the
+  // buy flow feels like part of the host app, not a separate "advertiser app".
+  // Pure advertisers (and admins previewing) get the advertiser shell.
+  const shellRole = profile.role === 'host' ? 'host' : 'advertiser'
+
   return (
     <>
       {profile.role === 'admin' && <AdminPreviewBanner surface="advertiser" />}
-      {/* A host advertising here gets a way back to their venue dashboard. */}
+      {/* Host nav lacks a campaigns tab, so give hosts a header link to their ads. */}
       <AppShell
-        role="advertiser"
-        crossLink={profile.role === 'host' ? { href: '/host', label: '← My venue' } : undefined}
+        role={shellRole}
+        crossLink={profile.role === 'host' ? { href: '/advertiser', label: 'My ads →' } : undefined}
       >
         {children}
       </AppShell>

@@ -24,7 +24,9 @@ export function AppShell({
   const pathname = usePathname()
   const inFlow =
     pathname.startsWith('/advertiser/browse') || pathname.startsWith('/advertiser/new')
-  const hideNav = role === 'advertiser' && inFlow
+  // Hide the tab bar during the guided buy flow no matter which shell the user is
+  // in (a host keeps their host nav, but the flow's sticky CTA owns the bottom).
+  const hideNav = inFlow
 
   return (
     <div className="flex min-h-screen flex-col">
