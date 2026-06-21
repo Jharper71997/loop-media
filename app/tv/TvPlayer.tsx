@@ -25,9 +25,10 @@ type FillerCard = {
 
 type Manifest = {
   tv: { loop_length_seconds: number; slot_seconds: number }
-  venue: { name: string; lat: number | null; lng: number | null; territory: { name: string } | null } | null
+  venue: { id: string; name: string; lat: number | null; lng: number | null; territory: { name: string } | null } | null
   items: AdItem[]
   filler?: FillerCard[]
+  trivia?: { code: string; url: string; qr_image: string } | null
   generated_at: string
 }
 
@@ -35,6 +36,7 @@ type Slide =
   | (AdItem & { kind: 'ad' })
   | { kind: 'weather' }
   | { kind: 'clock' }
+  | { kind: 'trivia' }
   | { kind: 'promo' }
   | { kind: 'filler'; card: FillerCard }
 
@@ -53,19 +55,20 @@ function weatherInfo(code: number): { label: string; emoji: string } {
 
 function buildPlaylist(m: Manifest): Slide[] {
   const slot = m.tv.slot_seconds || 15
-  // Custom filler cards rotate in order; weather is interleaved separately.
   const cards = m.filler ?? []
-  let cardIdx = 0
-  const nextFiller = (): Slide =>
-    cards.length ? { kind: 'filler', card: cards[cardIdx++ % cards.length] } : { kind: 'weather' }
+  // Filler pool rotated between ads (and used to fill empty screens): the live
+  // trivia teaser, weather, then any authored cards.
+  const fillerPool: Slide[] = []
+  if (m.trivia) fillerPool.push({ kind: 'trivia' })
+  fillerPool.push({ kind: 'weather' })
+  for (const card of cards) fillerPool.push({ kind: 'filler', card })
+  let fi = 0
+  const nextFiller = (): Slide => fillerPool[fi++ % fillerPool.length]
 
   if (!m.items.length) {
-    // No ads sold yet: lead with the Loop Network house ad ("promote your local
-    // business"), then ambient weather + any authored cards. No bare clock/date
-    // screen — every empty slot should be selling the network, not telling time.
-    const out: Slide[] = [{ kind: 'promo' }, { kind: 'weather' }]
-    for (const card of cards) out.push({ kind: 'filler', card })
-    return out
+    // No ads sold yet: lead with the Loop Network house ad, then rotate the
+    // filler pool (trivia, weather, authored cards). No bare clock/date screen.
+    return [{ kind: 'promo' }, ...fillerPool]
   }
   const out: Slide[] = []
   m.items.forEach((it, i) => {
@@ -444,6 +447,12 @@ function Player({ deviceId, onUnpair }: { deviceId: string; onUnpair: () => void
           </div>
           <div className="mt-2 text-3xl text-white/60">{w?.label ?? 'Weather'}</div>
         </FillerFrame>
+      ) : slide.kind === 'trivia' ? (
+        <TriviaSlide
+          venueId={manifest.venue?.id ?? ''}
+          code={manifest.trivia?.code ?? ''}
+          qrImage={manifest.trivia?.qr_image ?? ''}
+        />
       ) : slide.kind === 'clock' ? (
         <FillerFrame title="Loop Network">
           <div className="text-9xl font-semibold tabular-nums">
@@ -547,6 +556,76 @@ function Player({ deviceId, onUnpair }: { deviceId: string; onUnpair: () => void
         >
           Unpair
         </button>
+      </div>
+    </div>
+  )
+}
+
+// Live "play trivia" teaser shown on the TV: scannable join QR + game code and a
+// live leaderboard. Polls the public state endpoint while it's on screen.
+function TriviaSlide({ venueId, code, qrImage }: { venueId: string; code: string; qrImage: string }) {
+  const [lb, setLb] = useState<{ name: string; score: number }[]>([])
+  const [prompt, setPrompt] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!venueId) return
+    let alive = true
+    const tick = async () => {
+      try {
+        const r = await fetch(`/api/trivia/state?venue=${venueId}`, { cache: 'no-store' })
+        if (!r.ok) return
+        const d = await r.json()
+        if (!alive) return
+        setLb(d.leaderboard ?? [])
+        setPrompt(d.question?.prompt ?? null)
+      } catch {
+        /* keep last */
+      }
+    }
+    tick()
+    const id = setInterval(tick, 3000)
+    return () => {
+      alive = false
+      clearInterval(id)
+    }
+  }, [venueId])
+
+  return (
+    <div className="flex h-full w-full items-center justify-center gap-16 bg-gradient-to-b from-zinc-900 to-black px-16 text-white">
+      <div className="flex flex-col items-center">
+        <div className="text-3xl font-extrabold tracking-wide" style={{ color: GOLD }}>
+          PLAY TRIVIA
+        </div>
+        {qrImage && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={qrImage} alt="Scan to play" className="mt-6 size-60 rounded-2xl bg-white p-3" />
+        )}
+        <div className="mt-5 text-2xl text-white/70">Scan to play on your phone</div>
+        {code && (
+          <div className="mt-1 font-mono text-4xl tracking-widest" style={{ color: GOLD }}>
+            {code}
+          </div>
+        )}
+      </div>
+      <div className="max-w-xl">
+        {prompt && <div className="mb-8 text-4xl font-semibold leading-snug">{prompt}</div>}
+        <div className="text-sm uppercase tracking-[0.2em] text-white/40">Leaderboard</div>
+        {lb.length ? (
+          <ol className="mt-4 space-y-2">
+            {lb.slice(0, 6).map((p, i) => (
+              <li key={i} className="flex justify-between text-3xl">
+                <span>
+                  {i + 1}. {p.name}
+                </span>
+                <span className="font-mono" style={{ color: GOLD }}>
+                  {p.score}
+                </span>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <div className="mt-4 text-3xl text-white/50">Be the first to play!</div>
+        )}
       </div>
     </div>
   )

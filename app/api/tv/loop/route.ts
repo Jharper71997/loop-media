@@ -23,7 +23,7 @@ export async function GET(req: Request) {
   const supabase = createAdminClient()
   const { data: tvRow } = await supabase
     .from('tvs')
-    .select('id, loop_length_seconds, slot_seconds, venue:venues(name, lat, lng, territory:territories(id, name))')
+    .select('id, loop_length_seconds, slot_seconds, venue:venues(id, name, lat, lng, play_code, territory:territories(id, name))')
     .eq('device_id', device)
     .maybeSingle()
 
@@ -36,9 +36,11 @@ export async function GET(req: Request) {
     loop_length_seconds: number
     slot_seconds: number
     venue: {
+      id: string
       name: string
       lat: number | null
       lng: number | null
+      play_code: string | null
       territory: { id: string; name: string } | null
     } | null
   }
@@ -117,11 +119,27 @@ export async function GET(req: Request) {
       .map((f) => ({ type: f.type, payload: f.payload }))
   }
 
+  // Trivia join QR for the on-screen "play trivia" slide.
+  let trivia: { code: string; url: string; qr_image: string } | null = null
+  if (tv.venue?.play_code) {
+    const playUrl = `${base}/play/${tv.venue.play_code}`
+    trivia = {
+      code: tv.venue.play_code,
+      url: playUrl,
+      qr_image: await QRCode.toDataURL(playUrl, {
+        margin: 1,
+        width: 240,
+        color: { dark: '#000000', light: '#ffffff' },
+      }),
+    }
+  }
+
   return NextResponse.json({
     tv: { loop_length_seconds: tv.loop_length_seconds, slot_seconds: tv.slot_seconds },
     venue: tv.venue,
     items,
     filler,
+    trivia,
     generated_at: now,
   })
 }
