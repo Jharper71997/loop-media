@@ -124,12 +124,11 @@ export function TvPlayer() {
 /* ---------------- Pairing ---------------- */
 
 function Pairing({ onPaired }: { onPaired: (deviceId: string) => void }) {
-  // A provisioned screen carries its pairing code in the kiosk URL
-  // (/tv?code=LM-XXXXX) so it pairs itself on first boot with no human input.
-  // Read it synchronously so we show a quiet "pairing…" state — not the manual
-  // form — while the auto-pair runs. After the first success the device_id lives
-  // in localStorage and this screen never reaches pairing again, so the code in
-  // the URL is harmless (and is consumed one-time server-side regardless).
+  // A screen can carry its pairing code in the kiosk URL (/tv?code=XXXX) so it
+  // pairs itself on first boot with no human input. Read it synchronously so we
+  // show a quiet "pairing…" state — not the manual form — while the auto-pair
+  // runs. After success the device_id lives in localStorage and the screen skips
+  // pairing on later boots; the code stays reusable so it can be re-added anytime.
   const presetCode =
     typeof window === 'undefined'
       ? ''
@@ -157,8 +156,8 @@ function Pairing({ onPaired }: { onPaired: (deviceId: string) => void }) {
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Pairing failed')
         setBusy(false)
-        // Auto-pair failed (e.g. code already consumed): reveal the manual form
-        // so it can still be paired by hand on the bench.
+        // Auto-pair failed (e.g. bad code or no network): reveal the manual form
+        // so it can still be paired by hand.
         setAutoPairing(false)
       }
     },
@@ -210,7 +209,8 @@ function Pairing({ onPaired }: { onPaired: (deviceId: string) => void }) {
           autoFocus
           value={code}
           onChange={(e) => setCode(e.target.value.toUpperCase())}
-          placeholder="LM-XXXXX"
+          placeholder="XXXX"
+          maxLength={4}
           className="w-80 rounded-xl border border-white/15 bg-white/5 px-6 py-5 text-center text-3xl tracking-widest uppercase outline-none focus:border-[#d4af37]"
         />
         <button

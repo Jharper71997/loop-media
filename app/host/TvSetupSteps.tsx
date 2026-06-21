@@ -3,10 +3,19 @@
 import { useState } from 'react'
 import { Check, Copy, Mail } from 'lucide-react'
 
-// Walks a host through pairing a brand-new screen: where to go on the TV, what
-// code to enter, and what to tap. Shown on the host dashboard for any screen
-// that has a pairing code but isn't paired yet.
-export function TvSetupSteps({ code, tvUrl }: { code: string; tvUrl: string }) {
+// Shows a screen's pairing code on the host dashboard. For a brand-new screen it
+// walks the host through pairing (where to go on the TV, the code, what to tap).
+// For an already-paired screen it shows the code compactly with a re-add hint —
+// the code is reusable, so the host can turn a screen off and pair it again.
+export function TvSetupSteps({
+  code,
+  tvUrl,
+  paired = false,
+}: {
+  code: string
+  tvUrl: string
+  paired?: boolean
+}) {
   const [copied, setCopied] = useState<'url' | 'code' | null>(null)
   const display = tvUrl.replace(/^https?:\/\//, '')
 
@@ -30,6 +39,24 @@ export function TvSetupSteps({ code, tvUrl }: { code: string; tvUrl: string }) {
         '3. Tap "Pair screen". It goes live within a few seconds.',
       ].join('\n')
     )
+
+  // Already paired: show the code compactly so the host can always re-view it and
+  // re-add the screen (or a replacement device) by re-entering it on the TV.
+  if (paired) {
+    return (
+      <div className="rounded-lg border border-border bg-muted/30 p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm text-muted-foreground">Pairing code</span>
+          <code className="rounded bg-muted px-2 py-1 font-mono text-base tracking-widest">{code}</code>
+          <CopyButton label="Copy code" done={copied === 'code'} onClick={() => copy(code, 'code')} />
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Turn this screen off or swap to a new device? Open{' '}
+          <code className="font-mono">{display}</code> on the TV and enter this code to re-add it.
+        </p>
+      </div>
+    )
+  }
 
   return (
     <div className="rounded-lg border border-primary/30 bg-primary/5 p-4">

@@ -157,30 +157,25 @@ export default async function HostHome() {
                         No screens set up here yet. Add one to get a pairing code.
                       </p>
                     ) : (
-                      v.tvs.map((t) =>
-                        !t.device_id && t.pairing_code ? (
+                      v.tvs.map((t) => {
+                        const paired = !!t.device_id
+                        return (
                           <div key={t.id} className="space-y-2">
                             <div className="flex items-center justify-between gap-2">
                               <span className="flex items-center gap-2 text-sm text-muted-foreground">
-                                <TvIcon className="size-4" /> New screen, not paired yet
+                                <TvIcon className="size-4" />
+                                {paired
+                                  ? `Last check-in ${timeAgo(t.last_heartbeat_at)}`
+                                  : 'New screen, not paired yet'}
                               </span>
-                              <LiveStatus lastHeartbeat={t.last_heartbeat_at} paired={false} />
+                              <LiveStatus lastHeartbeat={t.last_heartbeat_at} paired={paired} />
                             </div>
-                            <TvSetupSteps code={t.pairing_code} tvUrl={tvUrl} />
-                          </div>
-                        ) : (
-                          <div
-                            key={t.id}
-                            className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2"
-                          >
-                            <div className="flex items-center gap-2 text-sm">
-                              <TvIcon className="size-4 text-muted-foreground" />
-                              <span>{`Last check-in ${timeAgo(t.last_heartbeat_at)}`}</span>
-                            </div>
-                            <LiveStatus lastHeartbeat={t.last_heartbeat_at} paired={!!t.device_id} />
+                            {t.pairing_code && (
+                              <TvSetupSteps code={t.pairing_code} tvUrl={tvUrl} paired={paired} />
+                            )}
                           </div>
                         )
-                      )
+                      })
                     )}
                   </div>
                 </CardContent>
