@@ -232,7 +232,7 @@ export function PlayClient({ code }: { code: string }) {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-start bg-black px-5 py-10 text-white">
+    <main className="flex min-h-dvh flex-col items-center justify-start bg-black px-5 py-10 text-white">
       {children}
     </main>
   )

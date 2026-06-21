@@ -38,9 +38,9 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`dark ${geistSans.variable} ${geistMono.variable} ${sora.variable} h-full antialiased`}
+      className={`dark ${geistSans.variable} ${geistMono.variable} ${sora.variable} antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-background text-foreground">
+      <body className="flex min-h-dvh flex-col bg-background text-foreground">
         {children}
         <Toaster />
       </body>

@@ -11,7 +11,7 @@ export default async function AdminLayout({
   const territory = await getTerritoryContext(profile)
 
   return (
-    <div className="flex min-h-screen flex-col md:flex-row">
+    <div className="flex min-h-dvh flex-col md:flex-row">
       <AdminNav profile={profile} territory={territory} />
       <main className="min-w-0 flex-1">{children}</main>
     </div>
