@@ -1,31 +1,24 @@
--- Phone trivia game tied to the TV.
+-- Phone trivia game tied to the TV (no DO blocks, so it runs in the SQL editor).
 --
 -- People scan a code on the screen, answer time-synced trivia on their phones,
--- and the leaderboard renders on the TV. Rounds are derived from the wall clock
--- (no server tick): a round is a fixed window and the live question is
--- questions[round % count], so every phone and TV stays in sync just by agreeing
--- on the time. All gameplay writes go through service-role /api/trivia/* routes,
--- so these tables stay locked under RLS.
+-- and the leaderboard renders on the TV. Rounds derive from the wall clock (no
+-- server tick): a round is a fixed window and the live question is
+-- questions[round % count]. Gameplay writes go through service-role
+-- /api/trivia/* routes, so these tables stay locked under RLS.
 
 -- Per-venue join code shown on the TV (scan -> /play/<code>).
 alter table venues add column if not exists play_code text unique;
 
-do $$
-declare
-  alphabet text := 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';  -- no ambiguous 0/O/1/I
-  v record; code text;
-begin
-  for v in select id from venues where play_code is null loop
-    loop
-      code := '';
-      for i in 1..4 loop
-        code := code || substr(alphabet, 1 + floor(random() * length(alphabet))::int, 1);
-      end loop;
-      exit when not exists (select 1 from venues where play_code = code);
-    end loop;
-    update venues set play_code = code where id = v.id;
-  end loop;
-end $$;
+update venues v
+set play_code = (
+  select string_agg(
+    substr('ABCDEFGHJKLMNPQRSTUVWXYZ23456789', 1 + floor(random() * 32)::int, 1),
+    '' order by g
+  )
+  from generate_series(1, 4) g
+  where v.id is not null
+)
+where play_code is null;
 
 create table if not exists trivia_questions (
   id          uuid primary key default gen_random_uuid(),
@@ -61,10 +54,9 @@ alter table trivia_players  enable row level security;
 alter table trivia_answers  enable row level security;
 
 -- Only admins touch these directly; gameplay uses the service role via the API.
-do $$ begin
-  create policy trivia_questions_admin on trivia_questions
-    for all to authenticated using (is_admin()) with check (is_admin());
-exception when duplicate_object then null; end $$;
+drop policy if exists trivia_questions_admin on trivia_questions;
+create policy trivia_questions_admin on trivia_questions
+  for all to authenticated using (is_admin()) with check (is_admin());
 
 -- Starter question pool (only seeds an empty table, so re-running is safe).
 insert into trivia_questions (prompt, choices, correct_idx)
