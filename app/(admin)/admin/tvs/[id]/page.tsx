@@ -1,13 +1,14 @@
 import Link from 'next/link'
 import { headers } from 'next/headers'
 import { notFound } from 'next/navigation'
-import { ArrowLeft, ImageOff } from 'lucide-react'
+import { ArrowLeft, ImageOff, MonitorPlay } from 'lucide-react'
 import { requireAdmin } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { kioskUrl, pairingUrl } from '@/lib/tv'
 import { PageHeader } from '@/components/admin/PageHeader'
 import { DeleteButton } from '@/components/admin/DeleteButton'
+import { buttonVariants } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { formatDateTime, timeAgo, formatNumber } from '@/lib/format'
 import { LiveStatus } from '@/components/app/LiveStatus'
@@ -158,6 +159,16 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
         description="Screen detail"
         action={
           <div className="flex gap-1">
+            {tv.device_id && (
+              <a
+                href={`${kioskUrl(origin, tv.device_id)}&preview=1`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={buttonVariants({ variant: 'outline', size: 'sm' })}
+              >
+                <MonitorPlay className="size-4" /> Watch screen
+              </a>
+            )}
             <RegenerateButton id={tv.id} />
             <DeleteButton id={tv.id} action={deleteTv} />
           </div>

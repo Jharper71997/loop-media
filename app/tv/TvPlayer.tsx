@@ -94,6 +94,11 @@ function fillerLabel(type: FillerCard['type']): string {
 export function TvPlayer() {
   const [deviceId, setDeviceId] = useState<string | null>(null)
   const [ready, setReady] = useState(false)
+  // Admin "Watch screen" preview (/tv?device=<id>&preview=1): render the exact
+  // live loop but stay non-intrusive — don't claim this browser as the device
+  // (no localStorage), don't heartbeat, don't log plays. So an admin can peek at
+  // any screen without faking it live or inflating proof-of-play.
+  const [preview, setPreview] = useState(false)
 
   useEffect(() => {
     // A provisioned screen carries its identity in the kiosk URL
@@ -101,15 +106,20 @@ export function TvPlayer() {
     // first so the screen runs as a known device with zero pairing, then persist
     // it so it survives later boots even if the URL is ever plain /tv. Falls back
     // to a previously stored id, then to the manual/?code= pairing path.
-    const urlDevice = new URLSearchParams(window.location.search).get('device')?.trim()
-    const id = urlDevice || localStorage.getItem(DEVICE_KEY)
+    const params = new URLSearchParams(window.location.search)
+    const isPreview = params.get('preview') === '1'
+    setPreview(isPreview)
+    const urlDevice = params.get('device')?.trim()
+    // In preview never read/persist the stored device — keep the admin's browser
+    // from inheriting (or becoming) a real screen.
+    const id = urlDevice || (isPreview ? null : localStorage.getItem(DEVICE_KEY))
     if (id) {
-      localStorage.setItem(DEVICE_KEY, id)
+      if (!isPreview) localStorage.setItem(DEVICE_KEY, id)
       setDeviceId(id)
     }
     setReady(true)
-    // Cache creative media for offline playback.
-    if ('serviceWorker' in navigator) {
+    // Cache creative media for offline playback (skip in preview).
+    if (!isPreview && 'serviceWorker' in navigator) {
       navigator.serviceWorker.register('/tv-sw.js').catch(() => {})
     }
   }, [])
@@ -124,7 +134,16 @@ export function TvPlayer() {
         }}
       />
     )
-  return <Player deviceId={deviceId} onUnpair={() => { localStorage.removeItem(DEVICE_KEY); setDeviceId(null) }} />
+  return (
+    <Player
+      deviceId={deviceId}
+      preview={preview}
+      onUnpair={() => {
+        localStorage.removeItem(DEVICE_KEY)
+        setDeviceId(null)
+      }}
+    />
+  )
 }
 
 /* ---------------- Pairing ---------------- */
@@ -239,7 +258,15 @@ function Pairing({ onPaired }: { onPaired: (deviceId: string) => void }) {
 
 /* ---------------- Player ---------------- */
 
-function Player({ deviceId, onUnpair }: { deviceId: string; onUnpair: () => void }) {
+function Player({
+  deviceId,
+  preview = false,
+  onUnpair,
+}: {
+  deviceId: string
+  preview?: boolean
+  onUnpair: () => void
+}) {
   const [manifest, setManifest] = useState<Manifest | null>(null)
   const [index, setIndex] = useState(0)
   const [stale, setStale] = useState(false)
@@ -368,8 +395,10 @@ function Player({ deviceId, onUnpair }: { deviceId: string; onUnpair: () => void
     return () => anim.cancel()
   }, [])
 
-  // Heartbeat (30s).
+  // Heartbeat (30s). Skipped in admin preview so a peek doesn't fake the screen
+  // as live (the "live now" signal is the heartbeat, not the loop fetch).
   useEffect(() => {
+    if (preview) return
     const beat = () =>
       fetch('/api/tv/heartbeat', {
         method: 'POST',
@@ -380,7 +409,7 @@ function Player({ deviceId, onUnpair }: { deviceId: string; onUnpair: () => void
     beat()
     const id = setInterval(beat, 30 * 1000)
     return () => clearInterval(id)
-  }, [deviceId])
+  }, [deviceId, preview])
 
   // Clock tick.
   useEffect(() => {
@@ -436,8 +465,10 @@ function Player({ deviceId, onUnpair }: { deviceId: string; onUnpair: () => void
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index, playlist.length, slideSeconds, isVideoAd])
 
-  // Proof of play: log each time an ad slide becomes active.
+  // Proof of play: log each time an ad slide becomes active. Skipped in admin
+  // preview so peeking doesn't inflate a screen's play counts.
   useEffect(() => {
+    if (preview) return
     if (!slide || slide.kind !== 'ad') return
     fetch('/api/tv/play', {
       method: 'POST',
