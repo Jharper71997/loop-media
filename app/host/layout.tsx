@@ -17,10 +17,8 @@ export default async function HostLayout({
   return (
     <>
       {profile.role === 'admin' && <AdminPreviewBanner surface="host" />}
-      {/* Hosts can also advertise (20% off), so give them a way over to it. */}
-      <AppShell role="host" crossLink={{ href: '/advertiser', label: 'Advertise →' }}>
-        {children}
-      </AppShell>
+      {/* Advertising lives in its own host tab now (no cross-app jump). */}
+      <AppShell role="host">{children}</AppShell>
     </>
   )
 }

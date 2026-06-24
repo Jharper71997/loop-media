@@ -7,6 +7,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { buttonVariants } from '@/components/ui/button'
 import { StepHeader } from '@/components/app/StepHeader'
 import { StickyCta } from '@/components/app/StickyCta'
+import { useBasePath } from '@/lib/useBasePath'
 import { formatCents } from '@/lib/format'
 import {
   quoteCart,
@@ -27,6 +28,7 @@ export function ReviewStep({
   quoteOpts?: QuoteOptions
   pricingConfig?: PricingConfig
 }) {
+  const base = useBasePath()
   const byId = useMemo(() => new Map(venues.map((v) => [v.id, v])), [venues])
   const [cartIds, setCartIds] = useState<string[]>([])
 
@@ -61,7 +63,7 @@ export function ReviewStep({
         <p className="text-sm text-muted-foreground">
           Head back to the map and tap the businesses you want a screen in.
         </p>
-        <Link href="/advertiser/browse" className={buttonVariants({ size: 'lg' })}>
+        <Link href={`${base}/browse`} className={buttonVariants({ size: 'lg' })}>
           <MapPin className="size-4" /> Pick screens
         </Link>
       </div>
@@ -130,7 +132,7 @@ export function ReviewStep({
       </Card>
 
       <Link
-        href="/advertiser/browse"
+        href={`${base}/browse`}
         className="block text-center text-xs text-muted-foreground hover:text-foreground"
       >
         + Add more screens
@@ -138,7 +140,7 @@ export function ReviewStep({
 
       <StickyCta
         label="Add your ad"
-        href="/advertiser/new/creative"
+        href={`${base}/new/creative`}
         priceTop={`${cart.length} screen${cart.length === 1 ? '' : 's'}`}
         priceMain={`${formatCents(quote.totalCents)}/mo`}
       />

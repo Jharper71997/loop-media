@@ -18,6 +18,7 @@ import {
   type QuoteOptions,
   type PricingConfig,
 } from '@/lib/pricing'
+import { useBasePath, homeFor } from '@/lib/useBasePath'
 import { joinWaitlist, leaveWaitlist, requestCategory, rememberCategory } from './actions'
 
 export type BrowseVenue = {
@@ -66,6 +67,7 @@ export function BrowseClient({
   pricingConfig?: PricingConfig
 }) {
   const router = useRouter()
+  const base = useBasePath()
   const [cart, setCart] = useState<string[]>([])
   const [waitlisted, setWaitlisted] = useState<Set<string>>(
     () => new Set(venues.filter((v) => v.waitlisted).map((v) => v.id))
@@ -134,7 +136,7 @@ export function BrowseClient({
     if (next.cat && next.cat !== 'all') void rememberCategory(next.cat)
     const params = new URLSearchParams()
     if (c) params.set('cat', c)
-    router.push(`/advertiser/browse?${params.toString()}`)
+    router.push(`${base}/browse?${params.toString()}`)
   }
 
   // ---- Step 1: pick category ------------------------------------------------
@@ -146,7 +148,7 @@ export function BrowseClient({
           total={4}
           title="What do you sell?"
           subtitle="We lock in your category so competitors can't share your screens."
-          backHref="/advertiser"
+          backHref={homeFor(base)}
         />
 
         <div className="relative">
@@ -232,7 +234,7 @@ export function BrowseClient({
         total={4}
         title="Tap the businesses you want"
         subtitle={activeCatName ? `Exclusive for ${activeCatName}` : 'All categories'}
-        backHref="/advertiser/browse"
+        backHref={`${base}/browse`}
       />
 
       <button
@@ -283,7 +285,7 @@ export function BrowseClient({
       <StickyCta
         label={cartVenues.length ? 'Review' : 'Tap a screen to start'}
         disabled={cartVenues.length === 0}
-        href="/advertiser/new"
+        href={`${base}/new`}
         priceTop={
           cartVenues.length
             ? `${cartVenues.length} screen${cartVenues.length === 1 ? '' : 's'}${

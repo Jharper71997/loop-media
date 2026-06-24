@@ -9,27 +9,18 @@ export default async function AdvertiserLayout({
   children: React.ReactNode
 }) {
   const profile = await requireProfile()
-  // Advertisers live here; admins may preview; hosts may advertise elsewhere
-  // (they get 20% off). Anyone else goes to their own home.
-  if (!['advertiser', 'admin', 'host'].includes(profile.role)) {
+  // Hosts now advertise from inside their own app at /host/advertise, so a host
+  // should never sit in the advertiser shell — send them there.
+  if (profile.role === 'host') redirect('/host/advertise/browse')
+  // Advertisers live here; admins may preview. Anyone else goes to their own home.
+  if (!['advertiser', 'admin'].includes(profile.role)) {
     redirect(homeForRole(profile.role))
   }
-
-  // A host who advertises keeps their OWN shell (host nav + logo → /host) so the
-  // buy flow feels like part of the host app, not a separate "advertiser app".
-  // Pure advertisers (and admins previewing) get the advertiser shell.
-  const shellRole = profile.role === 'host' ? 'host' : 'advertiser'
 
   return (
     <>
       {profile.role === 'admin' && <AdminPreviewBanner surface="advertiser" />}
-      {/* Host nav lacks a campaigns tab, so give hosts a header link to their ads. */}
-      <AppShell
-        role={shellRole}
-        crossLink={profile.role === 'host' ? { href: '/advertiser', label: 'My ads →' } : undefined}
-      >
-        {children}
-      </AppShell>
+      <AppShell role="advertiser">{children}</AppShell>
     </>
   )
 }

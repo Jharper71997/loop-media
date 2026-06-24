@@ -6,12 +6,12 @@ import { createClient } from '@/lib/supabase/server'
 import { Card, CardContent } from '@/components/ui/card'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { timeAgo, isTvLive } from '@/lib/format'
+import { timeAgo, isTvLive, formatCents } from '@/lib/format'
 import type { Tv, Venue } from '@/lib/db.types'
 import { OnboardingTour } from '@/components/app/OnboardingTour'
 import { LiveStatus } from '@/components/app/LiveStatus'
 import { AutoRefresh } from '@/components/app/AutoRefresh'
-import { AddScreenButton } from './AddScreenButton'
+import { RemoveLocationButton } from './RemoveLocationButton'
 import { TvSetupSteps } from './TvSetupSteps'
 
 type VenueWithTvs = Venue & {
@@ -22,7 +22,8 @@ type VenueWithTvs = Venue & {
 type RunningPlacement = {
   id: string
   slot_position: number
-  tv: { venue: { name: string } | null } | null
+  status: string
+  tv: { venue: { id: string; name: string } | null } | null
   ad: { title: string; creative_type: string; owner_kind: string } | null
 }
 
@@ -54,12 +55,23 @@ export default async function HostHome() {
     const { data: placementsData } = await supabase
       .from('ad_placements')
       .select(
-        'id, slot_position, tv:tvs(venue:venues(name)), ad:ads(title, creative_type, owner_kind)'
+        'id, slot_position, status, tv:tvs(venue:venues(id, name)), ad:ads(title, creative_type, owner_kind)'
       )
       .in('tv_id', tvIds)
       .neq('status', 'ended')
       .order('slot_position')
     running = (placementsData ?? []) as unknown as RunningPlacement[]
+  }
+
+  // Per-venue count of ACTIVE paid advertiser ads (not the host's own promos).
+  // Removing a location is blocked while any are running (the server enforces it
+  // too); the dashboard shows this instead of an enabled Remove button.
+  const paidAdsByVenue = new Map<string, number>()
+  for (const p of running) {
+    const vid = p.tv?.venue?.id
+    if (vid && p.status === 'active' && p.ad?.owner_kind === 'advertiser') {
+      paidAdsByVenue.set(vid, (paidAdsByVenue.get(vid) ?? 0) + 1)
+    }
   }
 
   // Host promos used = non-rejected ads the host owns (matches the DB 3-slot cap).
@@ -69,6 +81,23 @@ export default async function HostHome() {
     .eq('owner_user_id', profile.id)
     .eq('owner_kind', 'host')
     .neq('status', 'rejected')
+
+  // This host's own paid campaigns running on OTHER venues' screens (they
+  // advertise from /host/advertise). Surfaced so they manage it without leaving.
+  const { data: myCampaignsData } = await supabase
+    .from('campaigns')
+    .select('id, status, monthly_total_cents, ad:ads(title)')
+    .eq('advertiser_id', profile.id)
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false })
+    .limit(6)
+  type MyCampaign = {
+    id: string
+    status: string
+    monthly_total_cents: number | null
+    ad: { title: string | null } | null
+  }
+  const myCampaigns = (myCampaignsData ?? []) as unknown as MyCampaign[]
 
   const allTvs = venues.flatMap((v) => v.tvs)
   const onlineCount = allTvs.filter((t) => isTvLive(t.last_heartbeat_at)).length
@@ -148,13 +177,16 @@ export default async function HostHome() {
                         {v.category?.name && <span>· {v.category.name}</span>}
                       </p>
                     </div>
-                    <AddScreenButton venueId={v.id} />
+                    <RemoveLocationButton
+                      venueId={v.id}
+                      paidAdCount={paidAdsByVenue.get(v.id) ?? 0}
+                    />
                   </div>
 
                   <div className="mt-4 space-y-2">
                     {v.tvs.length === 0 ? (
                       <p className="text-sm text-muted-foreground">
-                        No screens set up here yet. Add one to get a pairing code.
+                        Your screen is being set up.
                       </p>
                     ) : (
                       v.tvs.map((t) => {
@@ -227,7 +259,38 @@ export default async function HostHome() {
             </Link>
           </section>
 
-          {/* Advertise elsewhere — host discount */}
+          {/* Your ads running on other venues' screens */}
+          {myCampaigns.length > 0 && (
+            <section className="space-y-3">
+              <h2 className="text-sm font-medium">Your ads on the network</h2>
+              <Card>
+                <CardContent className="p-2">
+                  <ul className="divide-y divide-border">
+                    {myCampaigns.map((c) => (
+                      <li key={c.id}>
+                        <Link
+                          href={`/host/advertise/campaigns/${c.id}`}
+                          className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm transition hover:bg-muted/50"
+                        >
+                          <span className="min-w-0 truncate font-medium">
+                            {c.ad?.title ?? 'Campaign'}
+                          </span>
+                          <span className="flex shrink-0 items-center gap-3 text-xs text-muted-foreground">
+                            {c.monthly_total_cents != null && (
+                              <span>{formatCents(c.monthly_total_cents)}/mo</span>
+                            )}
+                            <span className="capitalize">{c.status}</span>
+                          </span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
+            </section>
+          )}
+
+          {/* Advertise on other screens — host discount */}
           <section className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-primary/30 bg-primary/5 p-5">
             <div className="flex items-start gap-3 text-sm">
               <Percent className="mt-0.5 size-5 shrink-0 text-primary" />
@@ -239,8 +302,8 @@ export default async function HostHome() {
                 </p>
               </div>
             </div>
-            <Link href="/advertiser/browse" className={cn(buttonVariants(), 'shrink-0')}>
-              <MapPin className="size-4" /> Buy ads on other screens
+            <Link href="/host/advertise" className={cn(buttonVariants(), 'shrink-0')}>
+              <MapPin className="size-4" /> Advertise on other screens
             </Link>
           </section>
         </>

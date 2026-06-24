@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { requireProfile } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { geocodeAddress } from '@/lib/geocode'
+import { genPairingCode, DEFAULT_LOOP_SECONDS, DEFAULT_SLOT_SECONDS } from '@/lib/tv'
 
 export interface RegisterVenueInput {
   name: string
@@ -30,6 +31,17 @@ function slugify(s: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '')
+}
+
+// Normalize an address/ZIP for duplicate comparison: lowercase, collapse
+// internal whitespace, trim, drop trailing punctuation. Used to enforce one
+// screen per location (a host can't register the same address twice).
+function normAddr(s: string | null | undefined): string {
+  return (s ?? '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/[.,#\s]+$/g, '')
 }
 
 // A host can register a venue in ANY US city. The "market" (territory) is
@@ -66,11 +78,26 @@ export async function requestVenue(input: RegisterVenueInput) {
     return { error: 'Only host accounts can register a venue.' }
   }
   if (!input.name.trim()) return { error: 'Enter your venue name.' }
+  if (!input.address.trim()) return { error: 'Enter your street address.' }
   if (!input.city.trim() || !input.state.trim()) {
     return { error: 'Enter your city and state.' }
   }
+  if (!input.postal_code.trim()) return { error: 'Enter your ZIP code.' }
 
   const admin = createAdminClient()
+
+  // One screen per location: reject if this host already registered a venue at
+  // the same street address + ZIP. Compared with a normalizer (tiny per-host
+  // list, so we filter in JS rather than in SQL).
+  const addrKey = `${normAddr(input.address)}|${normAddr(input.postal_code)}`
+  const { data: myVenues } = await admin
+    .from('venues')
+    .select('address, postal_code')
+    .eq('host_user_id', profile.id)
+  if ((myVenues ?? []).some((v) => `${normAddr(v.address)}|${normAddr(v.postal_code)}` === addrKey)) {
+    return { error: 'You already have a screen registered at this address.' }
+  }
+
   const territoryId = await findOrCreateTerritory(admin, input.city, input.state)
   if (!territoryId) return { error: 'Could not set up your city. Try again.' }
 
@@ -109,17 +136,40 @@ export async function requestVenue(input: RegisterVenueInput) {
     .single()
   if (error || !venue) return { error: error?.message ?? 'Could not save your venue.' }
 
-  // Store network details (incl. the WiFi password, a secret) in the
-  // service-role-only venue_provisioning table so we can program the Pi later.
-  const networkType = input.network_type === 'ethernet' ? 'ethernet' : 'wifi'
-  await admin.from('venue_provisioning').upsert({
-    venue_id: venue.id,
-    network_type: networkType,
-    wifi_ssid: networkType === 'wifi' ? input.wifi_ssid?.trim() || null : null,
-    wifi_password: networkType === 'wifi' ? input.wifi_password || null : null,
-    network_note: input.network_note?.trim() || null,
-    updated_at: new Date().toISOString(),
-  })
+  // One screen per location: give the new venue its single screen right away,
+  // with a pairing code the host enters on their TV at /tv. Same pattern as the
+  // old addScreen action, including the retry on a (rare) pairing-code clash.
+  let tvError: string | null = null
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const { error: tvErr } = await admin.from('tvs').insert({
+      venue_id: venue.id,
+      pairing_code: genPairingCode(),
+      status: 'unpaired',
+      loop_length_seconds: DEFAULT_LOOP_SECONDS,
+      slot_seconds: DEFAULT_SLOT_SECONDS,
+    })
+    if (!tvErr) {
+      tvError = null
+      break
+    }
+    tvError = tvErr.message
+    if (!/duplicate|unique/i.test(tvErr.message)) break
+  }
+  if (tvError) return { error: tvError }
+
+  // Optional network details for support. Only stored if the host actually
+  // entered any — we no longer ship/pre-program hardware, so this is just a note.
+  if (input.wifi_ssid?.trim() || input.wifi_password || input.network_note?.trim()) {
+    const networkType = input.network_type === 'ethernet' ? 'ethernet' : 'wifi'
+    await admin.from('venue_provisioning').upsert({
+      venue_id: venue.id,
+      network_type: networkType,
+      wifi_ssid: networkType === 'wifi' ? input.wifi_ssid?.trim() || null : null,
+      wifi_password: networkType === 'wifi' ? input.wifi_password || null : null,
+      network_note: input.network_note?.trim() || null,
+      updated_at: new Date().toISOString(),
+    })
+  }
 
   revalidatePath('/host')
   return { error: null }

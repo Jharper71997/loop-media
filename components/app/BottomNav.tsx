@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutGrid, Plus, User, Store, Megaphone, type LucideIcon } from 'lucide-react'
+import { LayoutGrid, Plus, User, Store, Megaphone, MonitorPlay, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export type AppRole = 'advertiser' | 'host'
@@ -17,6 +17,7 @@ const TABS: Record<AppRole, Tab[]> = {
   ],
   host: [
     { href: '/host', label: 'Venue', icon: Store, exact: true },
+    { href: '/host/advertise', label: 'Advertise', icon: MonitorPlay },
     { href: '/host/promos', label: 'Promos', icon: Megaphone },
     { href: '/host/account', label: 'Account', icon: User },
   ],
@@ -28,7 +29,12 @@ export function BottomNav({ role }: { role: AppRole }) {
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 backdrop-blur pb-[env(safe-area-inset-bottom)]">
-      <div className="mx-auto grid w-full max-w-md grid-cols-3">
+      <div
+        className={cn(
+          'mx-auto grid w-full max-w-md',
+          tabs.length === 4 ? 'grid-cols-4' : 'grid-cols-3'
+        )}
+      >
         {tabs.map((t) => {
           const active = t.exact ? pathname === t.href : pathname.startsWith(t.href)
           const Icon = t.icon

@@ -2,42 +2,55 @@
 
 import { revalidatePath } from 'next/cache'
 import { requireProfile } from '@/lib/auth'
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { genPairingCode, DEFAULT_LOOP_SECONDS, DEFAULT_SLOT_SECONDS } from '@/lib/tv'
 
-// A host adds another screen to one of THEIR venues. Generates a pairing code
-// the host enters on the TV at /tv. `tvs` is admin-write under RLS, so the
-// insert runs with the service role — gated by an ownership check first.
-export async function addScreen(venueId: string) {
+// A host removes one of THEIR locations. Under the one-screen-per-location model
+// this deletes the venue and — via ON DELETE CASCADE — its screen, that screen's
+// ad_placements, uptime rows and placement exclusions. Play/scan history survives
+// (tv_id is set null). `venues`/`tvs` are admin-write under RLS, so the delete
+// runs with the service role, gated by an app-layer ownership check.
+//
+// Blocked while a PAID advertiser ad is live on the screen: we don't drop a
+// paying advertiser silently — the host has to contact us first.
+export async function removeLocation(venueId: string) {
   const profile = await requireProfile()
+  const admin = createAdminClient()
 
-  // Verify the venue belongs to this host (admins may add to any venue).
-  const supabase = await createClient()
-  const { data: venue } = await supabase
+  const { data: venue } = await admin
     .from('venues')
-    .select('id, host_user_id')
+    .select('id, host_user_id, tvs(id)')
     .eq('id', venueId)
     .maybeSingle()
-  if (!venue) return { error: 'Venue not found.' }
+  if (!venue) return { error: 'Location not found.' }
   if (profile.role !== 'admin' && venue.host_user_id !== profile.id) {
-    return { error: 'That venue is not on your account.' }
+    return { error: 'That location is not on your account.' }
   }
 
-  const admin = createAdminClient()
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const { error } = await admin.from('tvs').insert({
-      venue_id: venueId,
-      pairing_code: genPairingCode(),
-      status: 'unpaired',
-      loop_length_seconds: DEFAULT_LOOP_SECONDS,
-      slot_seconds: DEFAULT_SLOT_SECONDS,
+  // Refuse if any paid advertiser ad is currently running on this location's
+  // screen(s). The host's own free promos (owner_kind 'host') don't count.
+  const tvIds = ((venue.tvs ?? []) as { id: string }[]).map((t) => t.id)
+  if (tvIds.length) {
+    const { data: placements } = await admin
+      .from('ad_placements')
+      .select('id, ad:ads(owner_kind)')
+      .in('tv_id', tvIds)
+      .eq('status', 'active')
+    const paid = (placements ?? []).filter((p) => {
+      const ad = Array.isArray(p.ad) ? p.ad[0] : p.ad
+      return ad?.owner_kind === 'advertiser'
     })
-    if (!error) {
-      revalidatePath('/host')
-      return { error: null as string | null }
+    if (paid.length) {
+      return {
+        error: `This location has ${paid.length} paid ad${
+          paid.length === 1 ? '' : 's'
+        } running. Contact us to remove it.`,
+      }
     }
-    if (!/duplicate|unique/i.test(error.message)) return { error: error.message }
   }
-  return { error: 'Could not generate a unique pairing code. Try again.' }
+
+  const { error } = await admin.from('venues').delete().eq('id', venueId)
+  if (error) return { error: error.message }
+
+  revalidatePath('/host')
+  return { error: null as string | null }
 }

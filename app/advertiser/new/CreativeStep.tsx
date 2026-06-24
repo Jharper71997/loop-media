@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { StepHeader } from '@/components/app/StepHeader'
 import { StickyCta } from '@/components/app/StickyCta'
+import { useBasePath } from '@/lib/useBasePath'
 import { formatCents } from '@/lib/format'
 import { CREATIVE_SETUP_FEE_CENTS, CREATIVE_REFRESH_CENTS } from '@/lib/fees'
 import { quoteCart, type QuoteOptions, type PricingConfig } from '@/lib/pricing'
@@ -36,6 +37,7 @@ export function CreativeStep({
   pricingConfig?: PricingConfig
 }) {
   const router = useRouter()
+  const base = useBasePath()
   const byId = useMemo(() => new Map(venues.map((v) => [v.id, v])), [venues])
 
   const [cartIds, setCartIds] = useState<string[]>([])
@@ -101,6 +103,7 @@ export function CreativeStep({
         creative_type,
         creative_url,
         creative_help_brief: mode === 'help' ? brief : null,
+        base_path: base,
       }
 
       const res = await submitCampaign(input)
@@ -116,7 +119,7 @@ export function CreativeStep({
         return
       }
       if (res.demo) toast.success('Campaign created (demo mode — no payment).')
-      router.push(`/advertiser/campaigns/${res.campaignId}`)
+      router.push(`${base}/campaigns/${res.campaignId}`)
     })
   }
 
@@ -124,7 +127,7 @@ export function CreativeStep({
     return (
       <div className="flex flex-col items-center gap-4 py-16 text-center">
         <h1 className="font-heading text-xl font-bold">Your cart is empty</h1>
-        <Link href="/advertiser/browse" className={buttonVariants({ size: 'lg' })}>
+        <Link href={`${base}/browse`} className={buttonVariants({ size: 'lg' })}>
           <MapPin className="size-4" /> Pick screens
         </Link>
       </div>

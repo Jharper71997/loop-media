@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
+import { ConfirmButton } from '@/components/app/ConfirmButton'
 import { submitHostPromo, deleteHostPromo } from './actions'
 
 type Venue = { id: string; name: string }
@@ -95,7 +96,22 @@ export function PromoSlots({
               {venues.length > 1 && (
                 <p className="text-xs text-muted-foreground">{venueName(p.host_venue_id)}</p>
               )}
-              <DeleteButton id={p.id} onDone={() => router.refresh()} />
+              <ConfirmButton
+                onConfirm={async () => {
+                  const res = await deleteHostPromo(p.id)
+                  if (!res.error) router.refresh()
+                  return res
+                }}
+                title="Remove this promo?"
+                description="It stops running on your screens. This can’t be undone."
+                confirmText="Remove"
+                successToast="Promo removed"
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:text-destructive"
+              >
+                <Trash2 className="size-4" /> Remove
+              </ConfirmButton>
             </CardContent>
           </Card>
         )
@@ -128,31 +144,6 @@ export function PromoSlots({
           </button>
         ))}
     </div>
-  )
-}
-
-function DeleteButton({ id, onDone }: { id: string; onDone: () => void }) {
-  const [pending, start] = useTransition()
-  return (
-    <Button
-      variant="ghost"
-      size="sm"
-      className="text-destructive hover:text-destructive"
-      disabled={pending}
-      onClick={() => {
-        if (!window.confirm('Remove this promo? It will stop running on your screens.')) return
-        start(async () => {
-          const res = await deleteHostPromo(id)
-          if (res.error) toast.error(res.error)
-          else {
-            toast.success('Promo removed')
-            onDone()
-          }
-        })
-      }}
-    >
-      <Trash2 className="size-4" /> Remove
-    </Button>
   )
 }
 

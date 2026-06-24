@@ -1,6 +1,5 @@
-import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ImageOff, ArrowLeft, MapPin } from 'lucide-react'
+import { ImageOff, MapPin } from 'lucide-react'
 import { requireProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { Badge } from '@/components/ui/badge'
@@ -23,6 +22,7 @@ import {
   UPTIME_WINDOW_DAYS,
 } from '@/lib/uptime'
 import { CampaignControls } from './CampaignControls'
+import { BackLink } from './BackLink'
 import { ReplaceCreative } from './ReplaceCreative'
 import { MembershipUpsell } from './MembershipUpsell'
 import CampaignMap from './CampaignMap'
@@ -187,12 +187,7 @@ export default async function CampaignDetail({
 
   return (
     <div className="space-y-6">
-      <Link
-        href="/advertiser"
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="size-4" /> All campaigns
-      </Link>
+      <BackLink />
 
       {checkout === 'success' && (
         <div className="rounded-lg border border-emerald-600/40 bg-emerald-600/10 px-4 py-3 text-sm text-emerald-300">

@@ -5,10 +5,16 @@ import { useRouter } from 'next/navigation'
 import { Pause, Play, Trash2, Archive } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { ConfirmButton } from '@/components/app/ConfirmButton'
+import { useBasePath, homeFor } from '@/lib/useBasePath'
 import { pauseCampaign, resumeCampaign, trashCampaign, archiveCampaign } from './actions'
 
 export function CampaignControls({ id, status }: { id: string; status: string }) {
   const router = useRouter()
+  const base = useBasePath()
+  const home = homeFor(base)
+  // Hosts have no "Past campaigns" page; send them home (their dashboard).
+  const pastHref = base === '/host/advertise' ? '/host' : '/advertiser/past'
   const [pending, start] = useTransition()
 
   const run = (fn: (id: string) => Promise<{ error: string | null }>, ok: string, to?: string) =>
@@ -39,37 +45,38 @@ export function CampaignControls({ id, status }: { id: string; status: string })
         </Button>
       )}
       {status !== 'canceled' && (
-        <Button
-          variant="outline"
-          disabled={pending}
-          onClick={() => {
-            if (
-              window.confirm(
-                'End this campaign and move it to Past campaigns? It stops running but stays saved with its performance.'
-              )
-            ) {
-              run(archiveCampaign, 'Moved to Past campaigns', '/advertiser/past')
-            }
+        <ConfirmButton
+          onConfirm={async () => {
+            const res = await archiveCampaign(id)
+            if (!res.error) router.push(pastHref)
+            return res
           }}
+          title="End this campaign?"
+          description="It stops running and moves to Past campaigns, but stays saved with its performance."
+          confirmText="Archive"
+          confirmVariant="default"
+          successToast="Moved to Past campaigns"
+          variant="outline"
+          size="default"
         >
           <Archive className="size-4" /> Archive
-        </Button>
+        </ConfirmButton>
       )}
-      <Button
-        variant="destructive"
-        disabled={pending}
-        onClick={() => {
-          if (
-            window.confirm(
-              'Move this campaign to Trash? Your ad stops running. It stays saved and you can restore it anytime.'
-            )
-          ) {
-            run(trashCampaign, 'Moved to Trash', '/advertiser')
-          }
+      <ConfirmButton
+        onConfirm={async () => {
+          const res = await trashCampaign(id)
+          if (!res.error) router.push(home)
+          return res
         }}
+        title="Move this campaign to Trash?"
+        description="Your ad stops running. It stays saved and you can restore it anytime."
+        confirmText="Delete"
+        successToast="Moved to Trash"
+        variant="destructive"
+        size="default"
       >
         <Trash2 className="size-4" /> Delete
-      </Button>
+      </ConfirmButton>
     </div>
   )
 }

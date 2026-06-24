@@ -45,7 +45,9 @@ export function RegisterVenueForm({
   function onSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!name.trim()) return toast.error('Enter your venue name.')
+    if (!address.trim()) return toast.error('Enter your street address.')
     if (!city.trim() || !stateVal.trim()) return toast.error('Enter your city and state.')
+    if (!zip.trim()) return toast.error('Enter your ZIP code.')
     start(async () => {
       const res = await requestVenue({
         name,
@@ -69,7 +71,7 @@ export function RegisterVenueForm({
         toast.error(res.error)
         return
       }
-      toast.success('Venue submitted — we’ll review it and set up your player.')
+      toast.success('Location submitted. Once approved, pair your screen with the code on your dashboard.')
       router.push('/host')
     })
   }
@@ -87,6 +89,7 @@ export function RegisterVenueForm({
           value={address}
           onChange={(e) => setAddress(e.target.value)}
           placeholder="614 Ensign Pl"
+          required
         />
       </div>
 
@@ -106,7 +109,7 @@ export function RegisterVenueForm({
         </div>
         <div className="space-y-1.5">
           <Label>ZIP</Label>
-          <Input value={zip} onChange={(e) => setZip(e.target.value)} placeholder="46341" />
+          <Input value={zip} onChange={(e) => setZip(e.target.value)} placeholder="46341" required />
         </div>
       </div>
 
@@ -149,10 +152,10 @@ export function RegisterVenueForm({
       </div>
 
       <div className="space-y-3 rounded-lg border border-border p-4">
-        <Label className="text-sm font-medium">How will the screen get online?</Label>
+        <Label className="text-sm font-medium">Network details (optional)</Label>
         <p className="text-xs text-muted-foreground">
-          We ship you a plug-and-play player. Tell us how it connects so we can set it up before it
-          arrives. Your WiFi password is stored privately and only used to program your device.
+          Optional. If you&apos;d like a hand getting your screen online, share how it connects and
+          we&apos;ll help. Anything you enter is stored privately and only used for support.
         </p>
         <div className="flex gap-2">
           <Button
@@ -199,8 +202,9 @@ export function RegisterVenueForm({
       </div>
 
       <p className="text-xs text-muted-foreground">
-        We ship you a plug-and-play player, already set up for your screen. Plug it into your TV&apos;s
-        HDMI and power, and the loop starts on its own — no pairing, no codes.
+        Once your location is approved, we&apos;ll show a pairing code on your dashboard. Open the
+        Loop Network player (the /tv page) on your TV&apos;s built-in browser or any cheap streaming
+        stick, enter the code, and your loop starts playing. Works on any smart TV.
       </p>
 
       <Button type="submit" size="lg" disabled={pending}>

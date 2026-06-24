@@ -21,6 +21,9 @@ export interface NewCampaignInput {
   creative_type: 'video' | 'image' | null
   creative_url: string | null
   creative_help_brief: string | null
+  // Which app tree the buyer is in, so post-checkout returns to the right place.
+  // Hosts advertise from '/host/advertise'; everyone else from '/advertiser'.
+  base_path?: string
 }
 
 export interface SubmitResult {
@@ -137,6 +140,10 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
     .single()
 
   const screenLabel = `${quote.totalScreens} screen${quote.totalScreens === 1 ? '' : 's'}`
+  // Return the buyer to the tree they bought from. Whitelisted to avoid an
+  // open-redirect via a crafted base_path.
+  const pathPrefix = input.base_path === '/host/advertise' ? '/host/advertise' : '/advertiser'
+  const homePath = pathPrefix === '/host/advertise' ? '/host' : '/advertiser'
 
   // Real Stripe Checkout when configured; admins always skip live payment.
   if (process.env.STRIPE_SECRET_KEY && !isAdmin) {
@@ -183,8 +190,8 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
           subscription_id: sub?.id ?? '',
           advertiser_id: profile.id,
         },
-        success_url: `${base}/advertiser/campaigns/${campaign.id}?checkout=success`,
-        cancel_url: `${base}/advertiser/campaigns/${campaign.id}?checkout=canceled`,
+        success_url: `${base}${pathPrefix}/campaigns/${campaign.id}?checkout=success`,
+        cancel_url: `${base}${pathPrefix}/campaigns/${campaign.id}?checkout=canceled`,
       })
       return { checkoutUrl: session.url ?? undefined, campaignId: campaign.id }
     } catch (e) {
@@ -202,6 +209,6 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
     .eq('id', sub?.id ?? '')
   await supabase.from('campaigns').update({ status: 'active' }).eq('id', campaign.id)
   await activatePlacementsIfReady(campaign.id)
-  revalidatePath('/advertiser')
+  revalidatePath(homePath)
   return { campaignId: campaign.id, demo: true }
 }
