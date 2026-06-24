@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireAdmin } from '@/lib/auth'
-import { activatePlacementsIfReady } from '@/lib/placement'
+import { activatePlacementsIfReady, placeHostPromo } from '@/lib/placement'
 
 export async function approveAd(id: string) {
   const profile = await requireAdmin()
@@ -26,6 +26,9 @@ export async function approveAd(id: string) {
   for (const c of campaigns ?? []) {
     await activatePlacementsIfReady(c.id, admin)
   }
+  // Host free-promos have no campaign — place them onto the host's own screens.
+  // No-ops for advertiser ads.
+  await placeHostPromo(id, admin)
 
   revalidatePath('/admin/queue')
   return { error: null }
@@ -44,6 +47,17 @@ export async function rejectAd(id: string, reason: string) {
     })
     .eq('id', id)
   if (error) return { error: error.message }
+
+  // End any active placements for this ad so a rejected creative leaves the loop
+  // and frees its slot (the TV loop won't play a rejected ad, but the row would
+  // otherwise keep occupying a slot).
+  const admin = createAdminClient()
+  await admin
+    .from('ad_placements')
+    .update({ status: 'ended', end_date: new Date().toISOString().slice(0, 10) })
+    .eq('ad_id', id)
+    .eq('status', 'active')
+
   revalidatePath('/admin/queue')
   return { error: null }
 }

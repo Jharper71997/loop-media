@@ -246,6 +246,7 @@ function Player({ deviceId, onUnpair }: { deviceId: string; onUnpair: () => void
   const [fatal, setFatal] = useState<string | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const motionRef = useRef<HTMLDivElement | null>(null)
   // The screen-label + Unpair controls stay hidden during playback (a TV has no
   // mouse hover) so the display is clean. A tap/remote-click reveals them for a
   // few seconds — long enough to unpair or go fullscreen — then they hide again.
@@ -299,12 +300,12 @@ function Player({ deviceId, onUnpair }: { deviceId: string; onUnpair: () => void
     }
   }, [deviceId, onUnpair])
 
-  // Initial load + periodic resync (45s) so a newly approved ad shows up on the
-  // screen within a minute without anyone touching the TV. Also re-sync whenever
+  // Initial load + periodic resync (30s) so a newly approved ad shows up on the
+  // screen within ~30s without anyone touching the TV. Also re-sync whenever
   // the tab regains focus/visibility (e.g. someone wakes the screen).
   useEffect(() => {
     loadLoop()
-    const id = setInterval(loadLoop, 45 * 1000)
+    const id = setInterval(loadLoop, 30 * 1000)
     const onVisible = () => {
       if (document.visibilityState === 'visible') loadLoop()
     }
@@ -346,6 +347,23 @@ function Player({ deviceId, onUnpair }: { deviceId: string; onUnpair: () => void
       document.removeEventListener('visibilitychange', onVisible)
       sentinel?.release().catch(() => {})
     }
+  }, [])
+
+  // Anti-sleep: a near-invisible element nudged forever via the Web Animations
+  // API. Many TVs (and Fire Stick screensavers) dim or sleep when the frame is
+  // STATIC for a while — e.g. a single image ad. Continuous sub-pixel motion
+  // keeps the frame "changing" so that detection doesn't trip. Runs on the
+  // compositor (not throttled like rAF). This is a best-effort MITIGATION; the
+  // reliable fix is disabling the TV/stick screensaver in its own settings at
+  // install. Complements the Wake Lock above.
+  useEffect(() => {
+    const el = motionRef.current
+    if (!el || typeof el.animate !== 'function') return
+    const anim = el.animate(
+      [{ transform: 'translateX(0px)' }, { transform: 'translateX(6px)' }],
+      { duration: 4000, iterations: Infinity, direction: 'alternate' }
+    )
+    return () => anim.cancel()
   }, [])
 
   // Heartbeat (30s).
@@ -540,6 +558,14 @@ function Player({ deviceId, onUnpair }: { deviceId: string; onUnpair: () => void
           </div>
         </div>
       )}
+
+      {/* Anti-sleep: a barely-visible element kept in constant motion so TVs
+          that sleep on a static frame keep seeing change. See the effect above. */}
+      <div
+        ref={motionRef}
+        aria-hidden
+        className="pointer-events-none absolute top-0 left-0 h-1 w-1 rounded-full bg-white/[0.02]"
+      />
 
       {/* Status chips */}
       <div className="pointer-events-none absolute right-4 bottom-4 flex items-center gap-2 text-xs">
