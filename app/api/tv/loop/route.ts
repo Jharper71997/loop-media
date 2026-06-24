@@ -161,5 +161,11 @@ export async function GET(req: Request) {
     filler,
     trivia,
     generated_at: now,
+    // Deployment id so the long-running TV page can detect a new release and
+    // reload itself (a screen otherwise runs the JS it booted with forever).
+    build:
+      process.env.VERCEL_GIT_COMMIT_SHA ??
+      process.env.VERCEL_DEPLOYMENT_ID ??
+      'dev',
   })
 }
