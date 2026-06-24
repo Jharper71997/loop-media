@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import QRCode from 'qrcode'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { genPairingCode } from '@/lib/tv'
 
 // Public base URL the phone-scannable QR must point at (the deployed domain in
 // prod; localhost in dev). Prefers explicit env, then forwarded host headers.
@@ -117,6 +118,25 @@ export async function GET(req: Request) {
     filler = ((fillerData ?? []) as { type: string; payload: Record<string, unknown>; expires_at: string | null }[])
       .filter((f) => !f.expires_at || new Date(f.expires_at).getTime() > Date.now())
       .map((f) => ({ type: f.type, payload: f.payload }))
+  }
+
+  // Every venue needs a play_code so the phone-trivia join link works and the
+  // TV shows the trivia slide. The 0028 migration only backfilled venues that
+  // existed then — any venue created since has none. Mint one lazily and persist
+  // it (idempotent: only sets when still null, then reads back the live value so
+  // a concurrent request's code wins cleanly).
+  if (tv.venue && !tv.venue.play_code) {
+    await supabase
+      .from('venues')
+      .update({ play_code: genPairingCode() })
+      .eq('id', tv.venue.id)
+      .is('play_code', null)
+    const { data: vp } = await supabase
+      .from('venues')
+      .select('play_code')
+      .eq('id', tv.venue.id)
+      .maybeSingle()
+    tv.venue.play_code = vp?.play_code ?? null
   }
 
   // Trivia join QR for the on-screen "play trivia" slide.

@@ -41,6 +41,7 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
   }
   const isAdmin = profile.role === 'admin'
   if (!input.title.trim()) return { error: 'Give your ad a title.' }
+  if (!input.qr_target_url?.trim()) return { error: 'Add a scan link for your ad.' }
   if (!input.territory_id) return { error: 'Pick a market.' }
 
   let venueIds = [...new Set((input.venue_ids ?? []).filter(Boolean))]
@@ -96,7 +97,7 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
       creative_type: input.creative_type ?? 'image',
       creative_url: input.creative_url,
       status: 'pending',
-      qr_target_url: input.qr_target_url || null,
+      qr_target_url: input.qr_target_url.trim(),
     })
     .select('id')
     .single()
