@@ -660,10 +660,10 @@ function TriviaSlide({ venueId, code, qrImage }: { venueId: string; code: string
       </div>
       <div className="max-w-xl">
         {prompt && <div className="mb-8 text-4xl font-semibold leading-snug">{prompt}</div>}
-        <div className="text-sm uppercase tracking-[0.2em] text-white/40">Leaderboard</div>
+        <div className="text-sm uppercase tracking-[0.2em] text-white/40">This Week&apos;s Leaders</div>
         {lb.length ? (
           <ol className="mt-4 space-y-2">
-            {lb.slice(0, 6).map((p, i) => (
+            {lb.slice(0, 2).map((p, i) => (
               <li key={i} className="flex justify-between text-3xl">
                 <span>
                   {i + 1}. {p.name}

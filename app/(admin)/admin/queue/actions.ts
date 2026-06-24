@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireAdmin } from '@/lib/auth'
-import { activatePlacementsIfReady, placeHostPromo } from '@/lib/placement'
+import { activatePlacementsIfReady } from '@/lib/placement'
 
 export async function approveAd(id: string) {
   const profile = await requireAdmin()
@@ -26,9 +26,6 @@ export async function approveAd(id: string) {
   for (const c of campaigns ?? []) {
     await activatePlacementsIfReady(c.id, admin)
   }
-  // Host free-promos have no campaign — place them onto the host's own screens.
-  // No-ops for advertiser ads.
-  await placeHostPromo(id, admin)
 
   revalidatePath('/admin/queue')
   return { error: null }

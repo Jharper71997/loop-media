@@ -29,7 +29,7 @@ type Promo = {
   status: string
   creative_type: string
   creative_url: string | null
-  host_venue_id: string | null
+  target_venue_name: string | null
 }
 
 function statusBadge(status: string) {
@@ -58,18 +58,6 @@ export function PromoSlots({
   const router = useRouter()
   const [adding, setAdding] = useState(false)
   const remaining = maxSlots - promos.length
-  const venueName = (id: string | null) => venues.find((v) => v.id === id)?.name ?? ''
-
-  if (venues.length === 0) {
-    return (
-      <Card>
-        <CardContent className="p-8 text-center text-sm text-muted-foreground">
-          No venue is linked to your account yet, so there&apos;s nowhere to run a promo.
-          Reach out to your Loop Network contact to get your screen set up.
-        </CardContent>
-      </Card>
-    )
-  }
 
   return (
     <div className="grid gap-4 sm:grid-cols-2">
@@ -94,8 +82,8 @@ export function PromoSlots({
                 <p className="text-sm font-medium">{p.title}</p>
                 <Badge className={b.cls}>{b.label}</Badge>
               </div>
-              {venues.length > 1 && (
-                <p className="text-xs text-muted-foreground">{venueName(p.host_venue_id)}</p>
+              {p.target_venue_name && (
+                <p className="text-xs text-muted-foreground">Running on {p.target_venue_name}</p>
               )}
               <ConfirmButton
                 onConfirm={async () => {
@@ -119,6 +107,18 @@ export function PromoSlots({
       })}
 
       {remaining > 0 &&
+        venues.length === 0 &&
+        promos.length === 0 && (
+          <Card className="sm:col-span-2">
+            <CardContent className="p-8 text-center text-sm text-muted-foreground">
+              There aren&apos;t any other Loop Network screens to run on yet. Check back as the
+              network grows.
+            </CardContent>
+          </Card>
+        )}
+
+      {remaining > 0 &&
+        venues.length > 0 &&
         (adding ? (
           <AddPromoCard
             userId={userId}
@@ -166,6 +166,10 @@ function AddPromoCard({
   const [pending, start] = useTransition()
 
   function save() {
+    if (!venueId) {
+      toast.error('Pick a screen to run your promo on.')
+      return
+    }
     if (!title.trim()) {
       toast.error('Give your promo a title.')
       return
@@ -185,7 +189,7 @@ function AddPromoCard({
       }
       const creative_url = supabase.storage.from('host-promos').getPublicUrl(path).data.publicUrl
       const res = await submitHostPromo({
-        venue_id: venueId,
+        target_venue_id: venueId,
         title,
         creative_type: file.type.startsWith('video') ? 'video' : 'image',
         creative_url,
@@ -203,25 +207,23 @@ function AddPromoCard({
   return (
     <Card className="sm:col-span-2">
       <CardContent className="space-y-3 p-4">
-        {venues.length > 1 && (
-          <div className="space-y-1.5">
-            <Label className="text-xs">Venue</Label>
-            <Select value={venueId} onValueChange={(v) => setVenueId(v ?? '')}>
-              <SelectTrigger className="w-full">
-                <SelectValue>
-                  {(v: string | null) => venues.find((x) => x.id === v)?.name ?? 'Select venue'}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {venues.map((v) => (
-                  <SelectItem key={v.id} value={v.id}>
-                    {v.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
+        <div className="space-y-1.5">
+          <Label className="text-xs">Run on</Label>
+          <Select value={venueId} onValueChange={(v) => setVenueId(v ?? '')}>
+            <SelectTrigger className="w-full">
+              <SelectValue>
+                {(v: string | null) => venues.find((x) => x.id === v)?.name ?? 'Select a screen'}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {venues.map((v) => (
+                <SelectItem key={v.id} value={v.id}>
+                  {v.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
         <div className="space-y-1.5">
           <Label className="text-xs">Promo title</Label>
           <Input

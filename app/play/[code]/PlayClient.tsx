@@ -25,7 +25,9 @@ export function PlayClient({ code }: { code: string }) {
   const [error, setError] = useState<string | null>(null)
 
   const [state, setState] = useState<TriviaState | null>(null)
-  const [selected, setSelected] = useState<number | null>(null)
+  const [picked, setPicked] = useState<number | null>(null) // tapped, not yet locked in
+  const [locked, setLocked] = useState(false) // locked in this round (local echo)
+  const [submitting, setSubmitting] = useState(false)
   const roundRef = useRef<number | null>(null)
 
   // Restore a prior join for this game code.
@@ -83,7 +85,8 @@ export function PlayClient({ code }: { code: string }) {
         if (!alive) return
         if (roundRef.current !== data.round) {
           roundRef.current = data.round
-          setSelected(null) // new question → clear local pick
+          setPicked(null) // new question → clear tentative pick
+          setLocked(false)
         }
         setState(data)
       } catch {
@@ -98,27 +101,29 @@ export function PlayClient({ code }: { code: string }) {
     }
   }, [join])
 
-  const answer = useCallback(
-    async (idx: number) => {
-      if (!join || !state || state.phase !== 'question') return
-      if (selected != null || state.you?.answered) return
-      setSelected(idx)
-      try {
-        await fetch('/api/trivia/answer', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            player_id: join.player_id,
-            venue_id: join.venue_id,
-            choice_idx: idx,
-          }),
-        })
-      } catch {
-        /* the next poll reflects the truth */
-      }
-    },
-    [join, state, selected]
-  )
+  // Tapping a choice only PICKS it (highlights). Nothing is recorded until the
+  // player presses "Lock it in" — that's the actual submit.
+  const lockIn = useCallback(async () => {
+    if (!join || !state || state.phase !== 'question') return
+    if (picked == null || locked || state.you?.answered) return
+    setLocked(true)
+    setSubmitting(true)
+    try {
+      await fetch('/api/trivia/answer', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          player_id: join.player_id,
+          venue_id: join.venue_id,
+          choice_idx: picked,
+        }),
+      })
+    } catch {
+      /* the next poll reflects the truth */
+    } finally {
+      setSubmitting(false)
+    }
+  }, [join, state, picked, locked])
 
   if (!ready) {
     return (
@@ -160,8 +165,8 @@ export function PlayClient({ code }: { code: string }) {
     )
   }
 
-  const answered = selected != null || !!state?.you?.answered
-  const myChoice = selected ?? state?.you?.choiceIdx ?? null
+  const answered = locked || !!state?.you?.answered
+  const myChoice = picked ?? state?.you?.choiceIdx ?? null
   const secs = state ? Math.max(0, Math.round(state.endsInMs / 1000)) : 0
 
   return (
@@ -169,7 +174,7 @@ export function PlayClient({ code }: { code: string }) {
       <div className="flex w-full max-w-md items-center justify-between text-sm">
         <span className="text-white/60">{join.venue_name}</span>
         <span className="font-mono" style={{ color: GOLD }}>
-          {state?.you?.score ?? 0} pts
+          {(state?.you?.score ?? 0) > 0 ? `🔥 ${state?.you?.score} in a row` : '0 in a row'}
         </span>
       </div>
 
@@ -191,7 +196,7 @@ export function PlayClient({ code }: { code: string }) {
                 <button
                   key={i}
                   disabled={answered || state.phase !== 'question'}
-                  onClick={() => answer(i)}
+                  onClick={() => setPicked(i)}
                   className={`rounded-xl border px-4 py-4 text-left text-lg transition ${cls} disabled:cursor-default`}
                 >
                   {c}
@@ -199,17 +204,31 @@ export function PlayClient({ code }: { code: string }) {
               )
             })}
           </div>
+
+          {state.phase === 'question' && !answered && (
+            <button
+              onClick={lockIn}
+              disabled={picked == null || submitting}
+              style={{ background: GOLD }}
+              className="mt-4 w-full rounded-xl px-6 py-4 text-lg font-semibold text-black transition disabled:opacity-40"
+            >
+              {submitting ? 'Locking in…' : picked == null ? 'Pick an answer' : 'Lock it in'}
+            </button>
+          )}
+
           <p className="mt-4 text-center text-sm text-white/40">
             {state.phase === 'question'
               ? answered
                 ? `Locked in — results in ${secs}s`
-                : `Tap your answer · ${secs}s`
+                : picked == null
+                  ? `Tap an answer · ${secs}s`
+                  : `Press lock in · ${secs}s`
               : `Next question in ${secs}s`}
           </p>
 
           {state.leaderboard.length > 0 && (
             <div className="mt-8">
-              <p className="mb-2 text-xs uppercase tracking-widest text-white/40">Leaderboard</p>
+              <p className="mb-2 text-xs uppercase tracking-widest text-white/40">This Week</p>
               <ol className="space-y-1">
                 {state.leaderboard.map((p, i) => (
                   <li key={i} className="flex justify-between text-sm">
