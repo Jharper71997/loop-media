@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import { ConfirmButton } from '@/components/app/ConfirmButton'
+import { CreativeFitNotice } from '@/components/app/CreativeFitNotice'
 import { submitHostPromo, deleteHostPromo } from './actions'
 
 type Venue = { id: string; name: string }
@@ -248,6 +249,7 @@ function AddPromoCard({
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
             />
           </label>
+          <CreativeFitNotice file={file} />
         </div>
         <div className="space-y-1.5">
           <Label className="text-xs">QR scan link (optional)</Label>

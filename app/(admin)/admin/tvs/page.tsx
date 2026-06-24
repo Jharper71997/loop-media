@@ -47,6 +47,7 @@ export default async function TvsPage() {
 
   let rows: TvRow[] = []
   const adsByTv = new Map<string, number>()
+  const titlesByTv = new Map<string, string[]>()
   if (venueIds.length) {
     const { data } = await supabase
       .from('tvs')
@@ -57,12 +58,23 @@ export default async function TvsPage() {
 
     const tvIds = rows.map((r) => r.id)
     if (tvIds.length) {
+      // Active placements + the ad title, in slot order, so each screen shows
+      // exactly which ads are running on it — not just a count.
       const { data: pl } = await supabase
         .from('ad_placements')
-        .select('tv_id')
+        .select('tv_id, ad:ads(title)')
         .in('tv_id', tvIds)
         .eq('status', 'active')
-      for (const p of pl ?? []) adsByTv.set(p.tv_id, (adsByTv.get(p.tv_id) ?? 0) + 1)
+        .order('slot_position')
+      for (const p of (pl ?? []) as { tv_id: string; ad: { title: string } | { title: string }[] | null }[]) {
+        adsByTv.set(p.tv_id, (adsByTv.get(p.tv_id) ?? 0) + 1)
+        const ad = Array.isArray(p.ad) ? p.ad[0] : p.ad
+        if (ad?.title) {
+          const arr = titlesByTv.get(p.tv_id) ?? []
+          arr.push(ad.title)
+          titlesByTv.set(p.tv_id, arr)
+        }
+      }
     }
   }
 
@@ -111,6 +123,12 @@ export default async function TvsPage() {
                   {Math.round(tv.loop_length_seconds / 60)}m / {tv.slot_seconds}s
                 </span>
               </div>
+              <div className="mt-2 text-xs text-muted-foreground">
+                <span className="text-foreground/70">Playing: </span>
+                {(titlesByTv.get(tv.id)?.length ?? 0) > 0
+                  ? (titlesByTv.get(tv.id) ?? []).join(', ')
+                  : 'nothing yet'}
+              </div>
               <div className="mt-1 text-xs text-muted-foreground">
                 Last seen {timeAgo(tv.last_heartbeat_at)}
               </div>
@@ -130,6 +148,7 @@ export default async function TvsPage() {
                 <TableHead>Venue</TableHead>
                 <TableHead>Pairing code / link</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Playing</TableHead>
                 <TableHead>Last seen</TableHead>
                 <TableHead className="text-right">Loop</TableHead>
                 <TableHead className="w-24" />
@@ -138,7 +157,7 @@ export default async function TvsPage() {
             <TableBody>
               {rows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
+                  <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
                     No TVs yet. Create one to get a pairing code for the technician.
                   </TableCell>
                 </TableRow>
@@ -169,6 +188,13 @@ export default async function TvsPage() {
                       paired={!!tv.device_id}
                       adsRunning={adsByTv.get(tv.id) ?? 0}
                     />
+                  </TableCell>
+                  <TableCell className="max-w-[18rem] text-sm text-muted-foreground">
+                    {(titlesByTv.get(tv.id)?.length ?? 0) > 0 ? (
+                      <span className="line-clamp-2">{(titlesByTv.get(tv.id) ?? []).join(', ')}</span>
+                    ) : (
+                      <span className="text-muted-foreground/60">nothing yet</span>
+                    )}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {timeAgo(tv.last_heartbeat_at)}

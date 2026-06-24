@@ -164,7 +164,9 @@ export function BrowseClient({
 
         {(() => {
           const q = catQuery.trim().toLowerCase()
-          const matches = q ? categories.filter((c) => c.name.toLowerCase().includes(q)) : categories
+          // Search-driven: show matches only once they start typing their
+          // business type — never the whole category list on screen.
+          const matches = q ? categories.filter((c) => c.name.toLowerCase().includes(q)) : []
           const exact = categories.some((c) => c.name.toLowerCase() === q)
           return (
             <>
@@ -208,8 +210,10 @@ export function BrowseClient({
                 </Button>
               )}
 
-              {matches.length === 0 && !q && (
-                <p className="text-sm text-muted-foreground">No categories yet.</p>
+              {!q && (
+                <p className="text-sm text-muted-foreground">
+                  Start typing your business type to find your category.
+                </p>
               )}
             </>
           )

@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { StepHeader } from '@/components/app/StepHeader'
 import { StickyCta } from '@/components/app/StickyCta'
+import { CreativeFitNotice } from '@/components/app/CreativeFitNotice'
 import { useBasePath } from '@/lib/useBasePath'
 import { formatCents } from '@/lib/format'
 import { CREATIVE_SETUP_FEE_CENTS, CREATIVE_REFRESH_CENTS } from '@/lib/fees'
@@ -200,6 +201,7 @@ export function CreativeStep({
                 {file.name} · {(file.size / 1_000_000).toFixed(1)} MB
               </p>
             )}
+            <CreativeFitNotice file={file} />
           </div>
         ) : (
           <>
