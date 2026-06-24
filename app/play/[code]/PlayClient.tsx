@@ -169,7 +169,7 @@ export function PlayClient({ code }: { code: string }) {
       <div className="flex w-full max-w-md items-center justify-between text-sm">
         <span className="text-white/60">{join.venue_name}</span>
         <span className="font-mono" style={{ color: GOLD }}>
-          {state?.you?.score ?? 0} pts
+          {(state?.you?.score ?? 0) > 0 ? `🔥 ${state?.you?.score} in a row` : '0 in a row'}
         </span>
       </div>
 
@@ -209,7 +209,7 @@ export function PlayClient({ code }: { code: string }) {
 
           {state.leaderboard.length > 0 && (
             <div className="mt-8">
-              <p className="mb-2 text-xs uppercase tracking-widest text-white/40">Leaderboard</p>
+              <p className="mb-2 text-xs uppercase tracking-widest text-white/40">This Week</p>
               <ol className="space-y-1">
                 {state.leaderboard.map((p, i) => (
                   <li key={i} className="flex justify-between text-sm">

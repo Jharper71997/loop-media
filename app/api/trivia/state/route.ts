@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { roundNumber, roundPhase, CORRECT_POINTS } from '@/lib/trivia'
+import { roundNumber, roundPhase } from '@/lib/trivia'
 
 // Live trivia state for a venue: the current question, phase/timer, today's
 // leaderboard, and (if a player id is passed) that player's answer + score.
@@ -27,20 +27,39 @@ export async function GET(req: Request) {
   const { phase, endsInMs } = roundPhase(now)
   const q = questions[round % questions.length]
 
-  // Leaderboard: today's correct answers at this venue, by player.
-  const startOfDay = new Date()
-  startOfDay.setHours(0, 0, 0, 0)
+  // Score = the player's current STREAK of correct answers in a row. One wrong
+  // answer resets them to zero — the whole game is how many you can get right in
+  // a row without a miss. Window resets weekly (Monday 00:00 server time; server
+  // runs UTC on Vercel, fine until per-venue tz lands). Fetch every answer this
+  // week (right AND wrong), ordered by round, and walk each player's run.
+  const weekStart = new Date()
+  weekStart.setHours(0, 0, 0, 0)
+  weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7))
   const { data: answers } = await supabase
     .from('trivia_answers')
-    .select('player_id, is_correct')
+    .select('player_id, round, is_correct')
     .eq('venue_id', venueId)
-    .eq('is_correct', true)
-    .gte('created_at', startOfDay.toISOString())
-  const byPlayer = new Map<string, number>()
-  for (const a of (answers ?? []) as { player_id: string }[]) {
-    byPlayer.set(a.player_id, (byPlayer.get(a.player_id) ?? 0) + CORRECT_POINTS)
+    .gte('created_at', weekStart.toISOString())
+
+  // Current streak = walk a player's answers in round order; +1 per correct, back
+  // to 0 on any miss. The final value is their live run.
+  const streakOf = (rows: { round: number; is_correct: boolean }[]): number => {
+    let s = 0
+    for (const r of [...rows].sort((a, b) => a.round - b.round)) s = r.is_correct ? s + 1 : 0
+    return s
   }
-  const top = [...byPlayer.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8)
+  const seqByPlayer = new Map<string, { round: number; is_correct: boolean }[]>()
+  for (const a of (answers ?? []) as { player_id: string; round: number; is_correct: boolean }[]) {
+    const arr = seqByPlayer.get(a.player_id) ?? []
+    arr.push({ round: Number(a.round), is_correct: a.is_correct })
+    seqByPlayer.set(a.player_id, arr)
+  }
+  const byPlayer = new Map<string, number>()
+  for (const [pid, rows] of seqByPlayer) byPlayer.set(pid, streakOf(rows))
+  const top = [...byPlayer.entries()]
+    .filter(([, s]) => s > 0)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 2)
   let leaderboard: { name: string; score: number }[] = []
   if (top.length) {
     const { data: players } = await supabase
@@ -53,17 +72,17 @@ export async function GET(req: Request) {
     leaderboard = top.map(([id, score]) => ({ name: nameById.get(id) ?? '—', score }))
   }
 
-  // This player's status for the current round + their score today.
+  // This player's status for the current round + their current streak.
   let you: { answered: boolean; choiceIdx: number | null; score: number } | null = null
   if (playerId) {
     const { data: mine } = await supabase
       .from('trivia_answers')
       .select('round, choice_idx, is_correct')
       .eq('player_id', playerId)
-      .gte('created_at', startOfDay.toISOString())
+      .gte('created_at', weekStart.toISOString())
     const rows = (mine ?? []) as { round: number; choice_idx: number; is_correct: boolean }[]
     const thisRound = rows.find((r) => Number(r.round) === round)
-    const score = rows.filter((r) => r.is_correct).length * CORRECT_POINTS
+    const score = streakOf(rows.map((r) => ({ round: Number(r.round), is_correct: r.is_correct })))
     you = { answered: !!thisRound, choiceIdx: thisRound?.choice_idx ?? null, score }
   }
 
