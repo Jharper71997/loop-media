@@ -15,7 +15,6 @@ import {
   DollarSign,
   Coins,
   Map,
-  Package,
   Activity,
   Newspaper,
   Palette,
@@ -60,8 +59,7 @@ const GROUPS: NavGroup[] = [
       { href: '/admin/venues', label: 'Venues', icon: Store },
       { href: '/admin/tvs', label: 'TVs', icon: Tv },
       { href: '/admin/categories', label: 'Categories & caps', icon: Tags },
-      { href: '/admin/packages', label: 'Packages', icon: Package },
-      { href: '/admin/pricing', label: 'Tier pricing', icon: Coins },
+      { href: '/admin/pricing', label: 'Packages & pricing', icon: Coins },
     ],
   },
   {
