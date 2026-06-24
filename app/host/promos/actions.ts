@@ -29,6 +29,7 @@ export async function submitHostPromo(
   }
   if (!input.title.trim()) return { error: 'Give your promo a title.' }
   if (!input.creative_url) return { error: 'Upload a promo image or video.' }
+  if (!input.qr_target_url?.trim()) return { error: 'Add a scan link for your promo.' }
   if (!input.target_venue_id) return { error: 'Pick a screen to run your promo on.' }
 
   const supabase = await createClient()
@@ -91,7 +92,7 @@ export async function submitHostPromo(
       creative_type: input.creative_type,
       creative_url: input.creative_url,
       status: 'pending',
-      qr_target_url: input.qr_target_url || null,
+      qr_target_url: input.qr_target_url.trim(),
     })
     .select('id')
     .single()

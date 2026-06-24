@@ -71,10 +71,12 @@ function buildPlaylist(m: Manifest): Slide[] {
     return [{ kind: 'promo' }, ...fillerPool]
   }
   const out: Slide[] = []
-  m.items.forEach((it, i) => {
+  m.items.forEach((it) => {
     out.push({ ...it, kind: 'ad', duration: it.duration || slot })
-    // After every 3rd ad drop in a filler card (authored card or weather).
-    if ((i + 1) % 3 === 0) out.push(nextFiller())
+    // Drop a filler card after EVERY ad (cycling trivia → weather → authored
+    // cards). The old "every 3rd ad" meant a screen with 1-2 ads showed no
+    // trivia at all; alternating keeps the trivia teaser on screen regularly.
+    out.push(nextFiller())
   })
   out.push({ kind: 'promo' })
   return out
@@ -547,15 +549,13 @@ function Player({ deviceId, onUnpair }: { deviceId: string; onUnpair: () => void
         </FillerFrame>
       )}
 
-      {/* Scan-to-act QR (overlaid on ad slides that have a destination) */}
+      {/* Scan-to-act QR (only on ad slides with a destination): a bare,
+          gold-framed code in the corner — no card, no caption. The white padding
+          is the QR's required quiet zone so it still scans cleanly. */}
       {slide.kind === 'ad' && slide.qr_image && (
-        <div className="absolute bottom-8 left-8 flex items-center gap-3 rounded-2xl bg-white/95 p-3 shadow-lg">
+        <div className="absolute right-8 bottom-8 rounded-xl bg-white p-1.5 ring-2 ring-[#d4af37]">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={slide.qr_image} alt="Scan" className="size-24" />
-          <div className="pr-2 text-black">
-            <div className="text-lg font-semibold leading-tight">Scan for offer</div>
-            <div className="text-sm text-black/60">Point your camera here</div>
-          </div>
+          <img src={slide.qr_image} alt="Scan" className="size-24 rounded-sm" />
         </div>
       )}
 

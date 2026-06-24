@@ -178,6 +178,10 @@ function AddPromoCard({
       toast.error('Upload a promo image or video.')
       return
     }
+    if (!qrUrl.trim()) {
+      toast.error('Add the link people go to when they scan your promo.')
+      return
+    }
     start(async () => {
       const supabase = createClient()
       const ext = file.name.split('.').pop() ?? 'bin'
@@ -193,7 +197,7 @@ function AddPromoCard({
         title,
         creative_type: file.type.startsWith('video') ? 'video' : 'image',
         creative_url,
-        qr_target_url: qrUrl.trim() || null,
+        qr_target_url: qrUrl.trim(),
       })
       if (res.error) {
         toast.error(res.error)
@@ -254,13 +258,17 @@ function AddPromoCard({
           <CreativeFitNotice file={file} />
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs">QR scan link (optional)</Label>
+          <Label className="text-xs">QR scan link</Label>
           <Input
             type="url"
             value={qrUrl}
             onChange={(e) => setQrUrl(e.target.value)}
             placeholder="https://your-site.com/menu"
+            required
           />
+          <p className="text-xs text-muted-foreground">
+            A QR code on your promo sends scanners here, so you can track results.
+          </p>
         </div>
         <div className="flex gap-2 pt-1">
           <Button size="sm" disabled={pending} onClick={save}>

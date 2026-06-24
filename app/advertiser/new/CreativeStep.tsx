@@ -74,6 +74,7 @@ export function CreativeStep({
   function onSubmit() {
     if (cart.length === 0) return toast.error('Your cart is empty. Pick screens first.')
     if (!title.trim()) return toast.error('Give your ad a title.')
+    if (!qrUrl.trim()) return toast.error('Add the link people go to when they scan your ad.')
     if (mode === 'upload' && !file)
       return toast.error('Upload your ad image or switch to "Request creative help".')
     if (mode === 'help' && !brief.trim()) return toast.error('Tell our team what you need designed.')
@@ -100,7 +101,7 @@ export function CreativeStep({
         venue_ids: cart.map((v) => v.id),
         category_id: categoryId,
         title,
-        qr_target_url: qrUrl.trim() || null,
+        qr_target_url: qrUrl.trim(),
         creative_type,
         creative_url,
         creative_help_brief: mode === 'help' ? brief : null,
@@ -157,14 +158,18 @@ export function CreativeStep({
       )}
 
       <div className="space-y-1.5">
-        <Label>Link when scanned (optional)</Label>
+        <Label>Link when scanned</Label>
         <Input
           type="url"
           className="h-11"
           placeholder="https://your-site.com/offer"
           value={qrUrl}
           onChange={(e) => setQrUrl(e.target.value)}
+          required
         />
+        <p className="text-xs text-muted-foreground">
+          A QR code on your ad sends scanners here. This is how you track results.
+        </p>
       </div>
 
       <div className="space-y-3">
