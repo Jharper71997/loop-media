@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Image from 'next/image'
 
 const GOLD = '#d4af37'
@@ -389,22 +389,32 @@ function Player({ deviceId, onUnpair }: { deviceId: string; onUnpair: () => void
     return () => clearInterval(id)
   }, [manifest?.venue?.lat, manifest?.venue?.lng])
 
-  const playlist = manifest ? buildPlaylist(manifest) : []
+  // Memoized so the playlist (and the current `slide`) keep a stable reference
+  // between renders. Without this, the 1s clock tick rebuilt `slide` every
+  // second, which reset the advance timer below before it could fire — freezing
+  // the loop on the first ad and hiding every later slot.
+  const playlist = useMemo(() => (manifest ? buildPlaylist(manifest) : []), [manifest])
   const slide = playlist.length ? playlist[index % playlist.length] : null
 
-  // Advance the loop. Videos advance on `ended`; everything else on a timer.
+  // How long this slide holds. Videos run to their own `ended` event; everything
+  // else (images, filler, promo) uses the admin-set seconds.
+  const isVideoAd = slide?.kind === 'ad' && slide.creative_type === 'video'
+  const slideSeconds = slide ? (slide.kind === 'ad' ? slide.duration : FILLER_SECONDS) : 0
+
+  // Advance the loop on a timer keyed to PRIMITIVES (index, length, this slide's
+  // duration/kind) — never the rebuilt `slide` object — so unrelated re-renders
+  // (the per-second clock) can't keep resetting it.
   useEffect(() => {
-    if (!slide) return
-    if (slide.kind === 'ad' && slide.creative_type === 'video') return
-    const seconds = slide.kind === 'ad' ? slide.duration : FILLER_SECONDS
+    if (!slide || isVideoAd) return
     timer.current = setTimeout(
       () => setIndex((i) => (i + 1) % Math.max(playlist.length, 1)),
-      seconds * 1000
+      slideSeconds * 1000
     )
     return () => {
       if (timer.current) clearTimeout(timer.current)
     }
-  }, [slide, index, playlist.length])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [index, playlist.length, slideSeconds, isVideoAd])
 
   // Proof of play: log each time an ad slide becomes active.
   useEffect(() => {
