@@ -11,6 +11,7 @@ import { DeleteButton } from '@/components/admin/DeleteButton'
 import { buttonVariants } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { formatDateTime, timeAgo, formatNumber } from '@/lib/format'
+import { isWithinOpenHours, localDate } from '@/lib/openHours'
 import { LiveStatus } from '@/components/app/LiveStatus'
 import { CopyField } from '@/components/app/CopyField'
 import { AutoRefresh } from '@/components/app/AutoRefresh'
@@ -20,7 +21,14 @@ import { deleteTv } from '../actions'
 import { TvLoopControls, RemovePlacementButton, AddPlacement } from './TvControls'
 
 type TvFull = Tv & {
-  venue: { id: string; name: string; territory_id: string } | null
+  venue: {
+    id: string
+    name: string
+    territory_id: string
+    business_open: string | null
+    business_close: string | null
+    business_days: number[] | null
+  } | null
 }
 
 type ProvisioningInfo = {
@@ -51,7 +59,7 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
 
   const { data: tvData } = await supabase
     .from('tvs')
-    .select('*, venue:venues(id, name, territory_id)')
+    .select('*, venue:venues(id, name, territory_id, business_open, business_close, business_days)')
     .eq('id', id)
     .maybeSingle()
   if (!tvData) notFound()
@@ -123,6 +131,16 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
   const open = Math.max(0, maxSlots - used)
 
   // ---- proof of play: uptime today + ad plays today/this month ----
+  // Counts are scoped to the venue's OPEN hours and bucketed by the venue's
+  // local day — a play at 3am with the screen left on isn't a real impression,
+  // so counting it would overstate what advertisers bought.
+  const venueHours = {
+    business_open: tv.venue?.business_open ?? null,
+    business_close: tv.venue?.business_close ?? null,
+    business_days: tv.venue?.business_days ?? null,
+  }
+  const todayLocal = localDate(new Date())
+  const monthLocalPrefix = todayLocal.slice(0, 7)
   const todayStr = new Date().toISOString().slice(0, 10)
   const monthStart = todayStr.slice(0, 8) + '01'
   const [{ data: up }, { data: plays }] = await Promise.all([
@@ -130,15 +148,22 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
     supabase.from('ad_plays').select('ad_id, played_at').eq('tv_id', id).gte('played_at', monthStart),
   ])
   const uptimeToday = (up as { seconds: number } | null)?.seconds ?? 0
-  const playRows = (plays ?? []) as { ad_id: string; played_at: string }[]
+  const allPlayRows = (plays ?? []) as { ad_id: string; played_at: string }[]
+  // Drop plays that happened while the venue was closed.
+  const playRows = allPlayRows.filter((p) => isWithinOpenHours(p.played_at, venueHours))
   const byAd = new Map<string, { today: number; month: number }>()
+  let playsTodayTotal = 0
   for (const p of playRows) {
+    const ld = localDate(p.played_at)
+    if (ld.slice(0, 7) !== monthLocalPrefix) continue
     const e = byAd.get(p.ad_id) ?? { today: 0, month: 0 }
     e.month += 1
-    if (p.played_at.slice(0, 10) === todayStr) e.today += 1
+    if (ld === todayLocal) {
+      e.today += 1
+      playsTodayTotal += 1
+    }
     byAd.set(p.ad_id, e)
   }
-  const playsTodayTotal = playRows.filter((p) => p.played_at.slice(0, 10) === todayStr).length
   // Titles for any ad that has plays (may include ads no longer on the loop).
   const playAdIds = [...byAd.keys()]
   const adTitle = new Map<string, string>()
@@ -215,6 +240,7 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
               <p className="mt-1 font-heading text-2xl font-bold tabular-nums">
                 {formatNumber(playsTodayTotal)}
               </p>
+              <p className="text-xs text-muted-foreground">during open hours</p>
             </CardContent>
           </Card>
           <Card>
@@ -299,10 +325,17 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
         {/* Plays per ad */}
         <Card>
           <CardContent className="space-y-3 p-5">
-            <p className="text-sm font-medium">Times shown per ad</p>
+            <div>
+              <p className="text-sm font-medium">Times shown per ad</p>
+              <p className="text-xs text-muted-foreground">
+                Counted only while the venue is open ({tv.venue?.business_open ?? '10:00'}–
+                {tv.venue?.business_close ?? '22:00'}), so it reflects real impressions.
+              </p>
+            </div>
             {playList.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                No plays logged yet. Counts appear here as the screen runs the loop.
+                No plays during open hours yet. Counts appear here as the screen runs the loop while
+                you&apos;re open.
               </p>
             ) : (
               <div className="space-y-2">
