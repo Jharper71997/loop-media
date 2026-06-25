@@ -30,6 +30,7 @@ type Manifest = {
   filler?: FillerCard[]
   trivia?: { code: string; url: string; qr_image: string } | null
   generated_at: string
+  build?: string
 }
 
 type Slide =
@@ -276,6 +277,10 @@ function Player({
   const [isFullscreen, setIsFullscreen] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const motionRef = useRef<HTMLDivElement | null>(null)
+  // The build this page booted with. When a later poll reports a different
+  // build, a new version has deployed and we reload — otherwise the screen runs
+  // the JS it started with forever and never picks up fixes.
+  const bootBuild = useRef<string | null>(null)
   // The screen-label + Unpair controls stay hidden during playback (a TV has no
   // mouse hover) so the display is clean. A tap/remote-click reveals them for a
   // few seconds — long enough to unpair or go fullscreen — then they hide again.
@@ -314,6 +319,17 @@ function Player({
       }
       if (!res.ok) throw new Error('fetch failed')
       const data: Manifest = await res.json()
+      // Self-update: reload once when the deployed build changes (skip in the
+      // admin preview, which isn't a real screen). First successful load just
+      // records the build.
+      if (!preview && data.build) {
+        if (bootBuild.current === null) {
+          bootBuild.current = data.build
+        } else if (bootBuild.current !== data.build) {
+          window.location.reload()
+          return
+        }
+      }
       setManifest(data)
       setStale(false)
       localStorage.setItem(cacheKey(deviceId), JSON.stringify(data))
@@ -327,7 +343,7 @@ function Player({
         setFatal('No connection and nothing cached yet.')
       }
     }
-  }, [deviceId, onUnpair])
+  }, [deviceId, onUnpair, preview])
 
   // Initial load + periodic resync (30s) so a newly approved ad shows up on the
   // screen within ~30s without anyone touching the TV. Also re-sync whenever
@@ -397,18 +413,31 @@ function Player({
 
   // Heartbeat (30s). Skipped in admin preview so a peek doesn't fake the screen
   // as live (the "live now" signal is the heartbeat, not the loop fetch).
+  // Only beats while the page is VISIBLE: when the stick sleeps or backgrounds
+  // (e.g. the TV is powered off and HDMI-CEC puts the Fire Stick to standby),
+  // beats stop and the admin app shows the screen offline within ~95s instead of
+  // reporting a dark TV as live. Resumes immediately on wake.
   useEffect(() => {
     if (preview) return
-    const beat = () =>
+    const beat = () => {
+      if (document.visibilityState !== 'visible') return
       fetch('/api/tv/heartbeat', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ device_id: deviceId }),
         keepalive: true,
       }).catch(() => {})
+    }
     beat()
     const id = setInterval(beat, 30 * 1000)
-    return () => clearInterval(id)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') beat()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      clearInterval(id)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [deviceId, preview])
 
   // Clock tick.
