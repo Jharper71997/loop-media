@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "org.loopnetwork.app",
+      "sha256_cert_fingerprints": [
+        "70:2D:76:47:39:FF:DA:8D:9E:F3:52:90:6D:14:A1:D1:F2:2A:29:24:D9:FF:75:14:6B:52:89:9D:93:3A:FF:38"
+      ]
+    }
+  }
+]
