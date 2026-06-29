@@ -69,7 +69,7 @@ export function AppShell({
 
       <main
         className={
-          'mx-auto w-full max-w-md flex-1 px-4 pt-4 ' +
+          'mx-auto w-full max-w-md flex-1 px-4 pt-6 ' +
           (hideNav ? 'pb-4' : 'pb-[calc(5.5rem+env(safe-area-inset-bottom))]')
         }
       >

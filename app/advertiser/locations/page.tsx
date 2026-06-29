@@ -176,7 +176,7 @@ export default async function LocationsPage() {
             <Card className="py-0">
               <CardContent className="divide-y divide-border p-0">
                 {venues.map((v) => (
-                  <div key={v.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                  <div key={v.id} className="flex items-center justify-between gap-3 px-4 py-3.5">
                     <div className="min-w-0">
                       <p className="truncate font-medium">{v.name}</p>
                       <p className="truncate text-xs text-muted-foreground">

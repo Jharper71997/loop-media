@@ -268,30 +268,30 @@ export default async function CampaignDetail({
         {/* Analytics */}
         <div className="space-y-4">
           <Card>
-            <CardContent className="p-5">
-              <div className="flex items-end justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Estimated impressions / mo</p>
-                  <p className="text-3xl font-semibold">{formatNumber(estImpressions)}</p>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  from {formatNumber(estPerDayTotal)}/day across your screens
-                </p>
-              </div>
+            <CardContent className="space-y-1 p-5">
+              <p className="text-sm text-muted-foreground">Estimated impressions / mo</p>
+              <p className="font-heading text-3xl font-bold tabular-nums">
+                {formatNumber(estImpressions)}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                from {formatNumber(estPerDayTotal)}/day across your screens
+              </p>
             </CardContent>
           </Card>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3">
             <Card>
-              <CardContent className="p-5">
+              <CardContent className="space-y-1 p-5">
                 <p className="text-sm text-muted-foreground">Locations running</p>
-                <p className="text-2xl font-semibold">{locations}</p>
+                <p className="font-heading text-2xl font-bold tabular-nums">{locations}</p>
               </CardContent>
             </Card>
             <Card>
-              <CardContent className="p-5">
+              <CardContent className="space-y-1 p-5">
                 <p className="text-sm text-muted-foreground">QR scans · 30d</p>
-                <p className="text-2xl font-semibold">{formatNumber(totalScans)}</p>
+                <p className="font-heading text-2xl font-bold tabular-nums">
+                  {formatNumber(totalScans)}
+                </p>
               </CardContent>
             </Card>
           </div>

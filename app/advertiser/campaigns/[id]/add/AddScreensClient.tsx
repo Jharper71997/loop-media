@@ -74,7 +74,7 @@ export function AddScreensClient({ campaignId, venues }: { campaignId: string; v
                   type="button"
                   onClick={() => toggle(v.id)}
                   className={cn(
-                    'flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition',
+                    'flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left transition',
                     on ? 'bg-primary/10' : 'hover:bg-muted/50'
                   )}
                 >

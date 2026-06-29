@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Card, CardContent } from '@/components/ui/card'
 import { buttonVariants } from '@/components/ui/button'
 import { MoneyStat } from '@/components/app/MoneyStat'
-import { formatNumber } from '@/lib/format'
+import { formatCents, formatNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import {
   dailySeries,
@@ -25,13 +25,14 @@ export default async function ResultsPage() {
 
   const { data: campsData } = await supabase
     .from('campaigns')
-    .select('id, ad:ads(id)')
+    .select('id, monthly_total_cents, ad:ads(id)')
     .eq('advertiser_id', profile.id)
     .eq('status', 'active')
     .is('deleted_at', null)
-  type CampRow = { id: string; ad: { id: string } | null }
+  type CampRow = { id: string; monthly_total_cents: number | null; ad: { id: string } | null }
   const camps = (campsData ?? []) as unknown as CampRow[]
   const campaignIds = camps.map((c) => c.id)
+  const spend = camps.reduce((s, c) => s + (c.monthly_total_cents ?? 0), 0)
   const adIds = [...new Set(camps.map((c) => c.ad?.id).filter(Boolean) as string[])]
 
   // eslint-disable-next-line react-hooks/purity -- server component; per-request timestamp is correct here
@@ -114,15 +115,18 @@ export default async function ResultsPage() {
         </Card>
       ) : (
         <>
-          <div className="grid grid-cols-3 gap-3">
-            <div className="rounded-xl border border-border bg-card/60 p-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-xl border border-border bg-card/60 px-4 py-3.5">
               <MoneyStat label="Locations" value={formatNumber(venues.length)} />
             </div>
-            <div className="rounded-xl border border-border bg-card/60 p-3">
+            <div className="rounded-xl border border-border bg-card/60 px-4 py-3.5">
               <MoneyStat label="Est. reach / mo" value={formatNumber(reach)} />
             </div>
-            <div className="rounded-xl border border-border bg-card/60 p-3">
+            <div className="rounded-xl border border-border bg-card/60 px-4 py-3.5">
               <MoneyStat label={`Scans · ${PERF_WINDOW_DAYS}d`} value={formatNumber(totalScans)} />
+            </div>
+            <div className="rounded-xl border border-border bg-card/60 px-4 py-3.5">
+              <MoneyStat label="Spend / mo" value={formatCents(spend)} />
             </div>
           </div>
 
@@ -161,7 +165,7 @@ export default async function ResultsPage() {
             <Card className="py-0">
               <CardContent className="divide-y divide-border p-0">
                 {rows.map((r) => (
-                  <div key={r.venueId} className="px-4 py-3">
+                  <div key={r.venueId} className="px-4 py-3.5">
                     <div className="flex items-center justify-between gap-3">
                       <span className="truncate font-medium">{r.name}</span>
                       <span className="shrink-0 font-heading text-lg font-bold tabular-nums">

@@ -52,10 +52,10 @@ function statusLabel(c: CampaignRow): {
   return { label: 'Draft', variant: 'secondary' }
 }
 
-// Compact dashboard metric tile (slightly lifted card so the strip reads as a unit).
+// Dashboard metric tile (slightly lifted card so the strip reads as a unit).
 function StatTile({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-border bg-card/60 p-3">
+    <div className="rounded-xl border border-border bg-card/60 px-4 py-3.5">
       <MoneyStat label={label} value={value} />
     </div>
   )
@@ -272,7 +272,7 @@ export default async function AdvertiserDashboard({
       ) : (
         <>
           {/* Command-center roll-up: the paying customer's numbers at a glance. */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3">
             <StatTile label="Locations" value={formatNumber(playingVenues.length)} />
             <StatTile label="Est. reach / mo" value={formatNumber(estReach)} />
             <StatTile label={`Scans · ${PERF_WINDOW_DAYS}d`} value={formatNumber(scans30d)} />
@@ -294,7 +294,7 @@ export default async function AdvertiserDashboard({
                     {playingVenues.map((v) => (
                       <div
                         key={v.id}
-                        className="flex items-center justify-between gap-3 px-4 py-3"
+                        className="flex items-center justify-between gap-3 px-4 py-3.5"
                       >
                         <div className="min-w-0">
                           <p className="truncate font-medium">{v.name}</p>
