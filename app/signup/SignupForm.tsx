@@ -105,6 +105,29 @@ export function SignupForm({ initialRole = 'advertiser' }: { initialRole?: Role 
               </button>
             ))}
           </div>
+
+          {/* Plain "what you get" for the chosen path, so a host (or advertiser)
+              clearly sees what they're signing up for. */}
+          <ul className="space-y-1.5 rounded-lg border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
+            {(role === 'host'
+              ? [
+                  'Free to host — no cost to you',
+                  'Promote your own business on your screen, free',
+                  'Keeps your customers entertained with live trivia + local info',
+                ]
+              : [
+                  'Your ad on local TVs where your customers already go',
+                  'Live in minutes — you manage it yourself',
+                  'A QR on every ad tracks your real results',
+                ]
+            ).map((t) => (
+              <li key={t} className="flex gap-2">
+                <Check className="mt-0.5 size-3.5 shrink-0 text-primary" />
+                <span>{t}</span>
+              </li>
+            ))}
+          </ul>
+
           <div className="space-y-2">
             <Label htmlFor="fullName">Full name</Label>
             <Input

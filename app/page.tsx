@@ -66,6 +66,20 @@ export default async function Home() {
           </div>
         </div>
 
+        {/* Plain reassurances — the questions a first-timer asks before signing up. */}
+        <div className="mt-4 flex flex-wrap justify-center gap-2">
+          {["Competitors can't share your screens", 'Month-to-month', "We'll design your ad"].map(
+            (t) => (
+              <span
+                key={t}
+                className="rounded-full border border-border bg-card/40 px-3 py-1 text-xs text-muted-foreground"
+              >
+                {t}
+              </span>
+            )
+          )}
+        </div>
+
         <div className="mt-6 flex w-full flex-col items-center gap-3">
           <Link
             href="/signup"
