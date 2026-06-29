@@ -16,7 +16,11 @@ export async function GET(req: Request) {
     .from('trivia_questions')
     .select('prompt, choices, correct_idx')
     .eq('active', true)
+    // created_at alone is not unique (seed rows share a timestamp). The id
+    // tiebreaker makes the order deterministic so questions[round % count] is
+    // stable across polls — otherwise the question can bounce mid-round.
     .order('created_at', { ascending: true })
+    .order('id', { ascending: true })
   const questions = (qs ?? []) as { prompt: string; choices: string[]; correct_idx: number }[]
   if (!questions.length) {
     return NextResponse.json({ error: 'No questions configured.' }, { status: 503 })

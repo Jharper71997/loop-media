@@ -26,7 +26,10 @@ export async function POST(req: Request) {
     .from('trivia_questions')
     .select('correct_idx')
     .eq('active', true)
+    // Must match the exact ordering in /api/trivia/state so grading lines up
+    // with the question the player saw. created_at ties need the id tiebreaker.
     .order('created_at', { ascending: true })
+    .order('id', { ascending: true })
   const questions = (qs ?? []) as { correct_idx: number }[]
   if (!questions.length) return NextResponse.json({ error: 'No questions.' }, { status: 503 })
   const correctIdx = questions[round % questions.length].correct_idx
