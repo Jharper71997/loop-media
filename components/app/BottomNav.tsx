@@ -2,7 +2,17 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutGrid, Plus, User, Store, Megaphone, MonitorPlay, type LucideIcon } from 'lucide-react'
+import {
+  Home,
+  BarChart3,
+  Plus,
+  MapPin,
+  User,
+  Store,
+  Megaphone,
+  MonitorPlay,
+  type LucideIcon,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export type AppRole = 'advertiser' | 'host'
@@ -11,8 +21,10 @@ type Tab = { href: string; label: string; icon: LucideIcon; exact?: boolean; pri
 
 const TABS: Record<AppRole, Tab[]> = {
   advertiser: [
-    { href: '/advertiser', label: 'Campaigns', icon: LayoutGrid, exact: true },
+    { href: '/advertiser', label: 'Home', icon: Home, exact: true },
+    { href: '/advertiser/results', label: 'Results', icon: BarChart3 },
     { href: '/advertiser/browse', label: 'New', icon: Plus, primary: true },
+    { href: '/advertiser/locations', label: 'Locations', icon: MapPin },
     { href: '/advertiser/account', label: 'Account', icon: User },
   ],
   host: [
@@ -32,7 +44,7 @@ export function BottomNav({ role }: { role: AppRole }) {
       <div
         className={cn(
           'mx-auto grid w-full max-w-md',
-          tabs.length === 4 ? 'grid-cols-4' : 'grid-cols-3'
+          tabs.length === 5 ? 'grid-cols-5' : tabs.length === 4 ? 'grid-cols-4' : 'grid-cols-3'
         )}
       >
         {tabs.map((t) => {
