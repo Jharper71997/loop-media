@@ -8,7 +8,12 @@ import { stripe, appUrl } from '@/lib/stripe'
 import { activatePlacementsIfReady } from '@/lib/placement'
 import { hasUnlimitedChanges } from '@/lib/membership'
 import { applyAdChange } from '@/lib/adChanges'
-import { AD_CHANGE_FEE_CENTS, UNLIMITED_CHANGES_CENTS } from '@/lib/fees'
+import { AD_CHANGE_FEE_CENTS, UNLIMITED_CHANGES_CENTS, CREATIVE_REFRESH_CENTS } from '@/lib/fees'
+import {
+  resolveCartCents,
+  resolveAdvertiserContext,
+  contextToQuoteOptions,
+} from '@/lib/pricing.server'
 
 // Verify the signed-in advertiser owns this campaign, then mutate via service
 // role (placements/subscriptions aren't writable under the advertiser's RLS).
@@ -300,6 +305,122 @@ export async function startMembershipCheckout(): Promise<{
     await admin.from('memberships').update({ status: 'canceled' }).eq('id', membership.id)
     return { error: e instanceof Error ? e.message : 'Could not start checkout.' }
   }
+}
+
+// Add more screens to an existing ACTIVE campaign, prorating the subscription —
+// no new campaign, no fresh Checkout. The new screens join the same monthly
+// subscription; the difference prorates onto the next invoice.
+export async function addScreensToCampaign(
+  id: string,
+  venueIds: string[]
+): Promise<{ error?: string; added?: number; newMonthlyCents?: number }> {
+  const c = await ownCampaign(id)
+  if (!c) return { error: 'Campaign not found.' }
+  const ids = [...new Set((venueIds ?? []).filter(Boolean))]
+  if (!ids.length) return { error: 'Pick at least one screen to add.' }
+
+  const admin = createAdminClient()
+  const advertiserId = c.advertiser_id
+
+  // Must be live + paid to add to its subscription.
+  const { data: camp } = await admin
+    .from('campaigns')
+    .select('status, territory_id')
+    .eq('id', id)
+    .maybeSingle()
+  if (!camp) return { error: 'Campaign not found.' }
+  if (camp.status !== 'active') return { error: 'Only an active campaign can take more screens.' }
+
+  // The ad's category drives exclusivity (a competitor's own-category venue is blocked).
+  let adCategory: string | null = null
+  if (c.ad_id) {
+    const { data: ad } = await admin
+      .from('ads')
+      .select('category_id')
+      .eq('id', c.ad_id)
+      .maybeSingle()
+    adCategory = ad?.category_id ?? null
+  }
+
+  const { data: existingTargets } = await admin
+    .from('campaign_targets')
+    .select('venue_id')
+    .eq('campaign_id', id)
+  const existingVenueIds = (existingTargets ?? []).map((t) => t.venue_id as string)
+  const existingSet = new Set(existingVenueIds)
+
+  // Validate the incoming venues: active, same market as the campaign (the
+  // placement engine only fills venues in the campaign's territory), not already
+  // on it, and not blocked by category exclusivity.
+  const { data: vRows } = await admin
+    .from('venues')
+    .select('id, status, territory_id, category_id, host_user_id')
+    .in('id', ids)
+  const toAdd = (vRows ?? [])
+    .filter((v) => v.status === 'active')
+    .filter((v) => v.territory_id === camp.territory_id)
+    .filter((v) => !existingSet.has(v.id))
+    .filter((v) => !(adCategory && v.category_id === adCategory && v.host_user_id !== advertiserId))
+    .map((v) => v.id as string)
+  if (!toAdd.length) return { error: 'None of those screens can be added to this campaign.' }
+
+  // Re-price the WHOLE set (existing + new). Discounts/floor are non-linear, so
+  // the new monthly total must be priced over the union, not added incrementally.
+  const ctx = await resolveAdvertiserContext(advertiserId)
+  const union = [...new Set([...existingVenueIds, ...toAdd])]
+  const { totalCents, tiers } = await resolveCartCents(union, contextToQuoteOptions(ctx))
+  if (!tiers.length) return { error: 'Could not price those screens. Try again.' }
+
+  // Add the new targets (net-new only — PK is (campaign_id, venue_id)).
+  const { error: tErr } = await admin
+    .from('campaign_targets')
+    .insert(toAdd.map((venue_id) => ({ campaign_id: id, venue_id })))
+  if (tErr) return { error: 'Could not add those screens. Try again.' }
+
+  // Bump the Stripe subscription amount, prorated. The monthly charge is a single
+  // inline-price recurring item; swap it for a new inline price at the new total.
+  const subId = await stripeSubId(admin, id)
+  if (subId && process.env.STRIPE_SECRET_KEY) {
+    try {
+      const sub = await stripe().subscriptions.retrieve(subId)
+      const recurring = sub.items.data.filter((i) => i.price.recurring)
+      // With a creative-refresh add-on there are 2 recurring items; the screens
+      // item is the one that isn't the $20 refresh.
+      const item =
+        recurring.length <= 1
+          ? recurring[0] ?? sub.items.data[0]
+          : recurring.find((i) => i.price.unit_amount !== CREATIVE_REFRESH_CENTS) ?? recurring[0]
+      if (item) {
+        const product =
+          typeof item.price.product === 'string' ? item.price.product : item.price.product.id
+        await stripe().subscriptions.update(subId, {
+          items: [
+            {
+              id: item.id,
+              price_data: {
+                currency: 'usd',
+                product,
+                unit_amount: totalCents,
+                recurring: { interval: 'month' },
+              },
+            },
+          ],
+          proration_behavior: 'create_prorations',
+        })
+      }
+    } catch {
+      /* best effort — targets + total are saved; an admin can reconcile in Stripe */
+    }
+  }
+
+  // monthly_total_cents is action-owned (the webhook never writes it).
+  await admin.from('campaigns').update({ monthly_total_cents: totalCents }).eq('id', id)
+
+  // Place only the newly-added venues' screens (placeCampaign skips existing TVs).
+  await activatePlacementsIfReady(id, admin)
+
+  revalidate(id)
+  return { added: toAdd.length, newMonthlyCents: totalCents }
 }
 
 // Bring a campaign back from Trash. It returns to the list as canceled (billing

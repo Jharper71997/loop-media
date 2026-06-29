@@ -1,12 +1,14 @@
 'use client'
 
 import { useTransition } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Pause, Play, Trash2, Archive } from 'lucide-react'
+import { Pause, Play, Trash2, Archive, Plus } from 'lucide-react'
 import { toast } from 'sonner'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { ConfirmButton } from '@/components/app/ConfirmButton'
 import { useBasePath, homeFor } from '@/lib/useBasePath'
+import { cn } from '@/lib/utils'
 import { pauseCampaign, resumeCampaign, trashCampaign, archiveCampaign } from './actions'
 
 export function CampaignControls({ id, status }: { id: string; status: string }) {
@@ -29,7 +31,14 @@ export function CampaignControls({ id, status }: { id: string; status: string })
     })
 
   return (
-    <div className="flex gap-2">
+    <div className="flex flex-wrap gap-2">
+      {/* Add more screens to this live campaign (prorated). Advertiser shell only
+          — the host advertise tree doesn't carry this subpage. */}
+      {status === 'active' && base === '/advertiser' && (
+        <Link href={`/advertiser/campaigns/${id}/add`} className={cn(buttonVariants(), 'gap-1.5')}>
+          <Plus className="size-4" /> Add screens
+        </Link>
+      )}
       {status === 'paused' && (
         <Button disabled={pending} onClick={() => run(resumeCampaign, 'Campaign resumed')}>
           <Play className="size-4" /> Resume
