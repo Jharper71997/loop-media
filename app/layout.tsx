@@ -23,6 +23,12 @@ const sora = Sora({
 export const metadata: Metadata = {
   title: "Loop Network",
   description: "Advertise where your customers already are — local screens across town.",
+  applicationName: "Loop Network",
+  appleWebApp: { capable: true, title: "Loop Network", statusBarStyle: "black-translucent" },
+  icons: {
+    icon: "/favicon.ico",
+    apple: "/apple-touch-icon.png",
+  },
 };
 
 export const viewport: Viewport = {
