@@ -17,11 +17,19 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
+import { rememberCategory } from '@/app/advertiser/browse/actions'
 
 type Role = 'advertiser' | 'host'
 
-export function SignupForm({ initialRole = 'advertiser' }: { initialRole?: Role }) {
+export function SignupForm({
+  initialRole = 'advertiser',
+  categories = [],
+}: {
+  initialRole?: Role
+  categories?: { id: string; name: string }[]
+}) {
   const [role, setRole] = useState<Role>(initialRole)
+  const [categoryId, setCategoryId] = useState('')
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -29,17 +37,34 @@ export function SignupForm({ initialRole = 'advertiser' }: { initialRole?: Role 
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (role === 'advertiser' && !categoryId) {
+      toast.error('Pick what you sell so we can lock in your category.')
+      return
+    }
     setLoading(true)
     const supabase = createClient()
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { full_name: fullName, role } },
+      options: {
+        data: {
+          full_name: fullName,
+          role,
+          ...(role === 'advertiser' && categoryId ? { category_id: categoryId } : {}),
+        },
+      },
     })
     setLoading(false)
     if (error) {
       toast.error(error.message)
       return
+    }
+    // Persist the category to the profile now if we got a session (no email
+    // confirmation). The buy flow never asks again once it's set.
+    if (data.session && role === 'advertiser' && categoryId) {
+      try {
+        await rememberCategory(categoryId)
+      } catch {}
     }
     // Flag a fresh sign-up so the dashboard shows the first-run walkthrough once.
     try {
@@ -127,6 +152,32 @@ export function SignupForm({ initialRole = 'advertiser' }: { initialRole?: Role 
               </li>
             ))}
           </ul>
+
+          {/* Capture category once, here at signup — so the buy flow never asks
+              "what do you sell?" again. Drives category exclusivity. */}
+          {role === 'advertiser' && (
+            <div className="space-y-2">
+              <Label htmlFor="category">What do you sell?</Label>
+              <select
+                id="category"
+                required
+                value={categoryId}
+                onChange={(e) => setCategoryId(e.target.value)}
+                className="h-11 w-full rounded-md border border-input bg-transparent px-3 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50"
+              >
+                <option value="">Choose your business type…</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                We lock in your category so competitors can&apos;t share your screens. You only set
+                this once.
+              </p>
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="fullName">Full name</Label>

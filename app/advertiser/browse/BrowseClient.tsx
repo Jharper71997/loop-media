@@ -159,11 +159,11 @@ export function BrowseClient({
   if (!categoryChosen) {
     return (
       <div className="space-y-5">
+        {/* Not a numbered flow step — category is set once at signup. This only
+            shows for accounts that don't have one yet, as a quick one-time gate. */}
         <StepHeader
-          step={1}
-          total={4}
           title="What do you sell?"
-          subtitle="We lock in your category so competitors can't share your screens."
+          subtitle="One quick thing — we lock in your category so competitors can't share your screens."
           backHref={homeFor(base)}
         />
 
@@ -250,8 +250,8 @@ export function BrowseClient({
   return (
     <div className="space-y-4">
       <StepHeader
-        step={2}
-        total={4}
+        step={1}
+        total={3}
         title="Tap the businesses you want"
         subtitle={activeCatName ? `Exclusive for ${activeCatName}` : 'All categories'}
         backHref={`${base}/browse`}

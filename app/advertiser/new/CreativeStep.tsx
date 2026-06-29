@@ -195,8 +195,8 @@ export function CreativeStep({
   return (
     <div className="space-y-6">
       <StepHeader
-        step={4}
-        total={4}
+        step={3}
+        total={3}
         title="Add your ad"
         subtitle="A 15-second spot. Image ads look best at 1180 × 820."
       />

@@ -72,7 +72,7 @@ export function ReviewStep({
 
   return (
     <div className="space-y-5">
-      <StepHeader step={3} total={4} title="Review your screens" />
+      <StepHeader step={2} total={3} title="Review your screens" />
 
       <div className="space-y-2.5">
         {cart.map((v) => (

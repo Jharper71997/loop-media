@@ -14,12 +14,13 @@ export function StepHeader({
   subtitle,
   backHref,
 }: {
-  step: number
-  total: number
+  step?: number
+  total?: number
   title: string
   subtitle?: string
   backHref?: string
 }) {
+  const hasSteps = step != null && total != null
   const router = useRouter()
   return (
     <div className="space-y-3 pt-1">
@@ -42,22 +43,23 @@ export function StepHeader({
             <ArrowLeft className="size-4" />
           </button>
         )}
-        <span className="text-xs font-medium text-muted-foreground">
-          Step {step} of {total}
-        </span>
+        {hasSteps && (
+          <span className="text-xs font-medium text-muted-foreground">
+            Step {step} of {total}
+          </span>
+        )}
       </div>
 
-      <div className="flex gap-1.5">
-        {Array.from({ length: total }).map((_, i) => (
-          <span
-            key={i}
-            className={cn(
-              'h-1.5 flex-1 rounded-full',
-              i < step ? 'bg-primary' : 'bg-muted'
-            )}
-          />
-        ))}
-      </div>
+      {hasSteps && (
+        <div className="flex gap-1.5">
+          {Array.from({ length: total }).map((_, i) => (
+            <span
+              key={i}
+              className={cn('h-1.5 flex-1 rounded-full', i < (step as number) ? 'bg-primary' : 'bg-muted')}
+            />
+          ))}
+        </div>
+      )}
 
       <div>
         <h1 className="font-heading text-2xl font-bold tracking-tight">{title}</h1>
