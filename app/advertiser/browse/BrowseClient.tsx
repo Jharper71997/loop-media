@@ -131,12 +131,28 @@ export function BrowseClient({
 
   const go = (next: { cat?: string | null }) => {
     const c = next.cat === undefined ? activeCat : next.cat
+    const navigate = () => {
+      const params = new URLSearchParams()
+      if (c) params.set('cat', c)
+      router.push(`${base}/browse?${params.toString()}`)
+    }
     // Save a real category pick to the profile so we never ask again (next visit
-    // or the creative step reuse it). 'all'/clearing is left as-is.
-    if (next.cat && next.cat !== 'all') void rememberCategory(next.cat)
-    const params = new URLSearchParams()
-    if (c) params.set('cat', c)
-    router.push(`${base}/browse?${params.toString()}`)
+    // + the creative step reuse it). Navigate only AFTER the save resolves —
+    // fire-and-forget here was being cancelled by the navigation, so nothing
+    // ever persisted. 'all'/clearing is left as-is.
+    if (next.cat && next.cat !== 'all') {
+      rememberCategory(next.cat)
+        .then((res) => {
+          if (res?.error) console.error('Could not save category:', res.error)
+          navigate()
+        })
+        .catch((err) => {
+          console.error('Could not save category:', err)
+          navigate()
+        })
+    } else {
+      navigate()
+    }
   }
 
   // ---- Step 1: pick category ------------------------------------------------

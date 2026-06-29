@@ -7,12 +7,19 @@ import { requireProfile } from '@/lib/auth'
 // ONCE (here, in browse Step 1) and reuse it on the creative step + every future
 // campaign. Called when they pick a real category; 'all'/no-category is ignored
 // so it doesn't wipe a previously saved one.
-export async function rememberCategory(categoryId: string | null): Promise<void> {
-  if (!categoryId || categoryId === 'all') return
+export async function rememberCategory(
+  categoryId: string | null
+): Promise<{ ok?: boolean; error?: string }> {
+  if (!categoryId || categoryId === 'all') return { ok: true }
   const profile = await requireProfile()
-  if (!['advertiser', 'host'].includes(profile.role)) return
+  if (!['advertiser', 'host', 'admin'].includes(profile.role)) return { ok: true }
   const supabase = await createClient()
-  await supabase.from('profiles').update({ category_id: categoryId }).eq('id', profile.id)
+  const { error } = await supabase
+    .from('profiles')
+    .update({ category_id: categoryId })
+    .eq('id', profile.id)
+  if (error) return { error: error.message }
+  return { ok: true }
 }
 
 // "Notify me" — join the waitlist for a (venue, category) that's currently full

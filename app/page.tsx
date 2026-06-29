@@ -26,7 +26,7 @@ export default async function Home() {
           you want on a map and you&apos;re live.
         </p>
 
-        <div className="mt-8 flex w-full flex-col gap-3">
+        <div className="mt-8 flex w-full flex-col items-center gap-3">
           <Link
             href="/signup"
             className={cn(buttonVariants({ size: 'lg' }), 'h-12 w-full text-base')}
@@ -34,16 +34,18 @@ export default async function Home() {
             Start advertising
           </Link>
           <Link
-            href="/signup"
-            className={cn(buttonVariants({ size: 'lg', variant: 'outline' }), 'h-12 w-full text-base')}
-          >
-            Host a screen
-          </Link>
-          <Link
             href="/login"
             className="mt-1 text-sm text-muted-foreground hover:text-foreground"
           >
             Log in
+          </Link>
+          {/* Hosting is a separate path, not a co-equal CTA — a quiet link for
+              venue owners rather than a primary button. */}
+          <Link
+            href="/signup?role=host"
+            className="mt-4 text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+          >
+            Own a venue? Host a screen &rarr;
           </Link>
         </div>
       </div>

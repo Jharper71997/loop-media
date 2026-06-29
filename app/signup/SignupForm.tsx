@@ -20,8 +20,8 @@ import { cn } from '@/lib/utils'
 
 type Role = 'advertiser' | 'host'
 
-export function SignupForm() {
-  const [role, setRole] = useState<Role>('advertiser')
+export function SignupForm({ initialRole = 'advertiser' }: { initialRole?: Role }) {
+  const [role, setRole] = useState<Role>(initialRole)
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')

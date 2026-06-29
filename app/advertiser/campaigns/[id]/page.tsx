@@ -251,7 +251,12 @@ export default async function CampaignDetail({
           <CardContent className="space-y-3 p-4">
             <p className="text-sm text-muted-foreground">
               {locations} screen{locations === 1 ? '' : 's'}
-              {c.monthly_total_cents != null && <> · {formatCents(c.monthly_total_cents)}/mo</>}
+              {/* Hide the price on the host shell — hosts shouldn't see amounts
+                  that could read as network revenue (the figure is their own
+                  spend, but the rule is no $ on host surfaces). */}
+              {c.monthly_total_cents != null && profile.role !== 'host' && (
+                <> · {formatCents(c.monthly_total_cents)}/mo</>
+              )}
             </p>
             {c.ad_id && c.status !== 'canceled' && (
               <ReplaceCreative campaignId={c.id} userId={profile.id} isMember={isMember} />

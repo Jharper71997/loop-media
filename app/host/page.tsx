@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Card, CardContent } from '@/components/ui/card'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { timeAgo, isTvLive, formatCents } from '@/lib/format'
+import { timeAgo, isTvLive } from '@/lib/format'
 import type { Tv, Venue } from '@/lib/db.types'
 import { OnboardingTour } from '@/components/app/OnboardingTour'
 import { LiveStatus } from '@/components/app/LiveStatus'
@@ -86,7 +86,7 @@ export default async function HostHome() {
   // advertise from /host/advertise). Surfaced so they manage it without leaving.
   const { data: myCampaignsData } = await supabase
     .from('campaigns')
-    .select('id, status, monthly_total_cents, ad:ads(title)')
+    .select('id, status, ad:ads(title)')
     .eq('advertiser_id', profile.id)
     .is('deleted_at', null)
     .order('created_at', { ascending: false })
@@ -94,7 +94,6 @@ export default async function HostHome() {
   type MyCampaign = {
     id: string
     status: string
-    monthly_total_cents: number | null
     ad: { title: string | null } | null
   }
   const myCampaigns = (myCampaignsData ?? []) as unknown as MyCampaign[]
@@ -262,7 +261,7 @@ export default async function HostHome() {
           {/* Your ads running on other venues' screens */}
           {myCampaigns.length > 0 && (
             <section className="space-y-3">
-              <h2 className="text-sm font-medium">Your ads on the network</h2>
+              <h2 className="text-sm font-medium">Your campaigns on other screens</h2>
               <Card>
                 <CardContent className="p-2">
                   <ul className="divide-y divide-border">
@@ -276,9 +275,6 @@ export default async function HostHome() {
                             {c.ad?.title ?? 'Campaign'}
                           </span>
                           <span className="flex shrink-0 items-center gap-3 text-xs text-muted-foreground">
-                            {c.monthly_total_cents != null && (
-                              <span>{formatCents(c.monthly_total_cents)}/mo</span>
-                            )}
                             <span className="capitalize">{c.status}</span>
                           </span>
                         </Link>

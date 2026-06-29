@@ -4,9 +4,18 @@ import { getProfile, homeForRole } from '@/lib/auth'
 import { BrandLockup } from '@/components/app/BrandLockup'
 import { SignupForm } from './SignupForm'
 
-export default async function SignupPage() {
+export default async function SignupPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ role?: string }>
+}) {
   const profile = await getProfile()
   if (profile) redirect(homeForRole(profile.role))
+
+  // Honor a ?role=host deep-link from the landing "Host a screen" link so the
+  // host card is preselected. Anything else (incl. the primary CTA) = advertiser.
+  const { role } = await searchParams
+  const initialRole = role === 'host' ? 'host' : 'advertiser'
 
   return (
     <main className="flex flex-1 items-center justify-center p-6">
@@ -14,7 +23,7 @@ export default async function SignupPage() {
         <Link href="/" className="mb-6 flex justify-center">
           <BrandLockup className="h-40 w-auto" />
         </Link>
-        <SignupForm />
+        <SignupForm initialRole={initialRole} />
       </div>
     </main>
   )
