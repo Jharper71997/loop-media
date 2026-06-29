@@ -27,6 +27,29 @@ function pickUs(rows: NominatimRow[]): { lat: number; lng: number } | null {
   return { lat, lng }
 }
 
+async function structuredSearch(
+  fields: { street?: string; city?: string; state?: string; zip?: string }
+): Promise<{ lat: number; lng: number } | null> {
+  try {
+    const p = new URLSearchParams({
+      format: 'json',
+      addressdetails: '1',
+      limit: '5',
+      countrycodes: 'us',
+    })
+    if (fields.street) p.set('street', fields.street)
+    if (fields.city) p.set('city', fields.city)
+    if (fields.state) p.set('state', fields.state)
+    if (fields.zip) p.set('postalcode', fields.zip)
+    const res = await fetch(`${NOMINATIM}?${p.toString()}`, { headers: HEADERS })
+    if (!res.ok) return null
+    const rows = (await res.json()) as NominatimRow[]
+    return Array.isArray(rows) ? pickUs(rows) : null
+  } catch {
+    return null
+  }
+}
+
 export async function geocodeAddress(
   parts: AddressParts
 ): Promise<{ lat: number; lng: number } | null> {
@@ -37,26 +60,8 @@ export async function geocodeAddress(
   if (!street && !city && !zip) return null
 
   // 1) Structured US search — the accurate path when we have city/state/zip.
-  try {
-    const p = new URLSearchParams({
-      format: 'json',
-      addressdetails: '1',
-      limit: '5',
-      countrycodes: 'us',
-    })
-    if (street) p.set('street', street)
-    if (city) p.set('city', city)
-    if (state) p.set('state', state)
-    if (zip) p.set('postalcode', zip)
-    const res = await fetch(`${NOMINATIM}?${p.toString()}`, { headers: HEADERS })
-    if (res.ok) {
-      const rows = (await res.json()) as NominatimRow[]
-      const hit = Array.isArray(rows) ? pickUs(rows) : null
-      if (hit) return hit
-    }
-  } catch {
-    /* fall through to freeform */
-  }
+  const structured = await structuredSearch({ street, city, state, zip })
+  if (structured) return structured
 
   // 2) Freeform US fallback (still country-scoped) if structured found nothing.
   try {
@@ -69,10 +74,23 @@ export async function geocodeAddress(
       q,
     })
     const res = await fetch(`${NOMINATIM}?${p.toString()}`, { headers: HEADERS })
-    if (!res.ok) return null
-    const rows = (await res.json()) as NominatimRow[]
-    return Array.isArray(rows) ? pickUs(rows) : null
+    if (res.ok) {
+      const rows = (await res.json()) as NominatimRow[]
+      const hit = Array.isArray(rows) ? pickUs(rows) : null
+      if (hit) return hit
+    }
   } catch {
-    return null
+    /* fall through to the locality fallback */
   }
+
+  // 3) Locality fallback — rural / state-highway street addresses often aren't in
+  // OSM (e.g. "461 hwy 172" returns nothing). Without this the venue is saved with
+  // null coords and silently dropped off the advertiser map. Fall back to an
+  // approximate city/zip pin so the venue still appears; an admin can refine it.
+  // Only when there's a locality to anchor on (avoids a meaningless country pin).
+  if (city || zip) {
+    const approx = await structuredSearch({ city, state, zip })
+    if (approx) return approx
+  }
+  return null
 }
