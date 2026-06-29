@@ -2,6 +2,7 @@
 
 import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
+import { MAP_TILE_URL, MAP_TILE_ATTRIBUTION } from '@/lib/mapTiles'
 import { formatCents } from '@/lib/format'
 import { TIER_LABEL } from '@/lib/pricing'
 import { US_CENTER, US_ZOOM } from '@/lib/geo'
@@ -33,8 +34,8 @@ export default function MapView({
       className="h-[40vh] min-h-64 w-full overflow-hidden rounded-xl"
     >
       <TileLayer
-        attribution="&copy; OpenStreetMap contributors"
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        attribution={MAP_TILE_ATTRIBUTION}
+        url={MAP_TILE_URL}
       />
       <MapFitBounds points={points} />
       {venues

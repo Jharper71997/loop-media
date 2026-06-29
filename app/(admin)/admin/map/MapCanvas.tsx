@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
+import { MAP_TILE_URL, MAP_TILE_ATTRIBUTION } from '@/lib/mapTiles'
 import { US_CENTER, US_ZOOM } from '@/lib/geo'
 import { MapFitBounds } from '@/components/app/MapFitBounds'
 
@@ -44,8 +45,8 @@ export function MapCanvas({
       className="h-[70vh] w-full overflow-hidden rounded-lg"
     >
       <TileLayer
-        attribution="&copy; OpenStreetMap contributors"
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        attribution={MAP_TILE_ATTRIBUTION}
+        url={MAP_TILE_URL}
       />
       <MapFitBounds points={points} />
       {geo.map((v) => {
