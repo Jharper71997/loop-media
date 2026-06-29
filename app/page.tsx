@@ -1,6 +1,5 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { Map, Zap, QrCode } from 'lucide-react'
 import { getProfile, homeForRole } from '@/lib/auth'
 import { buttonVariants } from '@/components/ui/button'
 import { BrandLockup } from '@/components/app/BrandLockup'
@@ -23,43 +22,48 @@ export default async function Home() {
           Get seen <span className="text-gold-metallic">where people go.</span>
         </h1>
         <p className="mt-4 text-pretty text-base text-muted-foreground">
-          Your 15-second ad on the TVs in the busiest bars, gyms, and shops in town. Tap the spots
-          you want on a map and you&apos;re live.
+          We put your business on the TVs in the busiest bars, gyms, and shops in town, then show
+          you exactly who&apos;s seeing it. You pick the spots, we handle the rest.
         </p>
 
-        {/* The three things sales-led indoor-billboard competitors can't offer:
-            a visible map, instant self-serve, and real scan attribution. */}
-        <div className="mt-8 grid w-full gap-2.5 text-left">
-          {[
-            {
-              Icon: Map,
-              title: 'Pick your screens on a map',
-              sub: 'See every venue and choose exactly where your ad runs.',
-            },
-            {
-              Icon: Zap,
-              title: 'Live in minutes',
-              sub: 'Upload, check out, done. No sales calls, no waiting on a quote.',
-            },
-            {
-              Icon: QrCode,
-              title: 'Track every scan',
-              sub: 'A QR on every ad logs real results, so you see what works.',
-            },
-          ].map(({ Icon, title, sub }) => (
-            <div
-              key={title}
-              className="flex items-start gap-3 rounded-xl border border-border bg-card/40 p-3"
-            >
-              <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-gold-metallic">
-                <Icon className="size-5" />
-              </span>
-              <div>
-                <p className="text-sm font-semibold">{title}</p>
-                <p className="text-xs text-muted-foreground">{sub}</p>
+        {/* Plain "how it works" steps — say clearly what we do and how we help,
+            the way a sales-led competitor's site walks you through their process. */}
+        <div className="mt-8 w-full text-left">
+          <p className="mb-3 text-center text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            How it works
+          </p>
+          <div className="grid gap-2.5">
+            {[
+              {
+                step: '1',
+                title: 'Pick your screens on a map',
+                sub: 'Choose the local bars, gyms, and shops where your customers already go.',
+              },
+              {
+                step: '2',
+                title: "Add your ad, or we'll make it",
+                sub: 'Upload a 15-second spot, or have our team design one for you.',
+              },
+              {
+                step: '3',
+                title: 'Go live and see results',
+                sub: 'Your ad runs in minutes, and a QR on it tracks every scan so you know it works.',
+              },
+            ].map(({ step, title, sub }) => (
+              <div
+                key={step}
+                className="flex items-start gap-3 rounded-xl border border-border bg-card/40 p-3"
+              >
+                <span className="grid size-7 shrink-0 place-items-center rounded-full bg-primary/10 text-sm font-bold text-gold-metallic">
+                  {step}
+                </span>
+                <div>
+                  <p className="text-sm font-semibold">{title}</p>
+                  <p className="text-xs text-muted-foreground">{sub}</p>
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
 
         <div className="mt-6 flex w-full flex-col items-center gap-3">
