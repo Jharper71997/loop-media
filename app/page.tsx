@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
+import { Map, Zap, QrCode } from 'lucide-react'
 import { getProfile, homeForRole } from '@/lib/auth'
 import { buttonVariants } from '@/components/ui/button'
 import { BrandLockup } from '@/components/app/BrandLockup'
@@ -26,7 +27,42 @@ export default async function Home() {
           you want on a map and you&apos;re live.
         </p>
 
-        <div className="mt-8 flex w-full flex-col items-center gap-3">
+        {/* The three things sales-led indoor-billboard competitors can't offer:
+            a visible map, instant self-serve, and real scan attribution. */}
+        <div className="mt-8 grid w-full gap-2.5 text-left">
+          {[
+            {
+              Icon: Map,
+              title: 'Pick your screens on a map',
+              sub: 'See every venue and choose exactly where your ad runs.',
+            },
+            {
+              Icon: Zap,
+              title: 'Live in minutes',
+              sub: 'Upload, check out, done. No sales calls, no waiting on a quote.',
+            },
+            {
+              Icon: QrCode,
+              title: 'Track every scan',
+              sub: 'A QR on every ad logs real results, so you see what works.',
+            },
+          ].map(({ Icon, title, sub }) => (
+            <div
+              key={title}
+              className="flex items-start gap-3 rounded-xl border border-border bg-card/40 p-3"
+            >
+              <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-gold-metallic">
+                <Icon className="size-5" />
+              </span>
+              <div>
+                <p className="text-sm font-semibold">{title}</p>
+                <p className="text-xs text-muted-foreground">{sub}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-6 flex w-full flex-col items-center gap-3">
           <Link
             href="/signup"
             className={cn(buttonVariants({ size: 'lg' }), 'h-12 w-full text-base')}
