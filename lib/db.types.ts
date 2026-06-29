@@ -102,6 +102,9 @@ export interface Tv {
   updated_at: string
 }
 
+// Which corner the scan QR sits in on an ad creative (TV overlay + preview).
+export type QrPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
+
 export interface Ad {
   id: string
   owner_user_id: string
@@ -117,6 +120,7 @@ export interface Ad {
   rejection_reason: string | null
   qr_target_url: string | null
   qr_code_url: string | null
+  qr_position: QrPosition
   reviewed_by: string | null
   reviewed_at: string | null
   created_at: string

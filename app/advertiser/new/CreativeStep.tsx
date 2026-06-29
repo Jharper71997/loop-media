@@ -21,6 +21,23 @@ import { quoteCart, type QuoteOptions, type PricingConfig } from '@/lib/pricing'
 import { CART_KEY } from '../browse/BrowseClient'
 import { submitCampaign, type NewCampaignInput } from './actions'
 import type { CartVenue } from './types'
+import { cn } from '@/lib/utils'
+import type { QrPosition } from '@/lib/db.types'
+
+const QR_POSITIONS: { value: QrPosition; label: string }[] = [
+  { value: 'top-left', label: 'Top left' },
+  { value: 'top-right', label: 'Top right' },
+  { value: 'bottom-left', label: 'Bottom left' },
+  { value: 'bottom-right', label: 'Bottom right' },
+]
+
+// Where the QR sits in the upload preview (smaller insets than the TV overlay).
+const QR_PREVIEW_CORNER: Record<QrPosition, string> = {
+  'top-left': 'left-2 top-2',
+  'top-right': 'right-2 top-2',
+  'bottom-left': 'left-2 bottom-2',
+  'bottom-right': 'right-2 bottom-2',
+}
 
 export function CreativeStep({
   userId,
@@ -50,6 +67,9 @@ export function CreativeStep({
   const [qrUrl, setQrUrl] = useState('')
   const [mode, setMode] = useState<'upload' | 'help'>('upload')
   const [file, setFile] = useState<File | null>(null)
+  const [qrPosition, setQrPosition] = useState<QrPosition>('bottom-right')
+  const [fileUrl, setFileUrl] = useState<string | null>(null)
+  const [qrPreview, setQrPreview] = useState<string | null>(null)
   const [brief, setBrief] = useState('')
   const [pending, start] = useTransition()
 
@@ -59,6 +79,41 @@ export function CreativeStep({
       if (raw) setCartIds(JSON.parse(raw) as string[])
     } catch {}
   }, [])
+
+  // Local object URL for the chosen file, so we can preview it (revoked on change).
+  useEffect(() => {
+    if (!file) {
+      setFileUrl(null)
+      return
+    }
+    const url = URL.createObjectURL(file)
+    setFileUrl(url)
+    return () => URL.revokeObjectURL(url)
+  }, [file])
+
+  // Render the actual scan-link QR client-side so the preview matches the TV.
+  // Lazy-import keeps the qrcode lib out of the main bundle.
+  useEffect(() => {
+    const url = qrUrl.trim()
+    if (!url) {
+      setQrPreview(null)
+      return
+    }
+    let alive = true
+    import('qrcode')
+      .then(({ default: QR }) =>
+        QR.toDataURL(url, { margin: 1, width: 240, color: { dark: '#000000', light: '#ffffff' } })
+      )
+      .then((data) => {
+        if (alive) setQrPreview(data)
+      })
+      .catch(() => {
+        if (alive) setQrPreview(null)
+      })
+    return () => {
+      alive = false
+    }
+  }, [qrUrl])
 
   const cart = useMemo(
     () => cartIds.map((id) => byId.get(id)).filter(Boolean) as CartVenue[],
@@ -102,6 +157,7 @@ export function CreativeStep({
         category_id: categoryId,
         title,
         qr_target_url: qrUrl.trim(),
+        qr_position: qrPosition,
         creative_type,
         creative_url,
         creative_help_brief: mode === 'help' ? brief : null,
@@ -207,6 +263,60 @@ export function CreativeStep({
               </p>
             )}
             <CreativeFitNotice file={file} />
+
+            {file && fileUrl && (
+              <div className="space-y-3 pt-1">
+                <p className="text-xs text-muted-foreground">
+                  Preview — this is how your ad shows on screen.
+                </p>
+                <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-black">
+                  {file.type.startsWith('video') ? (
+                    <video
+                      src={fileUrl}
+                      className="h-full w-full object-contain"
+                      muted
+                      autoPlay
+                      loop
+                      playsInline
+                    />
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={fileUrl} alt="Ad preview" className="h-full w-full object-contain" />
+                  )}
+                  {qrUrl.trim() && (
+                    <div
+                      className={cn(
+                        'absolute rounded-md bg-white p-1 ring-2 ring-[#d4af37]',
+                        QR_PREVIEW_CORNER[qrPosition]
+                      )}
+                    >
+                      {qrPreview ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={qrPreview} alt="QR preview" className="size-12 rounded-sm" />
+                      ) : (
+                        <div className="size-12 rounded-sm bg-muted" />
+                      )}
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <Label>QR code position</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {QR_POSITIONS.map((p) => (
+                      <Button
+                        key={p.value}
+                        type="button"
+                        variant={qrPosition === p.value ? 'secondary' : 'outline'}
+                        className="h-10"
+                        onClick={() => setQrPosition(p.value)}
+                      >
+                        {p.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <>

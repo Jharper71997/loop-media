@@ -2,9 +2,19 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Image from 'next/image'
+import type { QrPosition } from '@/lib/db.types'
 
 const GOLD = '#d4af37'
 const DEVICE_KEY = 'lm_device'
+
+// Maps an ad's chosen QR corner to the absolute-position classes for the overlay.
+// Full class names (not built by concatenation) so Tailwind keeps them.
+const QR_CORNER: Record<QrPosition, string> = {
+  'top-left': 'left-8 top-8',
+  'top-right': 'right-8 top-8',
+  'bottom-left': 'left-8 bottom-8',
+  'bottom-right': 'right-8 bottom-8',
+}
 const cacheKey = (d: string) => `lm_loop_${d}`
 
 type AdItem = {
@@ -16,6 +26,7 @@ type AdItem = {
   duration: number
   qr: string | null
   qr_image: string | null
+  qr_position?: QrPosition // which corner the QR sits in (older cached manifests omit it)
 }
 
 type FillerCard = {
@@ -613,7 +624,9 @@ function Player({
           gold-framed code in the corner — no card, no caption. The white padding
           is the QR's required quiet zone so it still scans cleanly. */}
       {slide.kind === 'ad' && slide.qr_image && (
-        <div className="absolute right-8 bottom-8 rounded-xl bg-white p-1.5 ring-2 ring-[#d4af37]">
+        <div
+          className={`absolute ${QR_CORNER[slide.qr_position ?? 'bottom-right']} rounded-xl bg-white p-1.5 ring-2 ring-[#d4af37]`}
+        >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={slide.qr_image} alt="Scan" className="size-24 rounded-sm" />
         </div>

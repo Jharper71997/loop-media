@@ -11,6 +11,7 @@ import {
 } from '@/lib/pricing.server'
 import { activatePlacementsIfReady } from '@/lib/placement'
 import { CREATIVE_SETUP_FEE_CENTS, CREATIVE_REFRESH_CENTS } from '@/lib/fees'
+import type { QrPosition } from '@/lib/db.types'
 
 export interface NewCampaignInput {
   territory_id: string
@@ -18,6 +19,7 @@ export interface NewCampaignInput {
   category_id: string | null
   title: string
   qr_target_url: string | null
+  qr_position?: QrPosition // which corner the scan QR sits in (default bottom-right)
   creative_type: 'video' | 'image' | null
   creative_url: string | null
   creative_help_brief: string | null
@@ -98,6 +100,7 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
       creative_url: input.creative_url,
       status: 'pending',
       qr_target_url: input.qr_target_url.trim(),
+      qr_position: input.qr_position ?? 'bottom-right',
     })
     .select('id')
     .single()
