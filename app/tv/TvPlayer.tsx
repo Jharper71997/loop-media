@@ -688,7 +688,13 @@ function TriviaSlide({ venueId, code, qrImage }: { venueId: string; code: string
         const d = await r.json()
         if (!alive) return
         setLb(d.leaderboard ?? [])
-        setPrompt(d.question?.prompt ?? null)
+        // Freeze the question for the life of this slide. The slide is only up
+        // ~10s but polls every 3s, and the game round rolls every 30s — without
+        // this hold, a round boundary inside the slide would swap the prompt to
+        // the next question mid-display (the "bounce"). The leaderboard still
+        // updates; the prompt holds once set. A fresh question loads next time
+        // the trivia slide comes around (the component remounts).
+        setPrompt((prev) => prev ?? d.question?.prompt ?? null)
       } catch {
         /* keep last */
       }
