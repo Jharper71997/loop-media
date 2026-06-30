@@ -164,7 +164,6 @@ export default async function CampaignDetail({
   const series = dailySeries(venues, scans)
   const rows = locationRows(venues, scans)
   const maxScans = Math.max(1, ...series.map((d) => d.scans))
-  const estPerDayTotal = series[0]?.estImpressions ?? 0
   const mapVenues: CampaignMapVenue[] = rows.map((r) => {
     const v = venueMap.get(r.venueId)!
     return { id: r.venueId, name: r.name, lat: v.lat, lng: v.lng, footTraffic: r.estPerMonth, scans: r.scans }
@@ -172,25 +171,36 @@ export default async function CampaignDetail({
   const hasGeo = mapVenues.some((v) => v.lat != null && v.lng != null)
 
   const adStatus = c.ad?.status
+  // Status → design-system Badge variant (no raw palette classes).
   const statusBadge =
     adStatus === 'rejected'
-      ? { label: 'Rejected', cls: 'bg-destructive' }
+      ? { label: 'Rejected', variant: 'destructive' as const }
       : adStatus === 'pending'
-        ? { label: 'Pending review', cls: 'bg-amber-600' }
+        ? { label: 'Pending review', variant: 'warning' as const }
         : c.status === 'active'
-          ? { label: 'Active', cls: 'bg-emerald-600' }
+          ? { label: 'Active', variant: 'success' as const }
           : c.status === 'paused'
-            ? { label: 'Paused', cls: 'bg-zinc-600' }
+            ? { label: 'Paused', variant: 'secondary' as const }
             : c.status === 'canceled'
-              ? { label: 'Canceled', cls: 'bg-destructive' }
-              : { label: 'Draft', cls: 'bg-zinc-600' }
+              ? { label: 'Canceled', variant: 'destructive' as const }
+              : { label: 'Draft', variant: 'secondary' as const }
+
+  const firstVenueName = venues[0]?.name ?? null
+  const isLive = c.status === 'active' && (adStatus === 'approved' || adStatus === 'active')
+  const noResultsYet = totalScans === 0
+  // Don't apologize for an SLA miss on a brand-new campaign — a screen can't miss
+  // a monthly uptime guarantee in its first few days of running.
+  const campaignAgeDays = c.created_at
+    ? Math.floor((Date.now() - new Date(c.created_at).getTime()) / 86400000)
+    : 0
+  const showBreach = breachedVenues > 0 && campaignAgeDays >= 3
 
   return (
     <div className="space-y-6">
       <BackLink />
 
       {checkout === 'success' && (
-        <div className="rounded-lg border border-emerald-600/40 bg-emerald-600/10 px-4 py-3 text-sm text-emerald-300">
+        <div className="rounded-lg border border-success/40 bg-success/10 px-4 py-3 text-sm text-success">
           Payment received. Your ad is now pending review — we&apos;ll place it across screens once approved.
         </div>
       )}
@@ -200,7 +210,7 @@ export default async function CampaignDetail({
         </div>
       )}
       {change === 'success' && (
-        <div className="rounded-lg border border-emerald-600/40 bg-emerald-600/10 px-4 py-3 text-sm text-emerald-300">
+        <div className="rounded-lg border border-success/40 bg-success/10 px-4 py-3 text-sm text-success">
           Payment received. Your new creative is pending review and replaces the current one once approved.
         </div>
       )}
@@ -209,8 +219,8 @@ export default async function CampaignDetail({
           Change canceled. Your current creative keeps running and you were not charged.
         </div>
       )}
-      {breachedVenues > 0 && (
-        <div className="rounded-lg border border-amber-600/40 bg-amber-600/10 px-4 py-3 text-sm text-amber-300">
+      {showBreach && (
+        <div className="rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-warning">
           {breachedVenues} of your screen{breachedVenues === 1 ? '' : 's'} ran below our 80%
           uptime guarantee this month. We&apos;re on it, and we&apos;ll make it right.
         </div>
@@ -219,7 +229,7 @@ export default async function CampaignDetail({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-center gap-2">
           <h1 className="text-2xl font-semibold tracking-tight">{c.ad?.title ?? 'Campaign'}</h1>
-          <Badge className={statusBadge.cls}>{statusBadge.label}</Badge>
+          <Badge variant={statusBadge.variant}>{statusBadge.label}</Badge>
         </div>
         <CampaignControls id={c.id} status={c.status} />
       </div>
@@ -265,37 +275,31 @@ export default async function CampaignDetail({
           </CardContent>
         </Card>
 
-        {/* Analytics */}
-        <div className="space-y-4">
-          <Card>
-            <CardContent className="space-y-1 p-5">
-              <p className="text-sm text-muted-foreground">Estimated impressions / mo</p>
-              <p className="font-heading text-3xl font-bold tabular-nums">
-                {formatNumber(estImpressions)}
-              </p>
+        {/* Performance summary — measured QR scans lead; reach is a clearly-labeled
+            estimate; nothing is repeated three times like before. */}
+        <Card>
+          <CardContent className="space-y-4 p-5">
+            {isLive && (
+              <div className="flex items-center gap-2 text-sm">
+                <span className="size-2 shrink-0 rounded-full bg-success" />
+                <span className="font-medium">
+                  Live on {locations} screen{locations === 1 ? '' : 's'}
+                  {locations === 1 && firstVenueName ? ` at ${firstVenueName}` : ''}
+                </span>
+              </div>
+            )}
+            <div className="grid grid-cols-3 gap-3">
+              <Stat label="QR scans" sub={`measured · ${PERF_WINDOW_DAYS}d`} value={totalScans} accent />
+              <Stat label="Est. reach" sub="per month" value={estImpressions} />
+              <Stat label="Screens" sub="live" value={locations} />
+            </div>
+            {noResultsYet && (
               <p className="text-xs text-muted-foreground">
-                from {formatNumber(estPerDayTotal)}/day across your screens
+                Your ad is running. QR scans and daily views show up here as people see it.
               </p>
-            </CardContent>
-          </Card>
-
-          <div className="grid grid-cols-2 gap-3">
-            <Card>
-              <CardContent className="space-y-1 p-5">
-                <p className="text-sm text-muted-foreground">Locations running</p>
-                <p className="font-heading text-2xl font-bold tabular-nums">{locations}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="space-y-1 p-5">
-                <p className="text-sm text-muted-foreground">QR scans · 30d</p>
-                <p className="font-heading text-2xl font-bold tabular-nums">
-                  {formatNumber(totalScans)}
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       {venues.length === 0 ? (
@@ -319,26 +323,14 @@ export default async function CampaignDetail({
             </div>
           )}
 
-          {/* Daily QR scans, last 30 days */}
-          <Card>
-            <CardContent className="p-5">
-              <div className="flex flex-wrap items-end justify-between gap-2">
-                <div>
-                  <p className="text-sm font-medium">Daily QR scans</p>
-                  <p className="text-xs text-muted-foreground">
-                    Last {PERF_WINDOW_DAYS} days · measured
-                  </p>
-                </div>
+          {/* Daily QR scans — only once there's something to plot (no empty chart). */}
+          {totalScans > 0 && (
+            <Card>
+              <CardContent className="p-5">
+                <p className="text-sm font-medium">Daily QR scans</p>
                 <p className="text-xs text-muted-foreground">
-                  ~{formatNumber(estPerDayTotal)} estimated impressions/day
+                  Last {PERF_WINDOW_DAYS} days · measured
                 </p>
-              </div>
-              {totalScans === 0 ? (
-                <p className="mt-4 text-sm text-muted-foreground">
-                  No QR scans yet in the last {PERF_WINDOW_DAYS} days. Scans appear here as people
-                  scan the on-screen code.
-                </p>
-              ) : (
                 <div className="mt-4 flex h-28 items-end gap-px">
                   {series.map((d) => (
                     <div
@@ -349,55 +341,80 @@ export default async function CampaignDetail({
                     />
                   ))}
                 </div>
-              )}
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
 
-          {/* Per-location breakdown */}
-          <Card>
-            <CardContent className="p-5">
-              <p className="mb-3 text-sm font-medium">By location</p>
-              <div className="space-y-2">
-                {rows.map((r) => (
-                  <div
-                    key={r.venueId}
-                    className="rounded-lg border border-border/60 px-3 py-2.5"
-                  >
-                    <div className="font-medium">{r.name}</div>
-                    <div className="mt-1.5 flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground">
-                      <span>
-                        ~{formatNumber(r.estPerMonth)}{' '}
-                        <span className="text-muted-foreground/70">impr/mo</span>
-                      </span>
-                      <span>
-                        ~{formatNumber(r.estPerDay)}{' '}
-                        <span className="text-muted-foreground/70">impr/day</span>
-                      </span>
-                      <span>
-                        {formatNumber(r.scans)}{' '}
-                        <span className="text-muted-foreground/70">scans · 30d</span>
-                      </span>
-                      {(() => {
-                        const u = uptimeByVenue.get(r.venueId)
-                        if (!u || !u.hasData) return null
-                        return (
-                          <span className={u.breach ? 'text-amber-400' : ''}>
-                            {formatUptimePct(u.pct)}{' '}
-                            <span className="text-muted-foreground/70">uptime · 30d</span>
+          {/* Per-location breakdown — only with more than one screen (a single
+              location just repeats the summary above). */}
+          {locations > 1 && (
+            <Card>
+              <CardContent className="p-5">
+                <p className="mb-3 text-sm font-medium">By location</p>
+                <div className="space-y-2">
+                  {rows.map((r) => {
+                    const u = uptimeByVenue.get(r.venueId)
+                    return (
+                      <div
+                        key={r.venueId}
+                        className="flex flex-wrap items-center justify-between gap-x-5 gap-y-1 rounded-lg border border-border/60 px-3 py-2.5"
+                      >
+                        <span className="font-medium">{r.name}</span>
+                        <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground">
+                          <span>
+                            {formatNumber(r.scans)}{' '}
+                            <span className="text-muted-foreground/70">scans · 30d</span>
                           </span>
-                        )
-                      })()}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <p className="mt-3 text-xs text-muted-foreground">
-                Ad views are an estimate of how many times your ad is seen. QR scans are measured.
-              </p>
-            </CardContent>
-          </Card>
+                          <span>
+                            ~{formatNumber(r.estPerMonth)}{' '}
+                            <span className="text-muted-foreground/70">est. views/mo</span>
+                          </span>
+                          {u && u.hasData && (
+                            <span className={u.breach ? 'text-warning' : ''}>
+                              {formatUptimePct(u.pct)}{' '}
+                              <span className="text-muted-foreground/70">uptime · 30d</span>
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          <p className="text-xs text-muted-foreground">
+            QR scans are measured. Reach is an estimate of how many times your ad is seen.
+          </p>
         </div>
       )}
+    </div>
+  )
+}
+
+// Compact metric for the performance summary. The measured one (QR scans) gets
+// the gold accent; estimates stay neutral.
+function Stat({
+  label,
+  sub,
+  value,
+  accent,
+}: {
+  label: string
+  sub: string
+  value: number
+  accent?: boolean
+}) {
+  return (
+    <div className="space-y-0.5">
+      <p
+        className={`font-heading text-2xl font-bold tabular-nums ${accent ? 'text-primary' : ''}`}
+      >
+        {formatNumber(value)}
+      </p>
+      <p className="text-xs font-medium">{label}</p>
+      <p className="text-[0.7rem] text-muted-foreground">{sub}</p>
     </div>
   )
 }
