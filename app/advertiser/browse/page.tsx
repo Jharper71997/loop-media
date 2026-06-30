@@ -14,7 +14,7 @@ import { BrowseClient, type BrowseVenue } from './BrowseClient'
 export default async function BrowsePage({
   searchParams,
 }: {
-  searchParams: Promise<{ cat?: string }>
+  searchParams: Promise<{ cat?: string; pick?: string }>
 }) {
   const profile = await requireProfile()
   const supabase = await createClient()
@@ -36,11 +36,13 @@ export default async function BrowsePage({
   const pricingConfig = await getPricingConfig()
   const quoteOpts: QuoteOptions = contextToQuoteOptions(ctx)
 
-  const { cat: catParam } = await searchParams
+  const { cat: catParam, pick } = await searchParams
   // Fall back to the category saved on this advertiser's profile last time, so a
   // returning advertiser lands straight on the map with their line of business
   // already locked in — no re-picking. An explicit ?cat= (incl. 'all') still wins.
-  const cat = catParam ?? profile.category_id ?? undefined
+  // ?pick=1 forces the category picker (the "change category" affordance) and must
+  // override the saved-profile fallback, or "change" would just reopen the same one.
+  const cat = pick ? undefined : catParam ?? profile.category_id ?? undefined
   const activeCat = categories.find((c) => c.id === cat)?.id ?? null
   // Step 1 of the flow: the category must be chosen (a real id, or 'all' to skip)
   // before we show the map. Absent param = not chosen yet. There is no separate
