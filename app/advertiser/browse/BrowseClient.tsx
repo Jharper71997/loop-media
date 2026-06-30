@@ -249,16 +249,30 @@ export function BrowseClient({
         step={1}
         total={3}
         title="Tap the businesses you want"
-        subtitle={activeCatName ? `Exclusive for ${activeCatName}` : 'All categories'}
+        subtitle="Tap any screen on the map or list to add it"
         backHref={`${base}/browse`}
       />
 
-      <button
-        onClick={() => go({ cat: null })}
-        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-      >
-        Change category <ChevronRight className="size-3.5" />
-      </button>
+      {activeCatName ? (
+        <p className="text-xs text-muted-foreground">
+          You&apos;re advertising as a{' '}
+          <span className="font-medium text-foreground">{activeCatName}</span>, so no other{' '}
+          {activeCatName.toLowerCase()} can run on the screens you pick.{' '}
+          <button
+            onClick={() => router.push(`${base}/browse?pick=1`)}
+            className="text-primary hover:underline"
+          >
+            Not a {activeCatName.toLowerCase()}? Change
+          </button>
+        </p>
+      ) : (
+        <button
+          onClick={() => router.push(`${base}/browse?pick=1`)}
+          className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+        >
+          Pick your business type <ChevronRight className="size-3.5" />
+        </button>
+      )}
 
       {venues.length === 0 ? (
         <p className="rounded-xl border border-border bg-card px-4 py-10 text-center text-sm text-muted-foreground">

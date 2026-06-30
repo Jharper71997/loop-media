@@ -4,15 +4,18 @@ import { Plus, Check, Bell, BellRing } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { formatCents } from '@/lib/format'
+import { formatCents, formatNumber } from '@/lib/format'
 import { TIER_LABEL, type PriceTier } from '@/lib/pricing'
 
 export type VenueCardData = {
   id: string
   name: string
+  venue_type: string | null
+  category: string | null
   tier: PriceTier
   priceCents: number
   foot_traffic_estimate: number
+  screens: number
   categoryFull: boolean
   ownCategory: boolean
   open: number
@@ -37,6 +40,17 @@ export function VenueCard({
   onNotify: () => void
 }) {
   const addable = !venue.categoryFull && venue.open > 0 && !venue.comingSoon
+  // What this place actually is, so advertisers know where their ad runs.
+  const businessType = venue.category ?? venue.venue_type ?? TIER_LABEL[venue.tier]
+  const info = [
+    businessType,
+    venue.foot_traffic_estimate > 0
+      ? `~${formatNumber(venue.foot_traffic_estimate)} visitors/mo`
+      : null,
+    `${venue.screens} screen${venue.screens === 1 ? '' : 's'}`,
+  ]
+    .filter(Boolean)
+    .join(' · ')
   return (
     <div
       role={addable ? 'button' : undefined}
@@ -52,12 +66,10 @@ export function VenueCard({
     >
       <div className="min-w-0">
         <div className="truncate font-medium">{venue.name}</div>
-        <div className="mt-0.5 text-xs text-muted-foreground">
-          {TIER_LABEL[venue.tier]}
-        </div>
+        <div className="mt-0.5 truncate text-xs text-muted-foreground">{info}</div>
         {venue.comingSoon && (
           <span className="mt-1 inline-block rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-            Coming soon
+            Coming soon · screen not live yet
           </span>
         )}
         <div className="mt-1 font-heading text-lg font-bold tabular-nums">

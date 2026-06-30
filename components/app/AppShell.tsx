@@ -70,7 +70,11 @@ export function AppShell({
       <main
         className={
           'mx-auto w-full max-w-md flex-1 px-4 pt-6 ' +
-          (hideNav ? 'pb-4' : 'pb-[calc(5.5rem+env(safe-area-inset-bottom))]')
+          // In-flow pages have a fixed bottom CTA bar; reserve room so the last
+          // card clears it. Out-of-flow pages reserve room for the tab bar.
+          (hideNav
+            ? 'pb-[calc(6rem+env(safe-area-inset-bottom))]'
+            : 'pb-[calc(5.5rem+env(safe-area-inset-bottom))]')
         }
       >
         {children}
