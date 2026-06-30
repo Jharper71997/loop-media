@@ -2,9 +2,19 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Image from 'next/image'
+import {
+  Sun,
+  CloudSun,
+  CloudFog,
+  CloudRain,
+  CloudSnow,
+  CloudDrizzle,
+  CloudLightning,
+  Thermometer,
+  type LucideIcon,
+} from 'lucide-react'
 import type { QrPosition } from '@/lib/db.types'
 
-const GOLD = '#d4af37'
 const DEVICE_KEY = 'lm_device'
 
 // Maps an ad's chosen QR corner to the absolute-position classes for the overlay.
@@ -54,15 +64,15 @@ type Slide =
 
 const FILLER_SECONDS = 10
 
-// WMO weather code -> label + emoji (Open-Meteo).
-function weatherInfo(code: number): { label: string; emoji: string } {
-  if (code === 0) return { label: 'Clear', emoji: '☀️' }
-  if (code <= 3) return { label: 'Partly cloudy', emoji: '⛅' }
-  if (code <= 48) return { label: 'Fog', emoji: '🌫️' }
-  if (code <= 67) return { label: 'Rain', emoji: '🌧️' }
-  if (code <= 77) return { label: 'Snow', emoji: '❄️' }
-  if (code <= 82) return { label: 'Showers', emoji: '🌦️' }
-  return { label: 'Storms', emoji: '⛈️' }
+// WMO weather code -> label + icon (Open-Meteo).
+function weatherInfo(code: number): { label: string; Icon: LucideIcon } {
+  if (code === 0) return { label: 'Clear', Icon: Sun }
+  if (code <= 3) return { label: 'Partly cloudy', Icon: CloudSun }
+  if (code <= 48) return { label: 'Fog', Icon: CloudFog }
+  if (code <= 67) return { label: 'Rain', Icon: CloudRain }
+  if (code <= 77) return { label: 'Snow', Icon: CloudSnow }
+  if (code <= 82) return { label: 'Showers', Icon: CloudDrizzle }
+  return { label: 'Storms', Icon: CloudLightning }
 }
 
 function buildPlaylist(m: Manifest): Slide[] {
@@ -248,17 +258,16 @@ function Pairing({ onPaired }: { onPaired: (deviceId: string) => void }) {
           onChange={(e) => setCode(e.target.value.toUpperCase())}
           placeholder="XXXX"
           maxLength={4}
-          className="w-80 rounded-xl border border-white/15 bg-white/5 px-6 py-5 text-center text-3xl tracking-widest uppercase outline-none focus:border-[#d4af37]"
+          className="w-80 rounded-xl border border-white/15 bg-white/5 px-6 py-5 text-center text-3xl tracking-widest uppercase outline-none focus:border-primary"
         />
         <button
           type="submit"
           disabled={busy || !code}
-          style={{ background: GOLD }}
-          className="rounded-xl px-8 py-3 text-lg font-medium text-black disabled:opacity-50"
+          className="rounded-xl bg-primary px-8 py-3 text-lg font-medium text-primary-foreground disabled:opacity-50"
         >
           {busy ? 'Pairing…' : 'Pair screen'}
         </button>
-        {error && <p className="text-red-400">{error}</p>}
+        {error && <p className="text-destructive">{error}</p>}
       </form>
       <p className="mt-10 max-w-md text-center text-sm text-white/40">
         Enter the pairing code from your Loop Network dashboard. It&apos;s shown under your venue,
@@ -553,7 +562,11 @@ function Player({
         )
       ) : slide.kind === 'weather' ? (
         <FillerFrame title="Loop Network">
-          <div className="text-[12rem] leading-none">{w?.emoji ?? '🌡️'}</div>
+          {w ? (
+            <w.Icon className="size-44 text-primary" strokeWidth={1.5} />
+          ) : (
+            <Thermometer className="size-44 text-primary" strokeWidth={1.5} />
+          )}
           <div className="mt-4 text-7xl font-semibold">
             {weather ? `${weather.temp}°F` : '—'}
           </div>
@@ -577,10 +590,7 @@ function Player({
       ) : slide.kind === 'filler' ? (
         <FillerFrame title="Loop Network">
           {fillerLabel(slide.card.type) && (
-            <div
-              className="mb-6 rounded-full px-5 py-1.5 text-2xl font-semibold tracking-wide"
-              style={{ background: GOLD, color: '#000' }}
-            >
+            <div className="mb-6 rounded-full bg-primary px-5 py-1.5 text-2xl font-semibold tracking-wide text-primary-foreground">
               {fillerLabel(slide.card.type)}
             </div>
           )}
@@ -611,10 +621,7 @@ function Player({
           <div className="mt-3 text-2xl text-white/70">
             Reach everyone who walks through the door.
           </div>
-          <div
-            className="mt-7 rounded-full px-6 py-2 text-2xl font-semibold"
-            style={{ background: GOLD, color: '#000' }}
-          >
+          <div className="mt-7 rounded-full bg-primary px-6 py-2 text-2xl font-semibold text-primary-foreground">
             Get your business on Loop Network
           </div>
         </FillerFrame>
@@ -625,7 +632,7 @@ function Player({
           is the QR's required quiet zone so it still scans cleanly. */}
       {slide.kind === 'ad' && slide.qr_image && (
         <div
-          className={`absolute ${QR_CORNER[slide.qr_position ?? 'bottom-right']} rounded-xl bg-white p-1.5 ring-2 ring-[#d4af37]`}
+          className={`absolute ${QR_CORNER[slide.qr_position ?? 'bottom-right']} rounded-xl bg-white p-1.5 ring-2 ring-primary`}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={slide.qr_image} alt="Scan" className="size-24 rounded-sm" />
@@ -643,7 +650,7 @@ function Player({
       {/* Status chips */}
       <div className="pointer-events-none absolute right-4 bottom-4 flex items-center gap-2 text-xs">
         {stale && (
-          <span className="rounded-full bg-amber-500/20 px-2 py-1 text-amber-300">offline · cached</span>
+          <span className="rounded-full bg-warning/20 px-2 py-1 text-warning">offline · cached</span>
         )}
       </div>
 
@@ -721,9 +728,9 @@ function TriviaSlide({ venueId, code, qrImage }: { venueId: string; code: string
   }, [venueId])
 
   return (
-    <div className="flex h-full w-full items-center justify-center gap-16 bg-gradient-to-b from-zinc-900 to-black px-16 text-white">
+    <div className="flex h-full w-full items-center justify-center gap-16 bg-gradient-to-br from-[#1c1813] via-[#100e0a] to-black px-16 text-white">
       <div className="flex flex-col items-center">
-        <div className="text-3xl font-extrabold tracking-wide" style={{ color: GOLD }}>
+        <div className="text-3xl font-extrabold tracking-wide text-primary">
           PLAY TRIVIA
         </div>
         {qrImage && (
@@ -732,7 +739,7 @@ function TriviaSlide({ venueId, code, qrImage }: { venueId: string; code: string
         )}
         <div className="mt-5 text-2xl text-white/70">Scan to play on your phone</div>
         {code && (
-          <div className="mt-1 font-mono text-4xl tracking-widest" style={{ color: GOLD }}>
+          <div className="mt-1 font-mono text-4xl tracking-widest text-primary">
             {code}
           </div>
         )}
@@ -747,7 +754,7 @@ function TriviaSlide({ venueId, code, qrImage }: { venueId: string; code: string
                 <span>
                   {i + 1}. {p.name}
                 </span>
-                <span className="font-mono" style={{ color: GOLD }}>
+                <span className="font-mono text-primary">
                   {p.score}
                 </span>
               </li>
@@ -763,9 +770,13 @@ function TriviaSlide({ venueId, code, qrImage }: { venueId: string; code: string
 
 function FillerFrame({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-b from-zinc-900 to-black text-center">
+    <div className="relative flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-[#1c1813] via-[#100e0a] to-black text-center text-white">
       {children}
-      {title && <div className="absolute top-6 left-8 text-lg text-white/40">{title}</div>}
+      {title && (
+        <div className="absolute left-8 top-6 font-heading text-lg font-semibold tracking-[0.18em] text-primary/80">
+          LOOP NETWORK
+        </div>
+      )}
     </div>
   )
 }
