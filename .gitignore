@@ -42,3 +42,6 @@ next-env.d.ts
 
 # raspberry-pi provisioning scratch (rejected hardware path; not part of the app)
 /pi/
+
+# agent worktrees (registered in .git/worktrees, never track their checkout)
+.claude/worktrees/
