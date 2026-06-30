@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getProfile, homeForRole } from '@/lib/auth'
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { BrandLockup } from '@/components/app/BrandLockup'
 import { SignupForm } from './SignupForm'
 
@@ -19,9 +19,12 @@ export default async function SignupPage({
   const initialRole = role === 'host' ? 'host' : 'advertiser'
 
   // Advertisers pick their category here at signup (it's saved to their account),
-  // so the buy flow never asks again.
-  const supabase = await createClient()
-  const { data: cats } = await supabase.from('categories').select('id, name').order('name')
+  // so the buy flow never asks again. The categories table's RLS only grants SELECT
+  // to the authenticated role, but this page is anonymous (no account yet), so a
+  // user-scoped read returns zero rows and the dropdown is empty. Read the global
+  // catalog with the service-role client instead (non-sensitive: id + name only).
+  const admin = createAdminClient()
+  const { data: cats } = await admin.from('categories').select('id, name').order('name')
   const categories = (cats ?? []) as { id: string; name: string }[]
 
   return (
