@@ -29,16 +29,13 @@ function renderHtml(venue: { name: string; city: string | null }, base: string):
   return `<!doctype html><html><body style="margin:0;background:#0a0a0b;font-family:Arial,Helvetica,sans-serif;color:#fff">
   <div style="max-width:520px;margin:0 auto;padding:32px 24px">
     <div style="font-size:13px;letter-spacing:2px;color:#d4af37;text-transform:uppercase">Loop Network</div>
-    <h1 style="font-size:24px;margin:16px 0 8px">A new screen just went live${where}.</h1>
-    <p style="font-size:16px;line-height:1.5;color:#cfcfcf;margin:0 0 8px">
-      <strong style="color:#fff">${venue.name}</strong> is now showing the loop. That's a fresh
-      spot to put your business in front of everyone who walks in.
-    </p>
+    <h1 style="font-size:24px;margin:16px 0 8px">A new screen is live${where}.</h1>
     <p style="font-size:16px;line-height:1.5;color:#cfcfcf;margin:0 0 24px">
-      Category exclusivity is first come, first served, so grab it before someone in your space does.
+      <strong style="color:#fff">${venue.name}</strong> is now showing the loop. It's on the map if
+      you'd like to take a look.
     </p>
     <a href="${browse}" style="display:inline-block;background:#d4af37;color:#000;font-weight:bold;text-decoration:none;padding:12px 22px;border-radius:10px">
-      See the screen on the map
+      See it on the map
     </a>
     <p style="font-size:12px;color:#777;margin-top:32px">You're getting this because you advertise on Loop Network in this market.</p>
   </div></body></html>`
