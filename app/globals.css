@@ -144,6 +144,15 @@
   html {
     @apply font-sans;
   }
+  /* Native <select> popups: force the option list dark so it stays readable on
+     the dark canvas. `color-scheme: dark` alone isn't honored for the dropdown
+     list on every browser (notably Chrome on Windows), where the options would
+     otherwise render near-white text on a white list. Set explicit colors too. */
+  .dark select option,
+  .dark select optgroup {
+    background-color: var(--popover);
+    color: var(--popover-foreground);
+  }
 }
 
 @layer utilities {
