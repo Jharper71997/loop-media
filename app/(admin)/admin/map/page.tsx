@@ -1,6 +1,7 @@
 import { requireAdmin } from '@/lib/auth'
 import { getTerritoryContext } from '@/lib/territory'
 import { createClient } from '@/lib/supabase/server'
+import { isTvLive } from '@/lib/format'
 import { PageHeader } from '@/components/admin/PageHeader'
 import { AdminMap } from './AdminMap'
 import type { VenuePin } from './MapCanvas'
@@ -16,7 +17,7 @@ export default async function MapPage() {
   let venueQ = supabase
     .from('venues')
     .select(
-      'id, name, status, lat, lng, foot_traffic_estimate, category:categories(name), tvs(id, status, loop_length_seconds, slot_seconds)'
+      'id, name, status, lat, lng, foot_traffic_estimate, category:categories(name), tvs(id, status, last_heartbeat_at, loop_length_seconds, slot_seconds)'
     )
     .in('status', ['active', 'inactive'])
   if (t) venueQ = venueQ.eq('territory_id', t)
@@ -29,7 +30,13 @@ export default async function MapPage() {
     lng: number | null
     foot_traffic_estimate: number
     category: { name: string } | null
-    tvs: { id: string; status: string; loop_length_seconds: number; slot_seconds: number }[]
+    tvs: {
+      id: string
+      status: string
+      last_heartbeat_at: string | null
+      loop_length_seconds: number
+      slot_seconds: number
+    }[]
   }
   const rows = (venueData ?? []) as unknown as VRow[]
 
@@ -88,8 +95,13 @@ export default async function MapPage() {
       lng: v.lng,
       footTraffic: v.foot_traffic_estimate,
       screensTotal: v.tvs.length,
-      online: v.tvs.filter((tv) => tv.status === 'online').length,
-      offline: v.tvs.filter((tv) => tv.status === 'offline').length,
+      // tvs.status is only ever written 'online'/'unpaired' (never 'offline'), so
+      // a dark screen must be detected from its heartbeat — every other admin
+      // surface uses isTvLive. Online = beating recently; offline = paired but
+      // gone quiet; unpaired = never set up.
+      online: v.tvs.filter((tv) => isTvLive(tv.last_heartbeat_at)).length,
+      offline: v.tvs.filter((tv) => tv.status !== 'unpaired' && !isTvLive(tv.last_heartbeat_at))
+        .length,
       unpaired: v.tvs.filter((tv) => tv.status === 'unpaired').length,
       capacity,
       used: usedByVenue.get(v.id) ?? 0,

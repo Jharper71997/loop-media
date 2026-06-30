@@ -1,7 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { requireAdmin } from '@/lib/auth'
+import { requireAdmin, adminCanTerritory } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { activatePlacementsIfReady } from '@/lib/placement'
 import { stripe } from '@/lib/stripe'
@@ -16,15 +16,19 @@ import { stripe } from '@/lib/stripe'
 // it's really active/paid before activating (don't run ads for free on a misclick).
 // Only the genuine no-Stripe-link fallback is an unverified admin override.
 export async function markCampaignPaid(campaignId: string) {
-  await requireAdmin()
+  const profile = await requireAdmin()
   const admin = createAdminClient()
 
   const { data: campaign } = await admin
     .from('campaigns')
-    .select('status')
+    .select('status, territory_id')
     .eq('id', campaignId)
     .maybeSingle()
   if (!campaign) return { error: 'Campaign not found.' }
+  // This activates + places via the service-role client (no RLS territory check),
+  // so confine it to the caller's territory.
+  if (!adminCanTerritory(profile, campaign.territory_id))
+    return { error: 'Not allowed for your territory.' }
   if (campaign.status === 'active') return { error: null } // already done
 
   const { data: sub } = await admin

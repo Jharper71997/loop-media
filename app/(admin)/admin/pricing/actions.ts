@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
-import { requireAdmin } from '@/lib/auth'
+import { requireAdmin, isGlobalAdmin } from '@/lib/auth'
 import type { PriceTier } from '@/lib/pricing'
 
 const TIER_COLUMN: Record<PriceTier, string> = {
@@ -21,6 +21,11 @@ function done() {
 }
 
 async function updateConfig(patch: Record<string, number>) {
+  // pricing_config is a single global row that drives the whole network's prices,
+  // so only a global (Holdings) admin may edit it — not a city-scoped admin.
+  const profile = await requireAdmin()
+  if (!isGlobalAdmin(profile))
+    return { error: 'Only a network (Holdings) admin can change global pricing.' }
   const supabase = await createClient()
   const { error } = await supabase
     .from('pricing_config')

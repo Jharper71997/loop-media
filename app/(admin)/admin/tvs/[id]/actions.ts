@@ -2,18 +2,37 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
-import { requireAdmin } from '@/lib/auth'
+import { requireAdmin, adminCanTerritory } from '@/lib/auth'
+import type { Profile } from '@/lib/db.types'
+
+type Supa = Awaited<ReturnType<typeof createClient>>
 
 function maxSlots(loop: number, slot: number): number {
   return Math.max(1, Math.floor((loop || 360) / (slot || 15)))
+}
+
+// tvs/placements RLS is plain is_admin() (no territory scope), so screen-level
+// admin actions check the screen's territory (via its venue) here.
+async function guardTv(supabase: Supa, profile: Profile, tvId: string): Promise<string | null> {
+  const { data: tv } = await supabase.from('tvs').select('venue_id').eq('id', tvId).maybeSingle()
+  if (!tv?.venue_id) return 'Screen not found.'
+  const { data: v } = await supabase
+    .from('venues')
+    .select('territory_id')
+    .eq('id', tv.venue_id)
+    .maybeSingle()
+  if (!adminCanTerritory(profile, v?.territory_id ?? null)) return 'Not allowed for your territory.'
+  return null
 }
 
 export async function updateTvLoop(
   id: string,
   input: { loop_length_seconds: number; slot_seconds: number }
 ) {
-  await requireAdmin()
+  const profile = await requireAdmin()
   const supabase = await createClient()
+  const denied = await guardTv(supabase, profile, id)
+  if (denied) return { error: denied }
   const { error } = await supabase
     .from('tvs')
     .update({
@@ -30,8 +49,10 @@ export async function updateTvLoop(
 // record an exclusion so the placement engine won't just re-add it on its next
 // run (the override has to stick). See migration 0013.
 export async function removePlacement(placementId: string, tvId: string) {
-  await requireAdmin()
+  const profile = await requireAdmin()
   const supabase = await createClient()
+  const denied = await guardTv(supabase, profile, tvId)
+  if (denied) return { error: denied }
 
   // Grab the campaign before ending so we can exclude this campaign↔tv pair.
   const { data: pl } = await supabase
@@ -60,8 +81,17 @@ export async function removePlacement(placementId: string, tvId: string) {
 
 // Manually drop an approved ad into the first free slot on this screen.
 export async function addPlacement(tvId: string, adId: string) {
-  await requireAdmin()
+  const profile = await requireAdmin()
   const supabase = await createClient()
+  const denied = await guardTv(supabase, profile, tvId)
+  if (denied) return { error: denied }
+
+  // Only an approved (or already-live) ad may be dropped onto a screen — never a
+  // pending or rejected creative.
+  const { data: ad } = await supabase.from('ads').select('status').eq('id', adId).maybeSingle()
+  if (!ad) return { error: 'Ad not found.' }
+  if (ad.status !== 'approved' && ad.status !== 'active')
+    return { error: 'That ad has not been approved yet.' }
 
   const { data: tv } = await supabase
     .from('tvs')
