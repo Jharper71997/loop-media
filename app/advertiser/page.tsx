@@ -33,12 +33,12 @@ type CampaignRow = {
 
 function statusLabel(c: CampaignRow): {
   label: string
-  variant: 'default' | 'secondary' | 'destructive' | 'outline'
+  variant: 'default' | 'secondary' | 'destructive' | 'outline' | 'success'
   hint?: string
 } {
   if (c.ad?.status === 'rejected') return { label: 'Rejected', variant: 'destructive' }
   if (c.ad?.status === 'pending') return { label: 'Pending review', variant: 'secondary' }
-  if (c.status === 'active') return { label: 'Active', variant: 'default' }
+  if (c.status === 'active') return { label: 'Active', variant: 'success' }
   if (c.status === 'paused') return { label: 'Paused', variant: 'outline' }
   if (c.status === 'canceled') return { label: 'Canceled', variant: 'destructive' }
   // Draft — give a specific reason so advertisers know what to do next
@@ -228,7 +228,7 @@ export default async function AdvertiserDashboard({
     <div className="space-y-6">
       <OnboardingTour role="advertiser" />
       {membership === 'success' && (
-        <div className="rounded-lg border border-emerald-600/40 bg-emerald-600/10 px-4 py-3 text-sm text-emerald-300">
+        <div className="rounded-lg border border-success/40 bg-success/10 px-4 py-3 text-sm text-success">
           You&apos;re in. Unlimited ad changes are now included on your account.
         </div>
       )}
@@ -264,7 +264,7 @@ export default async function AdvertiserDashboard({
                 every real place it plays, right here.
               </p>
             </div>
-            <Link href="/advertiser/browse" className={cn(buttonVariants({ size: 'lg' }), 'h-12')}>
+            <Link href="/advertiser/browse" className={cn(buttonVariants({ size: 'lg' }))}>
               <Plus className="size-4" /> Start a campaign
             </Link>
           </CardContent>
@@ -303,8 +303,8 @@ export default async function AdvertiserDashboard({
                           </p>
                         </div>
                         {v.live ? (
-                          <Badge className="shrink-0 gap-1.5 bg-emerald-600">
-                            <span className="size-1.5 rounded-full bg-white" /> Live now
+                          <Badge variant="success" className="shrink-0 gap-1.5">
+                            <span className="size-1.5 rounded-full bg-success-foreground" /> Live now
                           </Badge>
                         ) : (
                           <Badge variant="outline" className="shrink-0">
@@ -395,12 +395,7 @@ export default async function AdvertiserDashboard({
                       <CardContent className="space-y-2 p-4">
                         <div className="flex items-center justify-between gap-2">
                           <span className="truncate font-medium">{c.ad?.title ?? 'Untitled'}</span>
-                          <Badge
-                            variant={s.variant}
-                            className={cn(s.label === 'Active' && 'bg-emerald-600')}
-                          >
-                            {s.label}
-                          </Badge>
+                          <Badge variant={s.variant}>{s.label}</Badge>
                         </div>
                         <div className="text-xs text-muted-foreground">
                           {screens} screen{screens === 1 ? '' : 's'}
@@ -411,7 +406,7 @@ export default async function AdvertiserDashboard({
                         {c.ad?.status === 'rejected' && c.ad.rejection_reason && (
                           <p className="text-xs text-destructive">Reason: {c.ad.rejection_reason}</p>
                         )}
-                        {s.hint && <p className="text-xs text-amber-500">{s.hint}</p>}
+                        {s.hint && <p className="text-xs text-warning">{s.hint}</p>}
                       </CardContent>
                     </Card>
                   </Link>

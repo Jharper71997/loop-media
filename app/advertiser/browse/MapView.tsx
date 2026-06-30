@@ -7,7 +7,19 @@ import { formatCents } from '@/lib/format'
 import { TIER_LABEL } from '@/lib/pricing'
 import { US_CENTER, US_ZOOM } from '@/lib/geo'
 import { MapFitBounds } from '@/components/app/MapFitBounds'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import type { BrowseVenue } from './BrowseClient'
+
+// Brand-aligned marker palette. Concrete colors (not CSS vars) because Leaflet
+// paints these as SVG presentation attributes, which don't resolve var().
+const MARKER = {
+  cart: '#d4af37', // gold — in cart
+  comingSoon: '#94a3b8', // slate — TV not online yet
+  categoryFull: '#9ca3af', // gray — category taken
+  full: '#ef4444', // red — screen full
+  open: '#10b981', // emerald — open / addable
+}
 
 // CircleMarkers (vector) avoid Leaflet's default-icon asset issues in bundlers.
 export default function MapView({
@@ -33,25 +45,21 @@ export default function MapView({
       scrollWheelZoom={false}
       className="h-[40vh] min-h-64 w-full overflow-hidden rounded-xl"
     >
-      <TileLayer
-        attribution={MAP_TILE_ATTRIBUTION}
-        url={MAP_TILE_URL}
-      />
+      <TileLayer attribution={MAP_TILE_ATTRIBUTION} url={MAP_TILE_URL} />
       <MapFitBounds points={points} />
       {venues
         .filter((v) => v.lat != null && v.lng != null)
         .map((v) => {
           const inCart = cart.includes(v.id)
-          // gold = in cart, slate = coming soon, gray = category taken, red = full, green = open
           const color = inCart
-            ? '#d4af37'
+            ? MARKER.cart
             : v.comingSoon
-              ? '#94a3b8'
+              ? MARKER.comingSoon
               : v.categoryFull
-                ? '#9ca3af'
+                ? MARKER.categoryFull
                 : v.open === 0
-                  ? '#ef4444'
-                  : '#10b981'
+                  ? MARKER.full
+                  : MARKER.open
           return (
             <CircleMarker
               key={v.id}
@@ -65,45 +73,52 @@ export default function MapView({
                 dashArray: v.comingSoon ? '4 3' : undefined,
               }}
             >
-              <Popup>
-                <div style={{ minWidth: 170 }}>
-                  <strong>{v.name}</strong>
-                  <br />
-                  <span style={{ color: '#666' }}>{TIER_LABEL[v.tier]}</span>
-                  <br />
-                  <span style={{ fontSize: 16, fontWeight: 700 }}>{formatCents(v.priceCents)}</span>
-                  <span style={{ color: '#666' }}>/mo</span>
-                  <br />
+              <Popup minWidth={184}>
+                <div className="space-y-2">
+                  <div>
+                    <p className="font-heading text-sm font-semibold text-foreground">{v.name}</p>
+                    <p className="text-xs text-muted-foreground">{TIER_LABEL[v.tier]}</p>
+                  </div>
+                  <p className="text-foreground">
+                    <span className="text-base font-bold">{formatCents(v.priceCents)}</span>
+                    <span className="text-xs text-muted-foreground">/mo</span>
+                  </p>
                   {v.ownCategory ? (
-                    <span style={{ color: '#6b7280', fontWeight: 600 }}>
+                    <p className="text-xs font-medium text-muted-foreground">
                       Same business — not available
-                    </span>
+                    </p>
                   ) : v.comingSoon ? (
-                    <>
-                      <span style={{ color: '#64748b', fontWeight: 600 }}>Coming soon</span>
-                      <button
+                    <div className="space-y-2">
+                      <Badge variant="warning">Coming soon</Badge>
+                      <Button
+                        size="sm"
+                        variant={waitlisted.has(v.id) ? 'secondary' : 'outline'}
+                        className="w-full"
                         onClick={() => onNotify(v)}
-                        style={btn(waitlisted.has(v.id) ? '#6b7280' : '#111827')}
                       >
-                        {waitlisted.has(v.id) ? '✓ Notify on' : '🔔 Notify me'}
-                      </button>
-                    </>
+                        {waitlisted.has(v.id) ? 'Notify on' : 'Notify me'}
+                      </Button>
+                    </div>
                   ) : v.categoryFull ? (
-                    <button
+                    <Button
+                      size="sm"
+                      variant={waitlisted.has(v.id) ? 'secondary' : 'outline'}
+                      className="w-full"
                       onClick={() => onNotify(v)}
-                      style={btn(waitlisted.has(v.id) ? '#6b7280' : '#111827')}
                     >
-                      {waitlisted.has(v.id) ? '✓ Waitlisted' : '🔔 Notify me'}
-                    </button>
+                      {waitlisted.has(v.id) ? 'Waitlisted' : 'Notify me'}
+                    </Button>
                   ) : v.open === 0 ? (
-                    <span style={{ color: '#ef4444', fontWeight: 600 }}>Screen full</span>
+                    <p className="text-xs font-semibold text-destructive">Screen full</p>
                   ) : (
-                    <button
+                    <Button
+                      size="sm"
+                      variant={inCart ? 'secondary' : 'default'}
+                      className="w-full"
                       onClick={() => onToggle(v.id)}
-                      style={btn(inCart ? '#6b7280' : '#0a7d3b')}
                     >
-                      {inCart ? '✓ Added — remove' : '+ Add to cart'}
-                    </button>
+                      {inCart ? 'Added — remove' : 'Add to cart'}
+                    </Button>
                   )}
                 </div>
               </Popup>
@@ -112,18 +127,4 @@ export default function MapView({
         })}
     </MapContainer>
   )
-}
-
-function btn(bg: string): React.CSSProperties {
-  return {
-    marginTop: 8,
-    width: '100%',
-    padding: '6px 10px',
-    background: bg,
-    color: '#fff',
-    border: 'none',
-    borderRadius: 6,
-    fontWeight: 600,
-    cursor: 'pointer',
-  }
 }
