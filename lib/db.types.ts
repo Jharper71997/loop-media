@@ -120,7 +120,11 @@ export interface Ad {
   rejection_reason: string | null
   qr_target_url: string | null
   qr_code_url: string | null
-  qr_position: QrPosition
+  qr_position: QrPosition // legacy 4-corner enum; kept for back-compat, no longer rendered
+  // Free-drag QR center as fractions [0,1] of the 16:9 frame; the overlay
+  // renders at left = qr_x*100%, top = qr_y*100% with translate(-50%,-50%).
+  qr_x: number
+  qr_y: number
   reviewed_by: string | null
   reviewed_at: string | null
   created_at: string

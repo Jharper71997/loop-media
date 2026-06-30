@@ -2,28 +2,23 @@
 
 import { useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
-import type { QrPosition } from '@/lib/db.types'
 
 // The ad exactly as it appears on a TV: creative in a 16:9 frame, letterboxed,
-// with the scan QR in its chosen corner — the same layout the TV player renders.
-const CORNER: Record<QrPosition, string> = {
-  'top-left': 'left-2 top-2',
-  'top-right': 'right-2 top-2',
-  'bottom-left': 'left-2 bottom-2',
-  'bottom-right': 'right-2 bottom-2',
-}
-
+// with the scan QR at its free-drag spot — qrX/qrY are the QR's CENTER as
+// fractions of the frame, the same overlay math the TV player renders.
 export function AdScreenPreview({
   creativeUrl,
   creativeType,
   qrUrl,
-  qrPosition = 'bottom-right',
+  qrX = 0.9,
+  qrY = 0.88,
   className,
 }: {
   creativeUrl: string | null
   creativeType: 'video' | 'image'
   qrUrl?: string | null
-  qrPosition?: QrPosition
+  qrX?: number
+  qrY?: number
   className?: string
 }) {
   const [qr, setQr] = useState<string | null>(null)
@@ -77,10 +72,8 @@ export function AdScreenPreview({
       )}
       {qrUrl && qrUrl.trim() && (
         <div
-          className={cn(
-            'absolute rounded-md bg-white p-1 ring-2 ring-[#d4af37]',
-            CORNER[qrPosition]
-          )}
+          className="absolute rounded-md bg-white p-1 ring-2 ring-[#d4af37]"
+          style={{ left: `${qrX * 100}%`, top: `${qrY * 100}%`, transform: 'translate(-50%, -50%)' }}
         >
           {qr ? (
             // eslint-disable-next-line @next/next/no-img-element
