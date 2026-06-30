@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireAdmin } from '@/lib/auth'
 import { activatePlacementsIfReady } from '@/lib/placement'
+import { notifyAdReviewed } from '@/lib/notifyAdvertiser'
 
 export async function approveAd(id: string) {
   const profile = await requireAdmin()
@@ -25,6 +26,13 @@ export async function approveAd(id: string) {
   const { data: campaigns } = await admin.from('campaigns').select('id').eq('ad_id', id)
   for (const c of campaigns ?? []) {
     await activatePlacementsIfReady(c.id, admin)
+  }
+
+  // Best-effort: let the advertiser know their ad cleared review.
+  try {
+    await notifyAdReviewed(admin, id, { approved: true })
+  } catch {
+    /* a notification failure must never block approval */
   }
 
   revalidatePath('/admin/queue')
@@ -54,6 +62,13 @@ export async function rejectAd(id: string, reason: string) {
     .update({ status: 'ended', end_date: new Date().toISOString().slice(0, 10) })
     .eq('ad_id', id)
     .eq('status', 'active')
+
+  // Best-effort: tell the advertiser what to change so they can resubmit.
+  try {
+    await notifyAdReviewed(admin, id, { approved: false, reason })
+  } catch {
+    /* a notification failure must never block rejection */
+  }
 
   revalidatePath('/admin/queue')
   return { error: null }

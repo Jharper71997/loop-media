@@ -170,6 +170,69 @@ export async function archiveCampaign(id: string) {
   return { error: null }
 }
 
+// Re-open Stripe Checkout for a DRAFT campaign whose buyer abandoned or failed
+// payment. The campaign + subscription rows already exist from submitCampaign, so
+// this just mints a fresh Checkout session — no rebuild, no re-pick of venues. The
+// webhook flips it to active on payment exactly like a brand-new campaign. Without
+// this, a "saved as draft — resume payment anytime" campaign was a dead end.
+export async function resumeCheckout(
+  id: string,
+  basePath?: string
+): Promise<{ error?: string; checkoutUrl?: string }> {
+  const profile = await requireProfile()
+  const supabase = await createClient()
+  const { data: campaign } = await supabase
+    .from('campaigns')
+    .select('id, advertiser_id, status, monthly_total_cents')
+    .eq('id', id)
+    .maybeSingle()
+  if (!campaign || campaign.advertiser_id !== profile.id) return { error: 'Campaign not found.' }
+  if (campaign.status === 'active') return { error: 'This campaign is already live.' }
+  if (campaign.status === 'canceled')
+    return { error: 'This campaign was canceled. Start a new one.' }
+  if (!campaign.monthly_total_cents || campaign.monthly_total_cents <= 0)
+    return { error: 'This campaign has no amount to charge.' }
+  if (!process.env.STRIPE_SECRET_KEY) return { error: 'Payments are not configured.' }
+
+  const admin = createAdminClient()
+  const { data: sub } = await admin
+    .from('subscriptions')
+    .select('id')
+    .eq('campaign_id', id)
+    .maybeSingle()
+
+  const base = appUrl()
+  // Return the buyer to the tree they bought from (host vs advertiser shell).
+  const pathPrefix = basePath === '/host/advertise' ? '/host/advertise' : '/advertiser'
+  try {
+    const session = await stripe().checkout.sessions.create({
+      mode: 'subscription',
+      customer_email: profile.email,
+      line_items: [
+        {
+          quantity: 1,
+          price_data: {
+            currency: 'usd',
+            unit_amount: campaign.monthly_total_cents,
+            recurring: { interval: 'month' },
+            product_data: { name: 'Loop Network: monthly ad placement' },
+          },
+        },
+      ],
+      metadata: {
+        campaign_id: campaign.id,
+        subscription_id: sub?.id ?? '',
+        advertiser_id: profile.id,
+      },
+      success_url: `${base}${pathPrefix}/campaigns/${campaign.id}?checkout=success`,
+      cancel_url: `${base}${pathPrefix}/campaigns/${campaign.id}?checkout=canceled`,
+    })
+    return { checkoutUrl: session.url ?? undefined }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Stripe checkout failed.' }
+  }
+}
+
 // Swap the creative on an existing campaign. The new file is uploaded client-side
 // to the `creatives` bucket; here we route it through the ad-change policy:
 //
@@ -184,7 +247,8 @@ export async function archiveCampaign(id: string) {
 export async function replaceCreative(
   id: string,
   creativeUrl: string,
-  creativeType: 'image' | 'video'
+  creativeType: 'image' | 'video',
+  basePath?: string
 ): Promise<{ error?: string; applied?: boolean; checkoutUrl?: string }> {
   if (!creativeUrl) return { error: 'No creative was uploaded.' }
   const c = await ownCampaign(id)
@@ -242,8 +306,8 @@ export async function replaceCreative(
         },
       ],
       metadata: { ad_change_id: change.id, campaign_id: id },
-      success_url: `${base}/advertiser/campaigns/${id}?change=success`,
-      cancel_url: `${base}/advertiser/campaigns/${id}?change=canceled`,
+      success_url: `${base}${basePath === '/host/advertise' ? '/host/advertise' : '/advertiser'}/campaigns/${id}?change=success`,
+      cancel_url: `${base}${basePath === '/host/advertise' ? '/host/advertise' : '/advertiser'}/campaigns/${id}?change=canceled`,
     })
     await admin
       .from('ad_change_requests')
@@ -258,7 +322,7 @@ export async function replaceCreative(
 
 // Start the unlimited-changes membership ($X/mo). Creates a draft membership row
 // + a subscription Checkout session; the webhook activates it on payment.
-export async function startMembershipCheckout(): Promise<{
+export async function startMembershipCheckout(basePath?: string): Promise<{
   error?: string
   checkoutUrl?: string
 }> {
@@ -297,8 +361,8 @@ export async function startMembershipCheckout(): Promise<{
         },
       ],
       metadata: { membership_id: membership.id, advertiser_id: profile.id },
-      success_url: `${base}/advertiser?membership=success`,
-      cancel_url: `${base}/advertiser?membership=canceled`,
+      success_url: `${base}${basePath === '/host/advertise' ? '/host' : '/advertiser'}?membership=success`,
+      cancel_url: `${base}${basePath === '/host/advertise' ? '/host' : '/advertiser'}?membership=canceled`,
     })
     return { checkoutUrl: session.url ?? undefined }
   } catch (e) {

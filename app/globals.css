@@ -27,6 +27,10 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -64,6 +68,10 @@
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
+  --success: oklch(0.55 0.14 158);
+  --success-foreground: oklch(0.99 0 0);
+  --warning: oklch(0.72 0.15 75);
+  --warning-foreground: oklch(0.16 0.004 80);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
@@ -100,6 +108,10 @@
   --accent: oklch(0.3 0.02 88); /* subtle gold-tinted hover */
   --accent-foreground: oklch(0.95 0.02 90);
   --destructive: oklch(0.62 0.2 25);
+  --success: oklch(0.62 0.14 158); /* emerald, for Live/Active */
+  --success-foreground: oklch(0.99 0 0);
+  --warning: oklch(0.78 0.15 75); /* amber, distinct from gold primary */
+  --warning-foreground: oklch(0.16 0.004 80);
   --border: oklch(1 0 0 / 9%);
   --input: oklch(1 0 0 / 13%);
   --ring: oklch(0.78 0.125 88); /* gold focus ring */
@@ -146,4 +158,50 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
+}
+
+/*
+ * Leaflet theme overrides. Kept UNLAYERED (outside @layer) on purpose: Leaflet's
+ * own stylesheet is unlayered, so layered rules would always lose to it. The
+ * extra `.leaflet-popup` ancestor also lifts specificity above Leaflet's defaults.
+ */
+.leaflet-container {
+  background: var(--card) !important; /* tile gaps match the theme, no white flash */
+  font: inherit;
+}
+.leaflet-popup .leaflet-popup-content-wrapper,
+.leaflet-popup .leaflet-popup-tip {
+  background: var(--popover);
+  color: var(--popover-foreground);
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 0.55);
+}
+.leaflet-popup .leaflet-popup-content-wrapper {
+  border-radius: var(--radius-lg);
+}
+.leaflet-popup .leaflet-popup-content {
+  margin: 0.75rem 0.875rem;
+  font: inherit;
+}
+.leaflet-popup .leaflet-popup-content p {
+  margin: 0;
+}
+.leaflet-popup a.leaflet-popup-close-button {
+  color: var(--muted-foreground);
+}
+.leaflet-popup a.leaflet-popup-close-button:hover {
+  color: var(--foreground);
+}
+.leaflet-container .leaflet-control-attribution {
+  background: rgb(0 0 0 / 0.5);
+  color: var(--muted-foreground);
+}
+.leaflet-container .leaflet-control-attribution a {
+  color: var(--muted-foreground);
+}
+.leaflet-bar a,
+.leaflet-bar a:hover {
+  background: var(--card);
+  color: var(--foreground);
+  border-color: var(--border);
 }

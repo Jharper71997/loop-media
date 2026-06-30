@@ -4,6 +4,7 @@ import { stripe } from '@/lib/stripe'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { activatePlacementsIfReady } from '@/lib/placement'
 import { applyAdChange } from '@/lib/adChanges'
+import { notifyPaymentReceived } from '@/lib/notifyAdvertiser'
 
 function mapSubStatus(sub: Stripe.Subscription): string {
   return sub.pause_collection
@@ -193,6 +194,12 @@ async function handleEvent(
       await supabase.from('campaigns').update({ status: 'active' }).eq('id', campaignId)
       // Place onto screens if the ad is already approved (else admin approval will).
       await activatePlacementsIfReady(campaignId, supabase)
+      // Best-effort service receipt. Event dedupe above prevents a double send.
+      try {
+        await notifyPaymentReceived(supabase, campaignId)
+      } catch {
+        /* a notification failure must never fail the webhook */
+      }
     }
   } else if (event.type === 'customer.subscription.updated') {
     const sub = event.data.object as Stripe.Subscription

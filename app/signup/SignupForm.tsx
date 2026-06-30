@@ -137,7 +137,7 @@ export function SignupForm({
             {(role === 'host'
               ? [
                   'Free to host — no cost to you',
-                  'Promote your own business on your screen, free',
+                  'Free promo slots for your business on other Loop screens around town',
                   'Keeps your customers entertained with live trivia + local info',
                 ]
               : [
