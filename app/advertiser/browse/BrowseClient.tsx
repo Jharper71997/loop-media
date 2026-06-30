@@ -168,40 +168,42 @@ export function BrowseClient({
         />
 
         <div className="relative">
-          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Search className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             autoFocus
             value={catQuery}
             onChange={(e) => setCatQuery(e.target.value)}
             placeholder="Search your business type…"
-            className="pl-9"
+            className="h-12 rounded-xl pl-10 text-base"
           />
         </div>
 
         {(() => {
           const q = catQuery.trim().toLowerCase()
-          // Search-driven: show matches only once they start typing their
-          // business type — never the whole category list on screen.
-          const matches = q ? categories.filter((c) => c.name.toLowerCase().includes(q)) : []
+          // Show the catalog as a filterable chip cloud so the screen reads as a
+          // real picker, not an empty search box. Typing narrows it live.
+          const matches = q
+            ? categories.filter((c) => c.name.toLowerCase().includes(q))
+            : categories
           const exact = categories.some((c) => c.name.toLowerCase() === q)
           return (
             <>
               {matches.length > 0 && (
-                <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-wrap gap-2">
                   {matches.map((c) => (
                     <button
                       key={c.id}
                       onClick={() => go({ cat: c.id })}
-                      className="flex min-h-20 flex-col items-start justify-between rounded-xl border border-border bg-card p-4 text-left transition hover:border-primary/50 active:scale-[0.99]"
+                      className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-sm font-medium transition hover:border-primary/60 hover:bg-primary/5 active:scale-[0.98]"
                     >
-                      <Store className="size-5 text-primary" />
-                      <span className="font-medium leading-tight">{c.name}</span>
+                      <Store className="size-4 shrink-0 text-primary" />
+                      {c.name}
                     </button>
                   ))}
                 </div>
               )}
 
-              {/* Not in the catalog → request it (needs Loop Network approval). */}
+              {/* No match in the catalog → request it (needs Loop Network approval). */}
               {q && !exact && (
                 <Button
                   variant="outline"
@@ -222,14 +224,8 @@ export function BrowseClient({
                     })
                   }
                 >
-                  Other: add &ldquo;{catQuery.trim()}&rdquo; (needs our approval)
+                  Can&apos;t find it? Add &ldquo;{catQuery.trim()}&rdquo; for review
                 </Button>
-              )}
-
-              {!q && (
-                <p className="text-sm text-muted-foreground">
-                  Start typing your business type to find your category.
-                </p>
               )}
             </>
           )
