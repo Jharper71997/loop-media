@@ -1,7 +1,6 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import {
-  Eye,
   MapPin,
   Ban,
   MonitorPlay,
@@ -79,12 +78,31 @@ const PROBLEM = [
   },
 ]
 
-// Value proposition: why a screen 3 feet away beats a billboard a mile away.
-const ATTENTION = [
-  { icon: Eye, stat: '~90 sec', label: 'average dwell time on the screen' },
-  { icon: MapPin, stat: '3 to 6 ft', label: 'from your customer, not a highway away' },
-  { icon: Ban, stat: 'No skip', label: 'no scroll, no ad-block, 100% share of voice' },
-  { icon: MonitorPlay, stat: '45x', label: 'the attention of a highway billboard' },
+// Why an indoor screen works — qualitative, defensible truths about the medium.
+// Deliberately NO measured-attention numbers (dwell time) or "Nx a billboard"
+// multipliers: we don't track those, so we don't claim a figure we can't stand
+// behind. Everything here is either true of the medium itself or a real feature.
+const WHY = [
+  {
+    icon: MapPin,
+    title: 'In the room',
+    sub: 'On a screen where your customers already are, not a highway they drive past.',
+  },
+  {
+    icon: Ban,
+    title: 'Unskippable',
+    sub: "It can't be scrolled past, skipped, or ad-blocked like an online ad.",
+  },
+  {
+    icon: QrCode,
+    title: 'Measurable',
+    sub: 'A QR on every ad turns a glance into a scan you can actually count.',
+  },
+  {
+    icon: Lock,
+    title: 'Exclusive',
+    sub: 'Your category is yours. No competitor runs on the same screen.',
+  },
 ]
 
 // The Guide's authority: real, shipped reasons to trust Loop over the alternatives.
@@ -106,8 +124,8 @@ const GUIDE = [
   },
   {
     icon: Zap,
-    title: 'Live in minutes',
-    sub: 'Pick screens, upload your ad, go live yourself. Cancel anytime, with a monthly results report.',
+    title: 'Self-serve and flexible',
+    sub: 'Pick screens and manage your ad yourself. Cancel anytime, with a monthly results report.',
   },
 ]
 
@@ -126,7 +144,7 @@ const STEPS = [
   {
     n: '3',
     title: 'Go live and see results',
-    sub: 'Your ad runs in minutes, and a QR on it tracks every scan so you know it works.',
+    sub: 'Your ad goes live once it clears a quick review, and a QR on it tracks every scan so you know it works.',
   },
 ]
 
@@ -222,14 +240,14 @@ export default async function Home() {
       <section className="border-y border-border">
         <div className="mx-auto w-full max-w-6xl px-6 py-10">
           <h2 className="text-center font-heading text-xl font-bold tracking-tight">
-            A screen three feet away beats a billboard a mile away.
+            An ad in the room beats an ad they scroll past.
           </h2>
           <div className="mt-6 grid grid-cols-2 gap-px lg:grid-cols-4">
-            {ATTENTION.map(({ icon: Icon, stat, label }) => (
-              <div key={stat} className="flex flex-col items-center gap-1 px-3 py-6 text-center">
+            {WHY.map(({ icon: Icon, title, sub }) => (
+              <div key={title} className="flex flex-col items-center gap-1.5 px-3 py-6 text-center">
                 <Icon className="size-5 text-primary" />
-                <p className="font-heading text-xl font-bold">{stat}</p>
-                <p className="text-xs text-muted-foreground">{label}</p>
+                <p className="font-heading text-base font-bold">{title}</p>
+                <p className="text-xs text-muted-foreground">{sub}</p>
               </div>
             ))}
           </div>
@@ -275,7 +293,7 @@ export default async function Home() {
             The plan
           </p>
           <h2 className="mt-2 text-center font-heading text-2xl font-bold tracking-tight">
-            Live on local screens in minutes.
+            Up and running on local screens.
           </h2>
           <div className="mt-8 grid gap-4 md:grid-cols-3">
             {STEPS.map(({ n, title, sub }) => (
@@ -404,7 +422,7 @@ export default async function Home() {
       {/* Honest social proof — where it runs, no invented logos or counts. */}
       <section className="mx-auto w-full max-w-6xl px-6 pb-20 text-center">
         <p className="text-sm text-muted-foreground">
-          Running on local screens in bars, gyms, barbershops, restaurants, and cafés around
+          Built for local screens in bars, gyms, barbershops, restaurants, and cafés around
           Jacksonville, NC.
         </p>
       </section>
