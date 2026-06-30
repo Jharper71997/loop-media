@@ -1,6 +1,21 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { Eye, MapPin, Ban, MonitorPlay, QrCode, Gift, Check } from 'lucide-react'
+import {
+  Eye,
+  MapPin,
+  Ban,
+  MonitorPlay,
+  QrCode,
+  Gift,
+  Check,
+  Wallet,
+  EyeOff,
+  HelpCircle,
+  Tag,
+  Lock,
+  Zap,
+  ArrowRight,
+} from 'lucide-react'
 import { getProfile, homeForRole } from '@/lib/auth'
 import { buttonVariants } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -42,6 +57,29 @@ function TvMockup() {
   )
 }
 
+// ---- StoryBrand content blocks ------------------------------------------------
+
+// The Stakes: the problem, on three levels (external / internal / philosophical),
+// with the villain named — "advertising you can't measure."
+const PROBLEM = [
+  {
+    icon: Wallet,
+    title: 'Money out the door',
+    sub: 'Billboards, mailers, and boosted posts cost a fortune and vanish without a trace.',
+  },
+  {
+    icon: EyeOff,
+    title: 'No idea what worked',
+    sub: 'You pay, you cross your fingers, and you never really know if a single customer came from it.',
+  },
+  {
+    icon: HelpCircle,
+    title: 'Stuck guessing',
+    sub: "You're tired of betting your budget on hope. Every ad dollar should have to prove itself.",
+  },
+]
+
+// Value proposition: why a screen 3 feet away beats a billboard a mile away.
 const ATTENTION = [
   { icon: Eye, stat: '~90 sec', label: 'average dwell time on the screen' },
   { icon: MapPin, stat: '3 to 6 ft', label: 'from your customer, not a highway away' },
@@ -49,6 +87,31 @@ const ATTENTION = [
   { icon: MonitorPlay, stat: '45x', label: 'the attention of a highway billboard' },
 ]
 
+// The Guide's authority: real, shipped reasons to trust Loop over the alternatives.
+const GUIDE = [
+  {
+    icon: QrCode,
+    title: 'Proof on every ad',
+    sub: 'A QR code on each ad ties the screen to real customer scans, so you see exactly what works.',
+  },
+  {
+    icon: Tag,
+    title: 'Published pricing',
+    sub: 'You always see the price before you buy. No "request a media kit," no sales runaround.',
+  },
+  {
+    icon: Lock,
+    title: 'Category exclusivity',
+    sub: 'A competitor can never share the screens you run on. Your category is yours.',
+  },
+  {
+    icon: Zap,
+    title: 'Live in minutes',
+    sub: 'Pick screens, upload your ad, go live yourself. Cancel anytime, with a monthly results report.',
+  },
+]
+
+// The Plan: three obvious steps that remove confusion and risk.
 const STEPS = [
   {
     n: '1',
@@ -83,31 +146,34 @@ export default async function Home() {
         </Link>
       </header>
 
-      {/* Hero */}
+      {/* HEADER / HERO — grunt test: what you offer, how life improves, what to do.
+          The customer (the local business owner) is the hero; Loop is the guide. */}
       <section className="mx-auto grid w-full max-w-6xl items-center gap-10 px-6 py-12 lg:grid-cols-2 lg:gap-12 lg:py-20">
         <div className="text-center lg:text-left">
           <span className="inline-block rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">
-            Indoor TV advertising, done right
+            Indoor TV advertising you can actually measure
           </span>
           <h1 className="mt-5 text-balance font-heading text-4xl font-extrabold leading-[1.05] tracking-tight sm:text-5xl">
-            Get seen <span className="text-gold-metallic">where people go.</span>
+            Your business, on the screens your customers{' '}
+            <span className="text-gold-metallic">already watch.</span>
           </h1>
           <p className="mx-auto mt-4 max-w-md text-pretty text-base text-muted-foreground lg:mx-0">
-            We put your business on the TVs in the busiest bars, gyms, and shops in town, then show
-            you exactly who&apos;s seeing it. You pick the spots, we handle the rest.
+            Loop Network puts your ad on the TVs in the busiest local bars, gyms, and shops, with a
+            QR code on every ad that tracks real scans. So you finally know which ads bring customers
+            in, and which don&apos;t.
           </p>
           <div className="mt-7 flex flex-col items-center gap-3 sm:flex-row lg:items-start">
-            <Link
-              href="/signup"
-              className={cn(buttonVariants({ size: 'lg' }), 'w-full sm:w-auto')}
-            >
+            <Link href="/signup" className={cn(buttonVariants({ size: 'lg' }), 'w-full sm:w-auto')}>
               Start advertising
             </Link>
             <Link
-              href="/signup?role=host"
-              className={cn(buttonVariants({ variant: 'outline', size: 'lg' }), 'w-full sm:w-auto')}
+              href="#how"
+              className={cn(
+                buttonVariants({ variant: 'outline', size: 'lg' }),
+                'w-full sm:w-auto'
+              )}
             >
-              Host a screen
+              See how it works
             </Link>
           </div>
           <div className="mt-5 flex flex-wrap justify-center gap-x-5 gap-y-1.5 text-xs text-muted-foreground lg:justify-start">
@@ -121,45 +187,142 @@ export default async function Home() {
         <TvMockup />
       </section>
 
-      {/* Attention math — the category's most persuasive, and entirely true, frame */}
-      <section className="border-y border-border bg-card/30">
-        <div className="mx-auto grid w-full max-w-6xl grid-cols-2 gap-px px-6 py-2 lg:grid-cols-4">
-          {ATTENTION.map(({ icon: Icon, stat, label }) => (
-            <div key={stat} className="flex flex-col items-center gap-1 px-3 py-6 text-center">
-              <Icon className="size-5 text-primary" />
-              <p className="font-heading text-xl font-bold">{stat}</p>
-              <p className="text-xs text-muted-foreground">{label}</p>
-            </div>
-          ))}
+      {/* THE STAKES — name the problem (and the villain) before the solution. */}
+      <section className="border-t border-border bg-card/30">
+        <div className="mx-auto w-full max-w-6xl px-6 py-16">
+          <div className="mx-auto max-w-2xl text-center">
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              The problem
+            </p>
+            <h2 className="mt-2 text-balance font-heading text-2xl font-bold tracking-tight sm:text-3xl">
+              Local advertising shouldn&apos;t be a guessing game.
+            </h2>
+            <p className="mx-auto mt-3 max-w-xl text-pretty text-sm text-muted-foreground">
+              Advertising you can&apos;t measure is the enemy. It eats your budget, hides its
+              results, and leaves you hoping instead of knowing. We built Loop to end that.
+            </p>
+          </div>
+          <div className="mt-10 grid gap-4 md:grid-cols-3">
+            {PROBLEM.map(({ icon: Icon, title, sub }) => (
+              <div
+                key={title}
+                className="flex flex-col items-center gap-2 rounded-xl border border-border bg-background/40 p-6 text-center"
+              >
+                <Icon className="size-6 text-muted-foreground" />
+                <p className="font-semibold">{title}</p>
+                <p className="text-sm text-muted-foreground">{sub}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
-      {/* How it works */}
+      {/* VALUE PROPOSITION — the attention math: the category's truest, most
+          persuasive frame for why an indoor screen out-performs the alternatives. */}
+      <section className="border-y border-border">
+        <div className="mx-auto w-full max-w-6xl px-6 py-10">
+          <h2 className="text-center font-heading text-xl font-bold tracking-tight">
+            A screen three feet away beats a billboard a mile away.
+          </h2>
+          <div className="mt-6 grid grid-cols-2 gap-px lg:grid-cols-4">
+            {ATTENTION.map(({ icon: Icon, stat, label }) => (
+              <div key={stat} className="flex flex-col items-center gap-1 px-3 py-6 text-center">
+                <Icon className="size-5 text-primary" />
+                <p className="font-heading text-xl font-bold">{stat}</p>
+                <p className="text-xs text-muted-foreground">{label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* THE GUIDE — empathy + authority. We understand the problem, and here's
+          why we're the competent guide to get you out of it. */}
       <section className="mx-auto w-full max-w-6xl px-6 py-16">
-        <p className="text-center text-xs font-medium uppercase tracking-wider text-muted-foreground">
-          How it works
-        </p>
-        <h2 className="mt-2 text-center font-heading text-2xl font-bold tracking-tight">
-          Live on local screens in minutes
-        </h2>
-        <div className="mt-8 grid gap-4 md:grid-cols-3">
-          {STEPS.map(({ n, title, sub }) => (
-            <Card key={n}>
-              <CardContent className="space-y-2 p-5">
-                <span className="grid size-8 place-items-center rounded-full bg-primary/10 font-bold text-gold-metallic">
-                  {n}
+        <div className="mx-auto max-w-2xl text-center">
+          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            Why Loop
+          </p>
+          <h2 className="mt-2 text-balance font-heading text-2xl font-bold tracking-tight sm:text-3xl">
+            We think you deserve to see exactly what your money buys.
+          </h2>
+          <p className="mx-auto mt-3 max-w-xl text-pretty text-sm text-muted-foreground">
+            Loop Network is a local network, not a faceless billboard company. We made the thing we
+            wished existed: advertising that proves itself.
+          </p>
+        </div>
+        <div className="mt-10 grid gap-4 sm:grid-cols-2">
+          {GUIDE.map(({ icon: Icon, title, sub }) => (
+            <Card key={title}>
+              <CardContent className="flex gap-4 p-5">
+                <span className="grid size-10 shrink-0 place-items-center rounded-full bg-primary/10">
+                  <Icon className="size-5 text-primary" />
                 </span>
-                <p className="font-semibold">{title}</p>
-                <p className="text-sm text-muted-foreground">{sub}</p>
+                <div className="space-y-0.5">
+                  <p className="font-semibold">{title}</p>
+                  <p className="text-sm text-muted-foreground">{sub}</p>
+                </div>
               </CardContent>
             </Card>
           ))}
         </div>
       </section>
 
-      {/* Pricing — published on purpose; the franchise competitors all hide it */}
-      <section className="mx-auto w-full max-w-6xl px-6 pb-16">
+      {/* THE PLAN — three steps that remove the risk of getting started. */}
+      <section id="how" className="border-t border-border bg-card/30 scroll-mt-20">
+        <div className="mx-auto w-full max-w-6xl px-6 py-16">
+          <p className="text-center text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            The plan
+          </p>
+          <h2 className="mt-2 text-center font-heading text-2xl font-bold tracking-tight">
+            Live on local screens in minutes.
+          </h2>
+          <div className="mt-8 grid gap-4 md:grid-cols-3">
+            {STEPS.map(({ n, title, sub }) => (
+              <Card key={n}>
+                <CardContent className="space-y-2 p-5">
+                  <span className="grid size-8 place-items-center rounded-full bg-primary/10 font-bold text-gold-metallic">
+                    {n}
+                  </span>
+                  <p className="font-semibold">{title}</p>
+                  <p className="text-sm text-muted-foreground">{sub}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          <div className="mt-8 text-center">
+            <Link href="/signup" className={cn(buttonVariants({ size: 'lg' }))}>
+              Start advertising
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* SUCCESS — the transformation. Stakes resolved, hero wins. */}
+      <section className="mx-auto w-full max-w-6xl px-6 py-16">
         <Card className="border-primary/30 bg-primary/5">
+          <CardContent className="mx-auto flex max-w-2xl flex-col items-center gap-3 p-8 text-center">
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              What changes
+            </p>
+            <h2 className="text-balance font-heading text-2xl font-bold tracking-tight sm:text-3xl">
+              Stop guessing. Start knowing.
+            </h2>
+            <p className="text-pretty text-sm text-muted-foreground">
+              Become the local spot people keep seeing, and keep walking into, while the scans add up
+              in a dashboard that finally tells the truth about your marketing. That&apos;s what
+              advertising should feel like.
+            </p>
+            <Link href="/signup" className={cn(buttonVariants({ size: 'lg' }), 'mt-2')}>
+              Start advertising <ArrowRight className="size-4" />
+            </Link>
+          </CardContent>
+        </Card>
+      </section>
+
+      {/* PRICE — published on purpose; the franchise competitors all hide it. */}
+      <section className="mx-auto w-full max-w-6xl px-6 pb-16">
+        <Card>
           <CardContent className="flex flex-col items-center gap-4 p-8 text-center">
             <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
               Simple, public pricing
@@ -168,8 +331,8 @@ export default async function Home() {
               $50<span className="text-xl font-bold text-muted-foreground"> / TV / month</span>
             </p>
             <p className="max-w-md text-sm text-muted-foreground">
-              Start from a $200/mo minimum, cancel anytime, and we&apos;ll design your ad for you.
-              No contracts, no &quot;request a media kit.&quot; You always see the price before you buy.
+              Start from a $200/mo minimum, cancel anytime, and we&apos;ll design your ad for you. No
+              contracts, no hidden rates. You always see the price before you buy.
             </p>
             <Link href="/signup" className={cn(buttonVariants({ size: 'lg' }))}>
               Start advertising
@@ -178,7 +341,7 @@ export default async function Home() {
         </Card>
       </section>
 
-      {/* Two-audience fork */}
+      {/* Two-audience fork — advertiser (primary hero) + host (secondary). */}
       <section className="mx-auto grid w-full max-w-6xl gap-4 px-6 pb-16 md:grid-cols-2">
         <Card>
           <CardContent className="flex h-full flex-col gap-4 p-6">
@@ -201,10 +364,7 @@ export default async function Home() {
                 </li>
               ))}
             </ul>
-            <Link
-              href="/signup"
-              className={cn(buttonVariants({ size: 'lg' }), 'mt-auto w-full')}
-            >
+            <Link href="/signup" className={cn(buttonVariants({ size: 'lg' }), 'mt-auto w-full')}>
               Start advertising
             </Link>
           </CardContent>
@@ -241,7 +401,7 @@ export default async function Home() {
         </Card>
       </section>
 
-      {/* Honest social proof — where it runs, no invented logos or counts */}
+      {/* Honest social proof — where it runs, no invented logos or counts. */}
       <section className="mx-auto w-full max-w-6xl px-6 pb-20 text-center">
         <p className="text-sm text-muted-foreground">
           Running on local screens in bars, gyms, barbershops, restaurants, and cafés around
@@ -249,7 +409,7 @@ export default async function Home() {
         </p>
       </section>
 
-      {/* Footer */}
+      {/* Junk drawer / footer */}
       <footer className="mt-auto border-t border-border">
         <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-4 px-6 py-8 sm:flex-row">
           <Wordmark className="text-sm" />
@@ -264,9 +424,7 @@ export default async function Home() {
               Log in
             </Link>
           </nav>
-          <p className="text-xs text-muted-foreground">
-            © {year} Loop Network LLC
-          </p>
+          <p className="text-xs text-muted-foreground">© {year} Loop Network LLC</p>
         </div>
       </footer>
     </main>
