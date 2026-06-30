@@ -33,8 +33,8 @@ export function CategoryRequests({ requests }: { requests: CategoryRequest[] }) 
   if (!requests.length) return null
 
   return (
-    <div className="rounded-lg border border-amber-500/30 bg-amber-500/5">
-      <div className="border-b border-amber-500/20 px-4 py-2.5 text-sm font-medium">
+    <div className="rounded-lg border border-warning/30 bg-warning/10">
+      <div className="border-b border-warning/20 px-4 py-2.5 text-sm font-medium">
         Pending category requests ({requests.length})
       </div>
       <ul className="divide-y divide-border">

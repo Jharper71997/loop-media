@@ -52,7 +52,7 @@ export default async function FillerPage() {
 
       <div className="space-y-3 p-5 md:p-6">
         {!t && (
-          <div className="rounded-lg border border-amber-600/40 bg-amber-600/10 px-4 py-3 text-sm text-amber-300">
+          <div className="rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-warning">
             Pick a single territory in the sidebar to author its filler cards.
           </div>
         )}

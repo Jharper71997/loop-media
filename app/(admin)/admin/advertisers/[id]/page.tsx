@@ -19,19 +19,21 @@ type CampaignRow = Campaign & {
   package: Pick<Package, 'name' | 'base_price_cents' | 'screen_cap'> | null
 }
 
-function statusBadge(campaign: CampaignRow): { label: string; cls: string } {
+type BadgeVariant = 'warning' | 'success' | 'secondary' | 'destructive'
+
+function statusBadge(campaign: CampaignRow): { label: string; variant: BadgeVariant } {
   const adStatus = campaign.ad?.status
-  if (adStatus === 'rejected') return { label: 'Ad rejected', cls: 'bg-destructive' }
-  if (adStatus === 'pending') return { label: 'Pending review', cls: 'bg-amber-600' }
+  if (adStatus === 'rejected') return { label: 'Ad rejected', variant: 'destructive' }
+  if (adStatus === 'pending') return { label: 'Pending review', variant: 'warning' }
   switch (campaign.status) {
     case 'active':
-      return { label: 'Active', cls: 'bg-emerald-600' }
+      return { label: 'Active', variant: 'success' }
     case 'paused':
-      return { label: 'Paused', cls: 'bg-zinc-600' }
+      return { label: 'Paused', variant: 'secondary' }
     case 'canceled':
-      return { label: 'Canceled', cls: 'bg-destructive' }
+      return { label: 'Canceled', variant: 'destructive' }
     default:
-      return { label: 'Draft', cls: 'bg-zinc-600' }
+      return { label: 'Draft', variant: 'secondary' }
   }
 }
 
@@ -215,7 +217,7 @@ export default async function AdvertiserDetail({
                           <div>
                             <div className="flex items-center gap-2">
                               <h3 className="font-medium">{c.ad?.title ?? 'Untitled campaign'}</h3>
-                              <Badge className={badge.cls}>{badge.label}</Badge>
+                              <Badge variant={badge.variant}>{badge.label}</Badge>
                             </div>
                             <p className="mt-1 text-sm text-muted-foreground">
                               {c.package?.name ?? 'Custom'} ·{' '}
