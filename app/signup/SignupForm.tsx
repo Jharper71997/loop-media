@@ -17,9 +17,13 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
-import { rememberCategory } from '@/app/advertiser/browse/actions'
+import { rememberCategory, requestCategory } from '@/app/advertiser/browse/actions'
 
 type Role = 'advertiser' | 'host'
+
+// Sentinel for "my business type isn't listed" — files a review request instead
+// of locking a real category.
+const OTHER = '__other__'
 
 export function SignupForm({
   initialRole = 'advertiser',
@@ -30,6 +34,7 @@ export function SignupForm({
 }) {
   const [role, setRole] = useState<Role>(initialRole)
   const [categoryId, setCategoryId] = useState('')
+  const [otherText, setOtherText] = useState('')
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -37,8 +42,13 @@ export function SignupForm({
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
+    const isOther = categoryId === OTHER
     if (role === 'advertiser' && !categoryId) {
       toast.error('Pick what you sell so we can lock in your category.')
+      return
+    }
+    if (role === 'advertiser' && isOther && !otherText.trim()) {
+      toast.error('Tell us what your business does so we can review it.')
       return
     }
     setLoading(true)
@@ -50,7 +60,10 @@ export function SignupForm({
         data: {
           full_name: fullName,
           role,
-          ...(role === 'advertiser' && categoryId ? { category_id: categoryId } : {}),
+          ...(role === 'advertiser' && categoryId && !isOther ? { category_id: categoryId } : {}),
+          // Stash the proposed type in metadata too, so it survives an email-confirm
+          // signup that has no session to file the request below.
+          ...(role === 'advertiser' && isOther ? { category_request: otherText.trim() } : {}),
         },
       },
     })
@@ -59,11 +72,13 @@ export function SignupForm({
       toast.error(error.message)
       return
     }
-    // Persist the category to the profile now if we got a session (no email
-    // confirmation). The buy flow never asks again once it's set.
-    if (data.session && role === 'advertiser' && categoryId) {
+    // With a session (no email confirmation) record their choice now. A real pick
+    // saves to the profile so the buy flow never asks again; an "Other" files a
+    // review request for an admin to approve, and they browse everything meanwhile.
+    if (data.session && role === 'advertiser') {
       try {
-        await rememberCategory(categoryId)
+        if (isOther) await requestCategory(otherText.trim())
+        else if (categoryId) await rememberCategory(categoryId)
       } catch {}
     }
     // Flag a fresh sign-up so the dashboard shows the first-run walkthrough once.
@@ -171,11 +186,30 @@ export function SignupForm({
                     {c.name}
                   </option>
                 ))}
+                <option value={OTHER}>Other / not listed…</option>
               </select>
-              <p className="text-xs text-muted-foreground">
-                We lock in your category so competitors can&apos;t share your screens. You only set
-                this once.
-              </p>
+
+              {categoryId === OTHER ? (
+                <>
+                  <Input
+                    id="otherCategory"
+                    placeholder="Tell us what your business does"
+                    required
+                    value={otherText}
+                    onChange={(e) => setOtherText(e.target.value)}
+                    className="h-11"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    We&apos;ll review your business type and add it. You can browse every screen in
+                    the meantime.
+                  </p>
+                </>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  We lock in your category so competitors can&apos;t share your screens. You only set
+                  this once.
+                </p>
+              )}
             </div>
           )}
 

@@ -49,6 +49,7 @@ insert into categories (name, slug) values
   ('Financial Advisor',          'financial_advisor'),
   ('Mortgage / Lender',          'mortgage'),
   ('Marketing / Advertising',    'marketing'),
+  ('Consulting',                 'consulting'),
   ('Photography',                'photography'),
   ('Printing / Signs',           'printing'),
   ('IT / Computer Repair',       'it_services'),
