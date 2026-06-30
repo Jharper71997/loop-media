@@ -4,6 +4,14 @@ import { getTerritoryContext } from '@/lib/territory'
 import { createClient } from '@/lib/supabase/server'
 import { PageHeader } from '@/components/admin/PageHeader'
 import { Card, CardContent } from '@/components/ui/card'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import { formatCents, formatNumber } from '@/lib/format'
 import { ActivateButton } from './ActivateButton'
 
@@ -147,18 +155,24 @@ export default async function RevenuePage() {
           <Card>
             <CardContent className="p-5">
               <p className="mb-3 text-sm font-medium">MRR by territory</p>
-              <table className="w-full text-sm">
-                <tbody>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Territory</TableHead>
+                    <TableHead className="text-right">MRR</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {[...byTerritory.entries()]
                     .sort((a, b) => b[1] - a[1])
                     .map(([id, cents]) => (
-                      <tr key={id} className="border-b border-border/50 last:border-0">
-                        <td className="py-2">{territoryName(id)}</td>
-                        <td className="py-2 text-right tabular-nums">{formatCents(cents)}</td>
-                      </tr>
+                      <TableRow key={id}>
+                        <TableCell>{territoryName(id)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{formatCents(cents)}</TableCell>
+                      </TableRow>
                     ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
         )}
@@ -167,7 +181,7 @@ export default async function RevenuePage() {
         <Card>
           <CardContent className="p-5">
             <div className="mb-3 flex items-center gap-2">
-              <AlertCircle className="size-4 text-amber-500" />
+              <AlertCircle className="size-4 text-warning" />
               <p className="text-sm font-medium">Needs activation</p>
             </div>
             {needsActivation.length === 0 ? (

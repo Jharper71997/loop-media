@@ -3,7 +3,7 @@
 import { useTransition } from 'react'
 import { Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { Button } from '@/components/ui/button'
+import { ConfirmButton } from '@/components/admin/ConfirmButton'
 
 // Reusable row delete. `action` is a server action that takes the row id.
 export function DeleteButton({
@@ -17,21 +17,23 @@ export function DeleteButton({
 }) {
   const [pending, start] = useTransition()
   return (
-    <Button
+    <ConfirmButton
       variant="ghost"
       size="icon-sm"
       disabled={pending}
       aria-label="Delete"
-      onClick={() => {
-        if (!window.confirm(confirmText)) return
+      message={confirmText}
+      confirmLabel="Delete"
+      confirmVariant="destructive"
+      onConfirm={() =>
         start(async () => {
           const res = await action(id)
           if (res?.error) toast.error(res.error)
           else toast.success('Deleted')
         })
-      }}
+      }
     >
       <Trash2 className="size-4 text-destructive" />
-    </Button>
+    </ConfirmButton>
   )
 }

@@ -109,7 +109,7 @@ export default async function UptimePage() {
 
       <div className="space-y-4 p-5 md:p-6">
         {breaches > 0 && (
-          <div className="flex items-start gap-2 rounded-lg border border-amber-600/40 bg-amber-600/10 px-4 py-3 text-sm text-amber-300">
+          <div className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-warning">
             <AlertTriangle className="mt-0.5 size-4 shrink-0" />
             <span>
               {breaches} screen{breaches === 1 ? '' : 's'} ran below the 80% business-hours SLA over
@@ -147,7 +147,7 @@ export default async function UptimePage() {
                   </TableCell>
                   <TableCell className="tabular-nums">
                     {r.hasData ? (
-                      <span className={r.breach ? 'font-semibold text-amber-400' : ''}>
+                      <span className={r.breach ? 'font-semibold text-warning' : ''}>
                         {Math.round(r.pct * 100)}%
                       </span>
                     ) : (

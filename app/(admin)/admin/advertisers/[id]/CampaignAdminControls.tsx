@@ -6,6 +6,8 @@ import { Check, X, Pause, Play, RotateCw, Ban } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { InlineNumber } from '@/components/admin/InlineNumber'
+import { ConfirmButton } from '@/components/admin/ConfirmButton'
+import { PromptButton } from '@/components/admin/PromptButton'
 import {
   approveAd,
   rejectAd,
@@ -55,18 +57,19 @@ export function CampaignAdminControls({
             <Button size="sm" disabled={pending} onClick={() => run(() => approveAd(adId), 'Ad approved')}>
               <Check className="size-4" /> Approve ad
             </Button>
-            <Button
+            <PromptButton
               size="sm"
               variant="destructive"
               disabled={pending}
-              onClick={() => {
-                const reason = window.prompt('Reason for rejection (shown to the advertiser):')
-                if (reason === null) return
-                run(() => rejectAd(adId, reason), 'Ad rejected')
-              }}
+              message="Reason for rejection (shown to the advertiser):"
+              label="Reason"
+              placeholder="Shown to the advertiser"
+              submitLabel="Reject ad"
+              submitVariant="destructive"
+              onSubmit={(reason) => run(() => rejectAd(adId, reason), 'Ad rejected')}
             >
               <X className="size-4" /> Reject ad
-            </Button>
+            </PromptButton>
           </>
         )}
 
@@ -105,17 +108,18 @@ export function CampaignAdminControls({
         </Button>
 
         {status !== 'canceled' && (
-          <Button
+          <ConfirmButton
             size="sm"
             variant="destructive"
             disabled={pending}
-            onClick={() => {
-              if (window.confirm('Cancel this campaign? Its ad will stop running.'))
-                run(() => cancelCampaign(campaignId), 'Campaign canceled')
-            }}
+            message="Cancel this campaign? Its ad will stop running."
+            confirmLabel="Cancel campaign"
+            confirmVariant="destructive"
+            cancelLabel="Keep campaign"
+            onConfirm={() => run(() => cancelCampaign(campaignId), 'Campaign canceled')}
           >
             <Ban className="size-4" /> Cancel
-          </Button>
+          </ConfirmButton>
         )}
       </div>
 

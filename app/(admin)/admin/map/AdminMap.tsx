@@ -108,15 +108,15 @@ export function AdminMap({
           <CardContent className="space-y-1.5 p-4 text-xs text-muted-foreground">
             <p className="font-medium text-foreground">Legend</p>
             <p>
-              <span style={{ color: '#10b981' }}>●</span> screens online ·{' '}
-              <span style={{ color: '#ef4444' }}>●</span> offline ·{' '}
-              <span style={{ color: '#71717a' }}>●</span> unpaired
+              <span className="text-success">●</span> screens online ·{' '}
+              <span className="text-destructive">●</span> offline ·{' '}
+              <span className="text-muted-foreground">●</span> unpaired
             </p>
             <p>
-              <span style={{ color: '#d4a333' }}>●</span> selected advertiser&apos;s coverage
+              <span className="text-primary">●</span> selected advertiser&apos;s coverage
             </p>
             <p>
-              <span style={{ color: '#d4a333' }}>◌</span> pending venue (added, not yet verified)
+              <span className="text-primary">◌</span> pending venue (added, not yet verified)
             </p>
             <p>Bigger dot = fuller ad loop.</p>
           </CardContent>

@@ -101,7 +101,7 @@ export default async function VenuesPage() {
                   ) : isVenueListable(v) ? (
                     <Badge>On map</Badge>
                   ) : (
-                    <Badge variant="outline" className="border-amber-500/50 text-amber-600">
+                    <Badge variant="warning">
                       Needs data
                     </Badge>
                   )}
@@ -187,7 +187,7 @@ export default async function VenuesPage() {
                     ) : isVenueListable(v) ? (
                       <Badge>On map</Badge>
                     ) : (
-                      <Badge variant="outline" className="border-amber-500/50 text-amber-600">
+                      <Badge variant="warning">
                         Needs data
                       </Badge>
                     )}

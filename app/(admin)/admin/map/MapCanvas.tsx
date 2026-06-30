@@ -80,7 +80,7 @@ export function MapCanvas({
             >
               <Popup>
                 <strong>{v.name}</strong>
-                {v.pending && <span style={{ color: '#b8860b' }}> · pending</span>}
+                {v.pending && <span className="text-primary"> · pending</span>}
                 <br />
                 {v.category ?? '—'}
                 <br />
@@ -89,9 +89,9 @@ export function MapCanvas({
                 {v.used}/{v.capacity} slots filled · {v.screensTotal} screen
                 {v.screensTotal === 1 ? '' : 's'}
                 <br />
-                <span style={{ color: '#10b981' }}>{v.online} online</span>
+                <span className="text-success">{v.online} online</span>
                 {' · '}
-                <span style={{ color: '#ef4444' }}>{v.offline} offline</span>
+                <span className="text-destructive">{v.offline} offline</span>
                 {' · '}
                 {v.unpaired} unpaired
                 <br />
