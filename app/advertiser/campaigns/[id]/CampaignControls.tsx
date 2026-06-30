@@ -3,13 +3,13 @@
 import { useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Pause, Play, Trash2, Archive, Plus } from 'lucide-react'
+import { Pause, Play, Trash2, Archive, Plus, CreditCard } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { ConfirmButton } from '@/components/app/ConfirmButton'
 import { useBasePath, homeFor } from '@/lib/useBasePath'
 import { cn } from '@/lib/utils'
-import { pauseCampaign, resumeCampaign, trashCampaign, archiveCampaign } from './actions'
+import { pauseCampaign, resumeCampaign, trashCampaign, archiveCampaign, resumeCheckout } from './actions'
 
 export function CampaignControls({ id, status }: { id: string; status: string }) {
   const router = useRouter()
@@ -30,8 +30,22 @@ export function CampaignControls({ id, status }: { id: string; status: string })
       }
     })
 
+  // Draft = created but never paid for. Re-open Stripe so they can finish without
+  // rebuilding (the campaign + venues are already saved).
+  const resume = () =>
+    start(async () => {
+      const res = await resumeCheckout(id, base)
+      if (res.error) toast.error(res.error)
+      else if (res.checkoutUrl) window.location.href = res.checkoutUrl
+    })
+
   return (
     <div className="flex flex-wrap gap-2">
+      {status === 'draft' && (
+        <Button disabled={pending} onClick={resume}>
+          <CreditCard className="size-4" /> Resume payment
+        </Button>
+      )}
       {/* Add more screens to this live campaign (prorated). Advertiser shell only
           — the host advertise tree doesn't carry this subpage. */}
       {status === 'active' && base === '/advertiser' && (

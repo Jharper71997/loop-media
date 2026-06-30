@@ -248,9 +248,9 @@ export default async function HostHome() {
           {/* Promo CTA */}
           <section className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border bg-card p-5">
             <div className="text-sm">
-              <p className="font-medium">Promote your own venue — free</p>
+              <p className="font-medium">Promote your business — free</p>
               <p className="text-muted-foreground">
-                You get {PROMO_SLOTS} slots to run your own promos on your screens at no cost.
+                You get {PROMO_SLOTS} free promo slots to run on other Loop screens around town.
               </p>
             </div>
             <Link href="/host/promos" className={cn(buttonVariants(), 'shrink-0')}>

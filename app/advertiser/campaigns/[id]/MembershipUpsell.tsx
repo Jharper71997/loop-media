@@ -6,16 +6,18 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { formatCents } from '@/lib/format'
 import { UNLIMITED_CHANGES_CENTS, AD_CHANGE_FEE_CENTS } from '@/lib/fees'
+import { useBasePath } from '@/lib/useBasePath'
 import { startMembershipCheckout } from './actions'
 
 // Upsell shown to non-members: swap the per-change fee for an unlimited-changes
 // membership. Sends them to a subscription Checkout; the webhook activates it.
 export function MembershipUpsell() {
   const [pending, start] = useTransition()
+  const base = useBasePath()
 
   function buy() {
     start(async () => {
-      const res = await startMembershipCheckout()
+      const res = await startMembershipCheckout(base)
       if (res.error) {
         toast.error(res.error)
         return

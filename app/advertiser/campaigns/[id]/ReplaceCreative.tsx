@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { formatCents } from '@/lib/format'
 import { AD_CHANGE_FEE_CENTS, AD_CHANGE_NOTICE_DAYS } from '@/lib/fees'
+import { useBasePath } from '@/lib/useBasePath'
 import { replaceCreative } from './actions'
 
 // Lets an advertiser swap the creative on an existing campaign. Uploads the new
@@ -31,6 +32,7 @@ export function ReplaceCreative({
   const [open, setOpen] = useState(false)
   const [file, setFile] = useState<File | null>(null)
   const [pending, start] = useTransition()
+  const base = useBasePath()
 
   function submit() {
     if (!file) return toast.error('Choose an image or video first.')
@@ -45,7 +47,7 @@ export function ReplaceCreative({
       }
       const url = supabase.storage.from('creatives').getPublicUrl(path).data.publicUrl
       const type = file.type.startsWith('video') ? 'video' : 'image'
-      const res = await replaceCreative(campaignId, url, type)
+      const res = await replaceCreative(campaignId, url, type, base)
       if (res.error) {
         toast.error(res.error)
         return

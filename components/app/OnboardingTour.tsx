@@ -67,7 +67,7 @@ const STEPS: Record<'advertiser' | 'host', { steps: Step[]; cta: string; href: s
       {
         icon: Megaphone,
         title: '2 free promo slots',
-        body: 'Promote your own business on your screen, always free.',
+        body: 'Run free promo slots for your business on other Loop screens around town.',
       },
       {
         icon: Percent,
