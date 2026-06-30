@@ -93,6 +93,10 @@
 
 .dark {
   /* Loop Network brand: near-black canvas, gold accent, silver/off-white text. */
+  /* Tell the browser this surface is dark so NATIVE controls (the business-type
+     dropdown / mobile picker, scrollbars, autofill) render dark instead of a
+     jarring white. Without this the OS draws them light even on a dark page. */
+  color-scheme: dark;
   --background: oklch(0.155 0.004 80);
   --foreground: oklch(0.93 0.004 80);
   --card: oklch(0.205 0.005 80);
