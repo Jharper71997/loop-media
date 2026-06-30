@@ -1,8 +1,9 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-
-const GOLD = '#d4af37'
+import Image from 'next/image'
+import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 
 type TriviaState = {
   round: number
@@ -128,7 +129,7 @@ export function PlayClient({ code }: { code: string }) {
   if (!ready) {
     return (
       <Shell>
-        <p className="text-white/50">Loading…</p>
+        <p className="text-muted-foreground">Loading…</p>
       </Shell>
     )
   }
@@ -136,11 +137,19 @@ export function PlayClient({ code }: { code: string }) {
   if (!join) {
     return (
       <Shell>
-        <h1 className="text-4xl font-extrabold tracking-tight" style={{ color: GOLD }}>
+        <Image
+          src="/loop-network-emblem.png"
+          alt="Loop Network"
+          width={56}
+          height={62}
+          priority
+          className="h-14 w-auto"
+        />
+        <h1 className="mt-5 font-heading text-4xl font-extrabold tracking-tight text-primary">
           Loop Trivia
         </h1>
-        <p className="mt-2 text-white/60">
-          Game <span className="font-mono tracking-widest">{code}</span>
+        <p className="mt-2 text-muted-foreground">
+          Game <span className="font-mono tracking-widest text-foreground">{code}</span>
         </p>
         <form onSubmit={joinGame} className="mt-10 w-full max-w-xs space-y-4">
           <input
@@ -149,17 +158,17 @@ export function PlayClient({ code }: { code: string }) {
             onChange={(e) => setName(e.target.value)}
             placeholder="Your name"
             maxLength={16}
-            className="w-full rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-center text-xl outline-none focus:border-[#d4af37]"
+            className="w-full rounded-xl border border-border bg-card px-4 py-3 text-center text-xl text-foreground outline-none transition focus:border-primary"
           />
-          <button
+          <Button
             type="submit"
+            size="lg"
             disabled={joining || !name.trim()}
-            style={{ background: GOLD }}
-            className="w-full rounded-xl px-6 py-3 text-lg font-semibold text-black disabled:opacity-50"
+            className="h-14 w-full text-lg"
           >
             {joining ? 'Joining…' : 'Play'}
-          </button>
-          {error && <p className="text-center text-red-400">{error}</p>}
+          </Button>
+          {error && <p className="text-center text-destructive">{error}</p>}
         </form>
       </Shell>
     )
@@ -172,15 +181,15 @@ export function PlayClient({ code }: { code: string }) {
   return (
     <Shell>
       <div className="flex w-full max-w-md items-center justify-between text-sm">
-        <span className="text-white/60">{join.venue_name}</span>
-        <span className="font-mono" style={{ color: GOLD }}>
+        <span className="text-muted-foreground">{join.venue_name}</span>
+        <span className="font-mono text-primary">
           {(state?.you?.score ?? 0) > 0 ? `🔥 ${state?.you?.score} in a row` : '0 in a row'}
         </span>
       </div>
 
       {state ? (
         <div className="mt-6 w-full max-w-md">
-          <div className="min-h-[3.5rem] text-center text-2xl font-semibold leading-snug">
+          <div className="min-h-[3.5rem] text-center text-2xl font-semibold leading-snug text-foreground">
             {state.question.prompt}
           </div>
           <div className="mt-6 grid gap-3">
@@ -188,16 +197,19 @@ export function PlayClient({ code }: { code: string }) {
               const isCorrect = state.correctIdx === i
               const isMine = myChoice === i
               const reveal = state.phase === 'results'
-              let cls = 'border-white/15 bg-white/5'
-              if (reveal && isCorrect) cls = 'border-green-500 bg-green-500/20'
-              else if (reveal && isMine && !isCorrect) cls = 'border-red-500 bg-red-500/20'
-              else if (isMine) cls = 'border-[#d4af37] bg-[#d4af37]/15'
+              let cls = 'border-border bg-card'
+              if (reveal && isCorrect) cls = 'border-success bg-success/20'
+              else if (reveal && isMine && !isCorrect) cls = 'border-destructive bg-destructive/20'
+              else if (isMine) cls = 'border-primary bg-primary/15'
               return (
                 <button
                   key={i}
                   disabled={answered || state.phase !== 'question'}
                   onClick={() => setPicked(i)}
-                  className={`rounded-xl border px-4 py-4 text-left text-lg transition ${cls} disabled:cursor-default`}
+                  className={cn(
+                    'rounded-xl border px-4 py-4 text-left text-lg text-foreground transition disabled:cursor-default',
+                    cls
+                  )}
                 >
                   {c}
                 </button>
@@ -206,17 +218,17 @@ export function PlayClient({ code }: { code: string }) {
           </div>
 
           {state.phase === 'question' && !answered && (
-            <button
+            <Button
               onClick={lockIn}
+              size="lg"
               disabled={picked == null || submitting}
-              style={{ background: GOLD }}
-              className="mt-4 w-full rounded-xl px-6 py-4 text-lg font-semibold text-black transition disabled:opacity-40"
+              className="mt-4 h-14 w-full text-lg"
             >
               {submitting ? 'Locking in…' : picked == null ? 'Pick an answer' : 'Lock it in'}
-            </button>
+            </Button>
           )}
 
-          <p className="mt-4 text-center text-sm text-white/40">
+          <p className="mt-4 text-center text-sm text-muted-foreground">
             {state.phase === 'question'
               ? answered
                 ? `Locked in — results in ${secs}s`
@@ -228,14 +240,16 @@ export function PlayClient({ code }: { code: string }) {
 
           {state.leaderboard.length > 0 && (
             <div className="mt-8">
-              <p className="mb-2 text-xs uppercase tracking-widest text-white/40">This Week</p>
+              <p className="mb-2 text-xs uppercase tracking-widest text-muted-foreground">
+                This Week
+              </p>
               <ol className="space-y-1">
                 {state.leaderboard.map((p, i) => (
-                  <li key={i} className="flex justify-between text-sm">
+                  <li key={i} className="flex justify-between text-sm text-foreground">
                     <span>
                       {i + 1}. {p.name}
                     </span>
-                    <span className="font-mono text-white/60">{p.score}</span>
+                    <span className="font-mono text-muted-foreground">{p.score}</span>
                   </li>
                 ))}
               </ol>
@@ -243,7 +257,7 @@ export function PlayClient({ code }: { code: string }) {
           )}
         </div>
       ) : (
-        <p className="mt-8 text-white/50">Starting…</p>
+        <p className="mt-8 text-muted-foreground">Starting…</p>
       )}
     </Shell>
   )
@@ -251,7 +265,7 @@ export function PlayClient({ code }: { code: string }) {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <main className="flex min-h-dvh flex-col items-center justify-start bg-black px-5 py-10 text-white">
+    <main className="flex min-h-dvh flex-col items-center justify-start bg-gradient-to-b from-[#1c1813] via-[#0d0c0a] to-black px-5 py-10 text-foreground">
       {children}
     </main>
   )
