@@ -23,7 +23,6 @@ import {
 import { CampaignControls } from './CampaignControls'
 import { BackLink } from './BackLink'
 import { ReplaceCreative } from './ReplaceCreative'
-import { MembershipUpsell } from './MembershipUpsell'
 import CampaignMap from './CampaignMap'
 import type { CampaignMapVenue } from './CampaignMapView'
 
@@ -51,21 +50,6 @@ export default async function CampaignDetail({
     .maybeSingle()
   if (!data) notFound()
   const c = data as unknown as CampaignFull
-
-  // Does this advertiser hold the unlimited-changes membership? (RLS scopes the
-  // memberships table to their own rows.) Drives whether a creative swap is free.
-  const { data: membership } = await supabase
-    .from('memberships')
-    .select('current_period_end')
-    .eq('kind', 'unlimited_changes')
-    .eq('status', 'active')
-    .order('current_period_end', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-  const isMember =
-    !!membership &&
-    (!membership.current_period_end ||
-      new Date(membership.current_period_end).getTime() >= Date.now())
 
   const { data: placementsData } = await supabase
     .from('ad_placements')
@@ -266,9 +250,8 @@ export default async function CampaignDetail({
               )}
             </p>
             {c.ad_id && c.status !== 'canceled' && (
-              <ReplaceCreative campaignId={c.id} userId={profile.id} isMember={isMember} />
+              <ReplaceCreative campaignId={c.id} userId={profile.id} />
             )}
-            {c.ad_id && c.status !== 'canceled' && !isMember && <MembershipUpsell />}
           </CardContent>
         </Card>
 

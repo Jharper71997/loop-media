@@ -7,8 +7,7 @@ import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { formatCents } from '@/lib/format'
-import { AD_CHANGE_FEE_CENTS, AD_CHANGE_NOTICE_DAYS } from '@/lib/fees'
+import { AD_CHANGE_NOTICE_DAYS } from '@/lib/fees'
 import { useBasePath } from '@/lib/useBasePath'
 import { replaceCreative } from './actions'
 
@@ -21,11 +20,9 @@ import { replaceCreative } from './actions'
 export function ReplaceCreative({
   campaignId,
   userId,
-  isMember,
 }: {
   campaignId: string
   userId: string
-  isMember: boolean
 }) {
   const router = useRouter()
   const inputRef = useRef<HTMLInputElement>(null)
@@ -63,12 +60,7 @@ export function ReplaceCreative({
     })
   }
 
-  const feeLabel = isMember ? 'Free with your membership' : `${formatCents(AD_CHANGE_FEE_CENTS)} per change`
-  const submitLabel = pending
-    ? 'Working…'
-    : isMember
-      ? 'Submit for review'
-      : `Pay ${formatCents(AD_CHANGE_FEE_CENTS)} and submit`
+  const submitLabel = pending ? 'Working…' : 'Submit for review'
 
   if (!open) {
     return (
@@ -110,11 +102,10 @@ export function ReplaceCreative({
           {file.name} · {(file.size / 1_000_000).toFixed(1)} MB
         </p>
       )}
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center gap-2">
         <Button size="sm" disabled={pending || !file} onClick={submit}>
           <Upload className="size-4" /> {submitLabel}
         </Button>
-        <span className="text-xs text-muted-foreground">{feeLabel}</span>
       </div>
     </div>
   )

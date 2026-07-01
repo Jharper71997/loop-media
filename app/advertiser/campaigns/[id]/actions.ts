@@ -257,7 +257,8 @@ export async function replaceCreative(
 
   const admin = createAdminClient()
   const profile = await requireProfile()
-  const free = !process.env.STRIPE_SECRET_KEY || (await hasUnlimitedChanges(admin, profile.id))
+  // Creative changes are free for everyone — we don't charge to swap a creative.
+  const free = true
 
   // Record the change either way (audit + the webhook needs the row to apply).
   const { data: change, error: insErr } = await admin

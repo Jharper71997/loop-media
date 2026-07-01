@@ -13,10 +13,10 @@ export default async function SignupPage({
   const profile = await getProfile()
   if (profile) redirect(homeForRole(profile.role))
 
-  // Honor a ?role=host deep-link from the landing "Host a screen" link so the
-  // host card is preselected. Anything else (incl. the primary CTA) = advertiser.
+  // Signup is advertiser-only now. Hosts register their venue at /host/register,
+  // so bounce any legacy ?role=host link straight there.
   const { role } = await searchParams
-  const initialRole = role === 'host' ? 'host' : 'advertiser'
+  if (role === 'host') redirect('/host/register')
 
   // Advertisers pick their category here at signup (it's saved to their account),
   // so the buy flow never asks again. The categories table's RLS only grants SELECT
@@ -33,7 +33,7 @@ export default async function SignupPage({
         <Link href="/" className="mb-6 flex justify-center">
           <BrandLockup className="h-40 w-auto" />
         </Link>
-        <SignupForm initialRole={initialRole} categories={categories} />
+        <SignupForm categories={categories} />
       </div>
     </main>
   )
