@@ -39,6 +39,24 @@ export async function approveAd(id: string) {
   return { error: null }
 }
 
+// Fix/adjust an ad's scan destination during review, before it goes live. RLS
+// (admin_can_territory) scopes the write to the reviewing admin's territory.
+export async function setAdQrTarget(id: string, url: string) {
+  await requireAdmin()
+  const trimmed = url.trim()
+  if (trimmed && !/^https?:\/\//i.test(trimmed)) {
+    return { error: 'Enter a full URL starting with http:// or https://' }
+  }
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('ads')
+    .update({ qr_target_url: trimmed || null })
+    .eq('id', id)
+  if (error) return { error: error.message }
+  revalidatePath('/admin/queue')
+  return { error: null }
+}
+
 export async function rejectAd(id: string, reason: string) {
   const profile = await requireAdmin()
   const supabase = await createClient()

@@ -7,6 +7,7 @@ import { ImageOff } from 'lucide-react'
 import { formatDateTime } from '@/lib/format'
 import type { Ad } from '@/lib/db.types'
 import { ReviewButtons } from './ReviewButtons'
+import { QrTargetEditor } from './QrTargetEditor'
 
 type QueueAd = Ad & {
   owner: { full_name: string | null; email: string } | null
@@ -90,11 +91,7 @@ export default async function QueuePage() {
                     </Badge>
                     <span>{formatDateTime(ad.created_at)}</span>
                   </div>
-                  {ad.qr_target_url && (
-                    <div className="truncate text-xs text-muted-foreground">
-                      QR → {ad.qr_target_url}
-                    </div>
-                  )}
+                  <QrTargetEditor adId={ad.id} initialUrl={ad.qr_target_url} />
                   <div className="mt-auto pt-1">
                     <ReviewButtons id={ad.id} />
                   </div>
