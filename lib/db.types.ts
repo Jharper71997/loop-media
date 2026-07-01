@@ -84,6 +84,7 @@ export interface Venue {
   business_open: string | null
   business_close: string | null
   business_days: number[] | null
+  trivia_enabled: boolean
   created_at: string
   updated_at: string
 }

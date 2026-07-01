@@ -21,6 +21,7 @@ import { isVenueListable } from '@/lib/venue'
 import type { Category, Territory, Venue, PriceTier } from '@/lib/db.types'
 import { VenueDialog } from './VenueDialog'
 import { VisibilityToggle } from './VisibilityToggle'
+import { TriviaToggle } from './TriviaToggle'
 import { deleteVenue } from './actions'
 import { cn } from '@/lib/utils'
 
@@ -118,6 +119,7 @@ export default async function VenuesPage() {
               </div>
               <div className="mt-3 flex justify-end gap-1">
                 <VisibilityToggle id={v.id} active={v.status === 'active'} />
+                <TriviaToggle id={v.id} enabled={v.trivia_enabled} />
                 <VenueDialog
                   venue={v}
                   categories={cats}
@@ -195,6 +197,7 @@ export default async function VenuesPage() {
                   <TableCell>
                     <div className="flex justify-end gap-1">
                       <VisibilityToggle id={v.id} active={v.status === 'active'} />
+                      <TriviaToggle id={v.id} enabled={v.trivia_enabled} />
                       <VenueDialog
                         venue={v}
                         categories={cats}
