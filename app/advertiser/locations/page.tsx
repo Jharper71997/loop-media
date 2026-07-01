@@ -8,7 +8,6 @@ import { buttonVariants } from '@/components/ui/button'
 import { formatNumber, isTvLive } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { PERF_WINDOW_DAYS } from '@/lib/analytics'
-import type { QrPosition } from '@/lib/db.types'
 import { AdScreenPreview } from '@/components/app/AdScreenPreview'
 import AdsMap, { type AdsMapVenue } from '../AdsMap'
 
@@ -21,7 +20,7 @@ export default async function LocationsPage() {
   const { data: campsData } = await supabase
     .from('campaigns')
     .select(
-      'id, created_at, ad:ads(id, title, creative_url, creative_type, qr_target_url, qr_position)'
+      'id, created_at, ad:ads(id, title, creative_url, creative_type, qr_target_url, qr_x, qr_y)'
     )
     .eq('advertiser_id', profile.id)
     .eq('status', 'active')
@@ -33,7 +32,8 @@ export default async function LocationsPage() {
     creative_url: string | null
     creative_type: 'video' | 'image'
     qr_target_url: string | null
-    qr_position: QrPosition
+    qr_x: number | null
+    qr_y: number | null
   }
   type CampRow = { id: string; created_at: string; ad: Ad | null }
   const camps = (campsData ?? []) as unknown as CampRow[]
@@ -158,7 +158,8 @@ export default async function LocationsPage() {
                 creativeUrl={previewAd.creative_url}
                 creativeType={previewAd.creative_type}
                 qrUrl={previewAd.qr_target_url}
-                qrPosition={previewAd.qr_position}
+                qrX={previewAd.qr_x ?? 0.9}
+                qrY={previewAd.qr_y ?? 0.88}
               />
               <p className="text-xs text-muted-foreground">
                 This is exactly how your ad shows on the TVs, with your scan code in the corner.

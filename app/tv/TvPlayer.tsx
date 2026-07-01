@@ -13,18 +13,9 @@ import {
   Thermometer,
   type LucideIcon,
 } from 'lucide-react'
-import type { QrPosition } from '@/lib/db.types'
 
 const DEVICE_KEY = 'lm_device'
 
-// Maps an ad's chosen QR corner to the absolute-position classes for the overlay.
-// Full class names (not built by concatenation) so Tailwind keeps them.
-const QR_CORNER: Record<QrPosition, string> = {
-  'top-left': 'left-8 top-8',
-  'top-right': 'right-8 top-8',
-  'bottom-left': 'left-8 bottom-8',
-  'bottom-right': 'right-8 bottom-8',
-}
 const cacheKey = (d: string) => `lm_loop_${d}`
 
 type AdItem = {
@@ -36,7 +27,10 @@ type AdItem = {
   duration: number
   qr: string | null
   qr_image: string | null
-  qr_position?: QrPosition // which corner the QR sits in (older cached manifests omit it)
+  // Free-drag QR center as fractions [0,1] of the 16:9 frame (older cached
+  // manifests omit these — default to the old bottom-right spot).
+  qr_x?: number
+  qr_y?: number
 }
 
 type FillerCard = {
@@ -632,7 +626,12 @@ function Player({
           is the QR's required quiet zone so it still scans cleanly. */}
       {slide.kind === 'ad' && slide.qr_image && (
         <div
-          className={`absolute ${QR_CORNER[slide.qr_position ?? 'bottom-right']} rounded-xl bg-white p-1.5 ring-2 ring-primary`}
+          className="absolute rounded-xl bg-white p-1.5 ring-2 ring-primary"
+          style={{
+            left: `${(slide.qr_x ?? 0.9) * 100}%`,
+            top: `${(slide.qr_y ?? 0.88) * 100}%`,
+            transform: 'translate(-50%, -50%)',
+          }}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={slide.qr_image} alt="Scan" className="size-24 rounded-sm" />

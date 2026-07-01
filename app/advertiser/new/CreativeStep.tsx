@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, useTransition } from 'react'
+import { useEffect, useMemo, useRef, useState, useTransition, type CSSProperties } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Upload, Sparkles, MapPin } from 'lucide-react'
@@ -21,22 +21,67 @@ import { quoteCart, type QuoteOptions, type PricingConfig } from '@/lib/pricing'
 import { CART_KEY } from '../browse/BrowseClient'
 import { submitCampaign, type NewCampaignInput } from './actions'
 import type { CartVenue } from './types'
-import { cn } from '@/lib/utils'
-import type { QrPosition } from '@/lib/db.types'
 
-const QR_POSITIONS: { value: QrPosition; label: string }[] = [
-  { value: 'top-left', label: 'Top left' },
-  { value: 'top-right', label: 'Top right' },
-  { value: 'bottom-left', label: 'Bottom left' },
-  { value: 'bottom-right', label: 'Bottom right' },
-]
+// The exported creative is always rendered at 16:9 720p so the crop preview and
+// the offscreen-canvas export share one coordinate system (see computeDraw).
+const EXPORT_W = 1280
+const EXPORT_H = 720
 
-// Where the QR sits in the upload preview (smaller insets than the TV overlay).
-const QR_PREVIEW_CORNER: Record<QrPosition, string> = {
-  'top-left': 'left-2 top-2',
-  'top-right': 'right-2 top-2',
-  'bottom-left': 'left-2 bottom-2',
-  'bottom-right': 'right-2 bottom-2',
+// Free-drag QR default — the QR CENTER as fractions of the frame. Roughly
+// bottom-right, matching the old 'bottom-right' corner so placements don't jump.
+const QR_DEFAULT = { x: 0.9, y: 0.88 }
+
+// Filter presets are plain CSS filter strings. The SAME string is set on the
+// preview <img> (style.filter) and on the export canvas (ctx.filter), so what the
+// advertiser sees is what gets baked into the uploaded PNG.
+const FILTER_PRESETS = [
+  { value: 'none', label: 'None', css: '' },
+  { value: 'warm', label: 'Warm', css: 'sepia(0.35) saturate(1.25) hue-rotate(-12deg)' },
+  { value: 'bw', label: 'B&W', css: 'grayscale(1)' },
+  { value: 'vivid', label: 'Vivid', css: 'saturate(1.6) contrast(1.08)' },
+] as const
+type FilterPreset = (typeof FILTER_PRESETS)[number]['value']
+
+const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
+
+function buildFilter(preset: FilterPreset, brightness: number, contrast: number): string {
+  const base = FILTER_PRESETS.find((p) => p.value === preset)?.css ?? ''
+  return `${base} brightness(${brightness}%) contrast(${contrast}%)`.trim()
+}
+
+// Cover-fit the natural image into the WxH frame, then zoom about center and pan.
+// Returns the draw rect in frame pixels — used for BOTH the CSS preview (as % of
+// the frame) and the canvas export, so they line up exactly.
+function computeDraw(
+  nat: { w: number; h: number },
+  zoom: number,
+  pan: { x: number; y: number },
+  W: number,
+  H: number
+) {
+  const base = Math.max(W / nat.w, H / nat.h) // cover
+  const s = base * zoom
+  const dw = nat.w * s
+  const dh = nat.h * s
+  const dx = (W - dw) / 2 + pan.x * W
+  const dy = (H - dh) / 2 + pan.y * H
+  return { dx, dy, dw, dh }
+}
+
+// Keep the (zoomed) image fully covering the frame: pan is bounded by how much
+// the drawn image overhangs each edge (as a fraction of the frame).
+function clampPan(
+  nat: { w: number; h: number },
+  zoom: number,
+  pan: { x: number; y: number },
+  W: number,
+  H: number
+) {
+  const base = Math.max(W / nat.w, H / nat.h)
+  const s = base * zoom
+  const maxX = Math.max(0, (nat.w * s - W) / (2 * W))
+  const maxY = Math.max(0, (nat.h * s - H) / (2 * H))
+  return { x: clamp(pan.x, -maxX, maxX), y: clamp(pan.y, -maxY, maxY) }
 }
 
 export function CreativeStep({
@@ -67,11 +112,30 @@ export function CreativeStep({
   const [qrUrl, setQrUrl] = useState('')
   const [mode, setMode] = useState<'upload' | 'help'>('upload')
   const [file, setFile] = useState<File | null>(null)
-  const [qrPosition, setQrPosition] = useState<QrPosition>('bottom-right')
   const [fileUrl, setFileUrl] = useState<string | null>(null)
   const [qrPreview, setQrPreview] = useState<string | null>(null)
   const [brief, setBrief] = useState('')
   const [pending, start] = useTransition()
+
+  // Free-drag QR center (fractions of the frame).
+  const [qrX, setQrX] = useState(QR_DEFAULT.x)
+  const [qrY, setQrY] = useState(QR_DEFAULT.y)
+
+  // Photo editor (images only). nat = natural pixel size once the image loads.
+  const [nat, setNat] = useState<{ w: number; h: number } | null>(null)
+  const [zoom, setZoom] = useState(1)
+  const [pan, setPan] = useState({ x: 0, y: 0 })
+  const [brightness, setBrightness] = useState(100)
+  const [contrast, setContrast] = useState(100)
+  const [preset, setPreset] = useState<FilterPreset>('none')
+
+  const frameRef = useRef<HTMLDivElement>(null)
+  const qrChipRef = useRef<HTMLDivElement>(null)
+  const qrDragRef = useRef(false)
+  const panDragRef = useRef<{ px: number; py: number; panX: number; panY: number } | null>(null)
+
+  const isVideo = !!file && file.type.startsWith('video')
+  const filterStr = buildFilter(preset, brightness, contrast)
 
   useEffect(() => {
     try {
@@ -80,8 +144,15 @@ export function CreativeStep({
     } catch {}
   }, [])
 
-  // Local object URL for the chosen file, so we can preview it (revoked on change).
+  // Local object URL for the chosen file, so we can preview it (revoked on
+  // change). Also resets the photo editor whenever the file changes.
   useEffect(() => {
+    setZoom(1)
+    setPan({ x: 0, y: 0 })
+    setBrightness(100)
+    setContrast(100)
+    setPreset('none')
+    setNat(null)
     if (!file) {
       setFileUrl(null)
       return
@@ -126,6 +197,101 @@ export function CreativeStep({
   const territoryId = cart[0]?.territoryId ?? ''
   const totalWithCreative = quote.totalCents + (mode === 'help' ? CREATIVE_REFRESH_CENTS : 0)
 
+  // Drag the QR chip anywhere; clamp so the whole chip stays inside the frame.
+  function onQrDown(e: React.PointerEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    e.currentTarget.setPointerCapture(e.pointerId)
+    qrDragRef.current = true
+  }
+  function onQrMove(e: React.PointerEvent) {
+    if (!qrDragRef.current) return
+    const frame = frameRef.current
+    if (!frame) return
+    const r = frame.getBoundingClientRect()
+    const chip = qrChipRef.current
+    const halfW = chip ? chip.offsetWidth / 2 / r.width : 0.06
+    const halfH = chip ? chip.offsetHeight / 2 / r.height : 0.06
+    setQrX(clamp((e.clientX - r.left) / r.width, halfW, 1 - halfW))
+    setQrY(clamp((e.clientY - r.top) / r.height, halfH, 1 - halfH))
+  }
+  function onQrUp(e: React.PointerEvent) {
+    qrDragRef.current = false
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    } catch {}
+  }
+
+  // Drag the photo to pan (images only); offsets are fractions of the frame.
+  function onPanDown(e: React.PointerEvent) {
+    if (!nat) return
+    e.preventDefault()
+    e.currentTarget.setPointerCapture(e.pointerId)
+    panDragRef.current = { px: e.clientX, py: e.clientY, panX: pan.x, panY: pan.y }
+  }
+  function onPanMove(e: React.PointerEvent) {
+    const d = panDragRef.current
+    if (!d || !nat) return
+    const frame = frameRef.current
+    if (!frame) return
+    const r = frame.getBoundingClientRect()
+    const nx = d.panX + (e.clientX - d.px) / r.width
+    const ny = d.panY + (e.clientY - d.py) / r.height
+    setPan(clampPan(nat, zoom, { x: nx, y: ny }, EXPORT_W, EXPORT_H))
+  }
+  function onPanUp(e: React.PointerEvent) {
+    panDragRef.current = null
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    } catch {}
+  }
+
+  function onZoomChange(z: number) {
+    setZoom(z)
+    if (nat) setPan((p) => clampPan(nat, z, p, EXPORT_W, EXPORT_H))
+  }
+
+  // Inline style that places the photo in the frame using the SAME math as the
+  // canvas export (expressed as % of the frame). maxWidth:none lets zoom > 1
+  // overflow past the frame width (clipped by the container's overflow-hidden).
+  const draw = nat ? computeDraw(nat, zoom, pan, EXPORT_W, EXPORT_H) : null
+  const imgStyle: CSSProperties = draw
+    ? {
+        position: 'absolute',
+        left: `${(draw.dx / EXPORT_W) * 100}%`,
+        top: `${(draw.dy / EXPORT_H) * 100}%`,
+        width: `${(draw.dw / EXPORT_W) * 100}%`,
+        height: `${(draw.dh / EXPORT_H) * 100}%`,
+        maxWidth: 'none',
+        filter: filterStr,
+      }
+    : { position: 'absolute', inset: 0, width: '100%', height: '100%', filter: filterStr }
+
+  // Composite the cropped + filtered photo to a 1280x720 PNG. The QR is NEVER
+  // baked in (the TV draws a tracked QR at play time) — only the photo is drawn.
+  async function exportImageBlob(src: string): Promise<Blob> {
+    const img = await new Promise<HTMLImageElement>((res, rej) => {
+      const im = new window.Image()
+      im.onload = () => res(im)
+      im.onerror = () => rej(new Error('Could not read image.'))
+      im.src = src
+    })
+    const dims = { w: img.naturalWidth, h: img.naturalHeight }
+    const canvas = document.createElement('canvas')
+    canvas.width = EXPORT_W
+    canvas.height = EXPORT_H
+    const ctx = canvas.getContext('2d')
+    if (!ctx) throw new Error('Canvas is not available.')
+    ctx.fillStyle = '#000000'
+    ctx.fillRect(0, 0, EXPORT_W, EXPORT_H)
+    ctx.filter = filterStr // same string as the preview img
+    const d = computeDraw(dims, zoom, pan, EXPORT_W, EXPORT_H)
+    ctx.drawImage(img, d.dx, d.dy, d.dw, d.dh)
+    const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'))
+    if (!blob) throw new Error('Could not render image.')
+    return blob
+  }
+
   function onSubmit() {
     if (cart.length === 0) return toast.error('Your cart is empty. Pick screens first.')
     if (!title.trim()) return toast.error('Give your ad a title.')
@@ -140,15 +306,31 @@ export function CreativeStep({
 
       if (mode === 'upload' && file) {
         const supabase = createClient()
-        const ext = file.name.split('.').pop() ?? 'bin'
+        // Images are composited (crop + zoom + pan + filter) to a PNG and that is
+        // uploaded; videos upload raw. The QR stays a render-time overlay either way.
+        let blob: Blob = file
+        let ext = file.name.split('.').pop() ?? 'bin'
+        let contentType = file.type
+        if (!isVideo && fileUrl) {
+          try {
+            blob = await exportImageBlob(fileUrl)
+          } catch (e) {
+            toast.error(e instanceof Error ? e.message : 'Could not process image.')
+            return
+          }
+          ext = 'png'
+          contentType = 'image/png'
+        }
         const path = `${userId}/${crypto.randomUUID()}.${ext}`
-        const { error: upErr } = await supabase.storage.from('creatives').upload(path, file)
+        const { error: upErr } = await supabase.storage
+          .from('creatives')
+          .upload(path, blob, { contentType })
         if (upErr) {
           toast.error(`Upload failed: ${upErr.message}`)
           return
         }
         creative_url = supabase.storage.from('creatives').getPublicUrl(path).data.publicUrl
-        creative_type = file.type.startsWith('video') ? 'video' : 'image'
+        creative_type = isVideo ? 'video' : 'image'
       }
 
       const input: NewCampaignInput = {
@@ -157,7 +339,8 @@ export function CreativeStep({
         category_id: categoryId,
         title,
         qr_target_url: qrUrl.trim(),
-        qr_position: qrPosition,
+        qr_x: qrX,
+        qr_y: qrY,
         creative_type,
         creative_url,
         creative_help_brief: mode === 'help' ? brief : null,
@@ -267,10 +450,14 @@ export function CreativeStep({
             {file && fileUrl && (
               <div className="space-y-3 pt-1">
                 <p className="text-xs text-muted-foreground">
-                  Preview — this is how your ad shows on screen.
+                  Preview — this is how your ad shows on screen. Drag the code anywhere
+                  {!isVideo ? ', and drag the photo to reposition it' : ''}.
                 </p>
-                <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-black">
-                  {file.type.startsWith('video') ? (
+                <div
+                  ref={frameRef}
+                  className="relative aspect-video w-full touch-none overflow-hidden rounded-lg bg-black select-none"
+                >
+                  {isVideo ? (
                     <video
                       src={fileUrl}
                       className="h-full w-full object-contain"
@@ -281,40 +468,120 @@ export function CreativeStep({
                     />
                   ) : (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={fileUrl} alt="Ad preview" className="h-full w-full object-contain" />
+                    <img
+                      src={fileUrl}
+                      alt="Ad preview"
+                      draggable={false}
+                      onLoad={(e) =>
+                        setNat({
+                          w: e.currentTarget.naturalWidth,
+                          h: e.currentTarget.naturalHeight,
+                        })
+                      }
+                      onPointerDown={onPanDown}
+                      onPointerMove={onPanMove}
+                      onPointerUp={onPanUp}
+                      onPointerCancel={onPanUp}
+                      className="cursor-grab touch-none select-none active:cursor-grabbing"
+                      style={imgStyle}
+                    />
                   )}
                   {qrUrl.trim() && (
                     <div
-                      className={cn(
-                        'absolute rounded-md bg-white p-1 ring-2 ring-[#d4af37]',
-                        QR_PREVIEW_CORNER[qrPosition]
-                      )}
+                      ref={qrChipRef}
+                      onPointerDown={onQrDown}
+                      onPointerMove={onQrMove}
+                      onPointerUp={onQrUp}
+                      onPointerCancel={onQrUp}
+                      className="absolute cursor-grab touch-none rounded-md bg-white p-1 ring-2 ring-[#d4af37] active:cursor-grabbing"
+                      style={{
+                        left: `${qrX * 100}%`,
+                        top: `${qrY * 100}%`,
+                        transform: 'translate(-50%, -50%)',
+                      }}
                     >
                       {qrPreview ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={qrPreview} alt="QR preview" className="size-12 rounded-sm" />
+                        <img
+                          src={qrPreview}
+                          alt="QR preview"
+                          draggable={false}
+                          className="size-12 rounded-sm"
+                        />
                       ) : (
                         <div className="size-12 rounded-sm bg-muted" />
                       )}
                     </div>
                   )}
                 </div>
-                <div className="space-y-1.5">
-                  <Label>QR code position</Label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {QR_POSITIONS.map((p) => (
-                      <Button
-                        key={p.value}
-                        type="button"
-                        variant={qrPosition === p.value ? 'secondary' : 'outline'}
-                        className="h-10"
-                        onClick={() => setQrPosition(p.value)}
-                      >
-                        {p.label}
-                      </Button>
-                    ))}
+
+                {!isVideo && (
+                  <div className="space-y-4">
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <Label>Zoom</Label>
+                        <span className="text-xs text-muted-foreground">{zoom.toFixed(1)}×</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={1}
+                        max={3}
+                        step={0.01}
+                        value={zoom}
+                        onChange={(e) => onZoomChange(Number(e.target.value))}
+                        className="h-2 w-full cursor-pointer accent-primary"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <Label>Brightness</Label>
+                          <span className="text-xs text-muted-foreground">{brightness}%</span>
+                        </div>
+                        <input
+                          type="range"
+                          min={50}
+                          max={150}
+                          step={1}
+                          value={brightness}
+                          onChange={(e) => setBrightness(Number(e.target.value))}
+                          className="h-2 w-full cursor-pointer accent-primary"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <Label>Contrast</Label>
+                          <span className="text-xs text-muted-foreground">{contrast}%</span>
+                        </div>
+                        <input
+                          type="range"
+                          min={50}
+                          max={150}
+                          step={1}
+                          value={contrast}
+                          onChange={(e) => setContrast(Number(e.target.value))}
+                          className="h-2 w-full cursor-pointer accent-primary"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Filter</Label>
+                      <div className="grid grid-cols-4 gap-2">
+                        {FILTER_PRESETS.map((p) => (
+                          <Button
+                            key={p.value}
+                            type="button"
+                            variant={preset === p.value ? 'secondary' : 'outline'}
+                            className="h-10"
+                            onClick={() => setPreset(p.value)}
+                          >
+                            {p.label}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             )}
           </div>
