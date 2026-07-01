@@ -58,6 +58,17 @@ export async function saveVenue(input: VenueInput) {
   return { error: null }
 }
 
+// Turn the phone-trivia game on/off for a venue's screens. Off by default — the
+// TV loop only shows trivia (and mints a play_code) where it's been enabled.
+export async function setVenueTrivia(id: string, enabled: boolean) {
+  await requireAdmin()
+  const supabase = await createClient()
+  const { error } = await supabase.from('venues').update({ trivia_enabled: enabled }).eq('id', id)
+  if (error) return { error: error.message }
+  revalidatePath('/admin/venues')
+  return { error: null }
+}
+
 // Show/hide a venue. Inactive venues are grayed out in admin and hidden from
 // the advertiser map — use it to stage a location that isn't ready yet.
 export async function setVenueStatus(id: string, status: 'active' | 'inactive') {

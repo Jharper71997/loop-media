@@ -24,7 +24,7 @@ export async function GET(req: Request) {
   const supabase = createAdminClient()
   const { data: tvRow } = await supabase
     .from('tvs')
-    .select('id, loop_length_seconds, slot_seconds, venue:venues(id, name, lat, lng, play_code, territory:territories(id, name))')
+    .select('id, loop_length_seconds, slot_seconds, venue:venues(id, name, lat, lng, play_code, trivia_enabled, territory:territories(id, name))')
     .eq('device_id', device)
     .maybeSingle()
 
@@ -42,6 +42,7 @@ export async function GET(req: Request) {
       lat: number | null
       lng: number | null
       play_code: string | null
+      trivia_enabled: boolean | null
       territory: { id: string; name: string } | null
     } | null
   }
@@ -124,12 +125,12 @@ export async function GET(req: Request) {
       .map((f) => ({ type: f.type, payload: f.payload }))
   }
 
-  // Every venue needs a play_code so the phone-trivia join link works and the
-  // TV shows the trivia slide. The 0028 migration only backfilled venues that
-  // existed then — any venue created since has none. Mint one lazily and persist
-  // it (idempotent: only sets when still null, then reads back the live value so
-  // a concurrent request's code wins cleanly).
-  if (tv.venue && !tv.venue.play_code) {
+  // A TRIVIA-ENABLED venue needs a play_code so the phone-trivia join link works
+  // and the TV shows the trivia slide. Mint one lazily the first time trivia is
+  // turned on here (idempotent: only sets when still null, then reads back the
+  // live value so a concurrent request's code wins cleanly). Trivia-off venues
+  // get no code and no trivia slide.
+  if (tv.venue?.trivia_enabled && !tv.venue.play_code) {
     await supabase
       .from('venues')
       .update({ play_code: genPairingCode() })
@@ -143,9 +144,9 @@ export async function GET(req: Request) {
     tv.venue.play_code = vp?.play_code ?? null
   }
 
-  // Trivia join QR for the on-screen "play trivia" slide.
+  // Trivia join QR for the on-screen "play trivia" slide — only where trivia is on.
   let trivia: { code: string; url: string; qr_image: string } | null = null
-  if (tv.venue?.play_code) {
+  if (tv.venue?.trivia_enabled && tv.venue?.play_code) {
     const playUrl = `${base}/play/${tv.venue.play_code}`
     trivia = {
       code: tv.venue.play_code,
