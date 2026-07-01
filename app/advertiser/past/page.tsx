@@ -4,7 +4,7 @@ import { requireProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { Card, CardContent } from '@/components/ui/card'
 import { formatNumber, formatCents } from '@/lib/format'
-import { estImpressionsPerMonth, type RunningVenue } from '@/lib/analytics'
+import { type RunningVenue } from '@/lib/analytics'
 
 // "Past campaigns" — archived campaigns the advertiser ended, with a recap of
 // how each performed. Unlike the live detail page, this reconstructs the run
@@ -116,7 +116,6 @@ export default async function PastCampaignsPage() {
           {campaigns.map((c) => {
             const venues = venuesByCampaign.get(c.id) ?? []
             const screens = venues.reduce((s, v) => s + v.tvIds.length, 0)
-            const estImpressions = estImpressionsPerMonth(venues)
             const scans = scansByCampaign.get(c.id) ?? 0
             return (
               <Link key={c.id} href={`/advertiser/campaigns/${c.id}`}>
@@ -141,9 +140,8 @@ export default async function PastCampaignsPage() {
                         {fmtDate(c.created_at)} – {fmtDate(c.archived_at)}
                       </div>
 
-                      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                      <div className="mt-3 grid grid-cols-3 gap-3">
                         <Stat label="Screens" value={formatNumber(screens)} />
-                        <Stat label="Est. impressions / mo" value={formatNumber(estImpressions)} />
                         <Stat label="QR scans (total)" value={formatNumber(scans)} />
                         <Stat
                           label="Monthly cost"

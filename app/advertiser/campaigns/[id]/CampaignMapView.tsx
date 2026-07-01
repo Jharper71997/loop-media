@@ -50,7 +50,6 @@ export default function CampaignMapView({
           >
             <Popup>
               <strong>{v.name}</strong>
-              <br />~{formatNumber(v.footTraffic)} est. ad views/mo
               <br />
               {formatNumber(v.scans)} QR scans (30d)
             </Popup>

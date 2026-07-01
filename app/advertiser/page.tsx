@@ -200,7 +200,6 @@ export default async function AdvertiserDashboard({
   const monthlySpend = campaigns
     .filter((c) => c.status === 'active')
     .reduce((s, c) => s + (c.monthly_total_cents ?? 0), 0)
-  const estReach = playingVenues.reduce((s, v) => s + v.footTraffic, 0)
 
   const credits = loyaltyCredits({
     monthsActive: ctx.monthsActive,
@@ -272,9 +271,8 @@ export default async function AdvertiserDashboard({
       ) : (
         <>
           {/* Command-center roll-up: the paying customer's numbers at a glance. */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <StatTile label="Locations" value={formatNumber(playingVenues.length)} />
-            <StatTile label="Est. reach / mo" value={formatNumber(estReach)} />
             <StatTile label={`Scans · ${PERF_WINDOW_DAYS}d`} value={formatNumber(scans30d)} />
             <StatTile label="Spend / mo" value={formatCents(monthlySpend)} />
           </div>

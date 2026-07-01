@@ -10,7 +10,6 @@ import { cn } from '@/lib/utils'
 import {
   dailySeries,
   locationRows,
-  estImpressionsPerMonth,
   PERF_WINDOW_DAYS,
   type RunningVenue,
   type ScanRow,
@@ -83,7 +82,6 @@ export default async function ResultsPage() {
 
   const series = dailySeries(venues, scans)
   const rows = locationRows(venues, scans)
-  const reach = estImpressionsPerMonth(venues)
   const totalScans = scans.length
   const maxScans = Math.max(1, ...series.map((d) => d.scans))
 
@@ -105,8 +103,7 @@ export default async function ResultsPage() {
               <BarChart3 className="size-6 text-primary" />
             </span>
             <p className="max-w-xs text-sm text-muted-foreground">
-              Once a campaign is live, your reach, scans, and best-performing locations show up
-              here.
+              Once a campaign is live, your scans and best-performing locations show up here.
             </p>
             <Link href="/advertiser/browse" className={cn(buttonVariants(), 'h-11')}>
               <Plus className="size-4" /> Start a campaign
@@ -115,12 +112,9 @@ export default async function ResultsPage() {
         </Card>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <div className="rounded-xl border border-border bg-card/60 px-4 py-3.5">
               <MoneyStat label="Locations" value={formatNumber(venues.length)} />
-            </div>
-            <div className="rounded-xl border border-border bg-card/60 px-4 py-3.5">
-              <MoneyStat label="Est. reach / mo" value={formatNumber(reach)} />
             </div>
             <div className="rounded-xl border border-border bg-card/60 px-4 py-3.5">
               <MoneyStat label={`Scans · ${PERF_WINDOW_DAYS}d`} value={formatNumber(totalScans)} />
@@ -173,15 +167,12 @@ export default async function ResultsPage() {
                         <span className="ml-1 text-xs font-normal text-muted-foreground">scans</span>
                       </span>
                     </div>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      ~{formatNumber(r.estPerMonth)} est. views / mo
-                    </p>
                   </div>
                 ))}
               </CardContent>
             </Card>
             <p className="text-xs text-muted-foreground">
-              Views are an estimate of how many people pass your ad. QR scans are measured.
+              QR scans are measured — each one is a real person who scanned your on-screen code.
             </p>
           </section>
         </>

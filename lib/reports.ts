@@ -183,7 +183,7 @@ export function renderReportHtml(r: CampaignReport, appUrl: string): string {
           <td style="padding:10px 0;border-top:1px solid #27272a;">
             <div style="font-weight:600;color:#fafafa;font-size:14px;">${escapeHtml(loc.name)}</div>
             <div style="margin-top:4px;color:#a1a1aa;font-size:12px;">
-              ~${formatNumber(loc.estPerMonth)} estimated views &nbsp;&middot;&nbsp; ${formatNumber(loc.scans)} QR scans
+              ${formatNumber(loc.scans)} QR scans
             </div>
           </td>
         </tr>`
@@ -209,12 +209,7 @@ export function renderReportHtml(r: CampaignReport, appUrl: string): string {
 
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
               <tr>
-                <td width="50%" style="padding:14px;background:#111113;border:1px solid #27272a;border-radius:10px;">
-                  <div style="color:#71717a;font-size:12px;">Estimated views</div>
-                  <div style="margin-top:4px;color:#fafafa;font-size:24px;font-weight:700;">${formatNumber(r.estImpressions)}</div>
-                </td>
-                <td style="width:12px;"></td>
-                <td width="50%" style="padding:14px;background:#111113;border:1px solid #27272a;border-radius:10px;">
+                <td style="padding:14px;background:#111113;border:1px solid #27272a;border-radius:10px;">
                   <div style="color:#71717a;font-size:12px;">QR scans</div>
                   <div style="margin-top:4px;color:#fafafa;font-size:24px;font-weight:700;">${formatNumber(r.totalScans)}</div>
                 </td>
@@ -233,7 +228,7 @@ export function renderReportHtml(r: CampaignReport, appUrl: string): string {
             </div>
 
             <p style="margin:22px 0 0;color:#52525b;font-size:11px;line-height:1.5;">
-              Estimated views are a projection from each venue's monthly foot traffic. QR scans are measured. Numbers reflect the screens your ad is currently running on.
+              QR scans are measured — each one is a real person who scanned your on-screen code. Numbers reflect the screens your ad is currently running on.
             </p>
           </td>
         </tr>
