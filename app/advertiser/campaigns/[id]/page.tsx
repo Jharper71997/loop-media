@@ -9,7 +9,6 @@ import type { Ad, Campaign } from '@/lib/db.types'
 import {
   dailySeries,
   locationRows,
-  estImpressionsPerMonth,
   venuesCenter,
   PERF_WINDOW_DAYS,
   type RunningVenue,
@@ -157,7 +156,6 @@ export default async function CampaignDetail({
     scans = (scanData ?? []) as ScanRow[]
   }
 
-  const estImpressions = estImpressionsPerMonth(venues)
   const locations = venues.length
   const totalScans = scans.length
 
@@ -187,7 +185,6 @@ export default async function CampaignDetail({
 
   const firstVenueName = venues[0]?.name ?? null
   const isLive = c.status === 'active' && (adStatus === 'approved' || adStatus === 'active')
-  const noResultsYet = totalScans === 0
   // Don't apologize for an SLA miss on a brand-new campaign — a screen can't miss
   // a monthly uptime guarantee in its first few days of running.
   const campaignAgeDays = c.created_at
@@ -240,7 +237,7 @@ export default async function CampaignDetail({
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_1.4fr]">
+      <div className="space-y-6">
         {/* Creative */}
         <Card className="overflow-hidden">
           <div className="flex aspect-video items-center justify-center bg-black">
@@ -288,16 +285,10 @@ export default async function CampaignDetail({
                 </span>
               </div>
             )}
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 gap-3">
               <Stat label="QR scans" sub={`measured · ${PERF_WINDOW_DAYS}d`} value={totalScans} accent />
-              <Stat label="Est. reach" sub="per month" value={estImpressions} />
               <Stat label="Screens" sub="live" value={locations} />
             </div>
-            {noResultsYet && (
-              <p className="text-xs text-muted-foreground">
-                Your ad is running. QR scans and daily views show up here as people see it.
-              </p>
-            )}
           </CardContent>
         </Card>
       </div>
@@ -365,10 +356,6 @@ export default async function CampaignDetail({
                             {formatNumber(r.scans)}{' '}
                             <span className="text-muted-foreground/70">scans · 30d</span>
                           </span>
-                          <span>
-                            ~{formatNumber(r.estPerMonth)}{' '}
-                            <span className="text-muted-foreground/70">est. views/mo</span>
-                          </span>
                           {u && u.hasData && (
                             <span className={u.breach ? 'text-warning' : ''}>
                               {formatUptimePct(u.pct)}{' '}
@@ -385,7 +372,7 @@ export default async function CampaignDetail({
           )}
 
           <p className="text-xs text-muted-foreground">
-            QR scans are measured. Reach is an estimate of how many times your ad is seen.
+            QR scans are measured — each one is a real person who scanned your on-screen code.
           </p>
         </div>
       )}
