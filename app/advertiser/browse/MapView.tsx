@@ -30,6 +30,7 @@ export default function MapView({
   onToggle,
   onNotify,
   userLoc,
+  frameBounds,
 }: {
   venues: BrowseVenue[]
   cart: string[]
@@ -39,13 +40,18 @@ export default function MapView({
   // The advertiser's own location (from the browser). When set, the map frames
   // around it and drops a "you're here" pin so nearby screens read at a glance.
   userLoc?: [number, number] | null
+  // A ~25mi box [[swLat,swLng],[neLat,neLng]] to frame the initial view on. Every
+  // venue below still renders as a marker, so zooming out reveals the whole
+  // network — the box only sets where the map opens. Null → frame all venues.
+  frameBounds?: [[number, number], [number, number]] | null
 }) {
   const venuePoints = venues
     .filter((v) => v.lat != null && v.lng != null)
     .map((v) => [v.lat as number, v.lng as number] as [number, number])
-  // Include the advertiser's own pin in the framing so the map zooms to their
-  // area (with the nearby screens around it), not the whole network.
-  const points = userLoc ? [userLoc, ...venuePoints] : venuePoints
+  // Default the viewport to the advertiser's ~25mi box when we have it; otherwise
+  // frame all venues (national when there's no location). Markers are unaffected.
+  const framePoints: [number, number][] =
+    frameBounds ?? (userLoc ? [userLoc, ...venuePoints] : venuePoints)
   return (
     <MapContainer
       center={US_CENTER}
@@ -54,7 +60,7 @@ export default function MapView({
       className="h-[40vh] min-h-64 w-full overflow-hidden rounded-xl lg:h-[calc(100dvh-9rem)]"
     >
       <TileLayer attribution={MAP_TILE_ATTRIBUTION} url={MAP_TILE_URL} />
-      <MapFitBounds points={points} />
+      <MapFitBounds points={framePoints} />
       {userLoc && (
         <>
           {/* Soft halo so the advertiser's own pin reads as "here", distinct from

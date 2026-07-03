@@ -203,10 +203,10 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
       <div className="space-y-6 p-5 md:p-6">
         <AutoRefresh seconds={20} />
         <Link
-          href="/admin/tvs"
+          href="/admin/venues"
           className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
         >
-          <ArrowLeft className="size-4" /> All TVs
+          <ArrowLeft className="size-4" /> Venues & screens
         </Link>
 
         {/* Status + live metrics */}

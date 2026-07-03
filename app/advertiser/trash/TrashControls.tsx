@@ -20,8 +20,10 @@ export function RestoreButton({ id }: { id: string }) {
           const res = await restoreCampaign(id)
           if (res.error) toast.error(res.error)
           else {
-            toast.success('Restored to your campaigns')
-            router.refresh()
+            // Land them on the campaign, where "Relaunch & pay" brings it live
+            // again (a restored campaign comes back canceled — billing stayed off).
+            toast.success('Restored — relaunch it to go live again')
+            router.push(`/advertiser/campaigns/${id}`)
           }
         })
       }

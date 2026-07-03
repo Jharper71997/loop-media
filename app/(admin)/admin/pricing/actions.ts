@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { requireAdmin, isGlobalAdmin } from '@/lib/auth'
-import type { PriceTier } from '@/lib/pricing'
+import { DEFAULT_PRICING_CONFIG, type PriceTier } from '@/lib/pricing'
 
 const TIER_COLUMN: Record<PriceTier, string> = {
   local: 'local_price_cents',
@@ -27,10 +27,36 @@ async function updateConfig(patch: Record<string, number>) {
   if (!isGlobalAdmin(profile))
     return { error: 'Only a network (Holdings) admin can change global pricing.' }
   const supabase = await createClient()
+
+  // Read-modify-write upsert. A bare .update().eq('id','default') silently
+  // matches 0 rows when the pricing_config row doesn't exist yet (fresh
+  // deployment), so edits vanished. Read the current row (or fall back to the
+  // code default — flat $50), then upsert a COMPLETE row so a first write can't
+  // inherit the table's column DEFAULTS for the fields we didn't touch.
+  const { data: existing } = await supabase
+    .from('pricing_config')
+    .select('*')
+    .eq('id', 'default')
+    .maybeSingle()
+
+  const d = DEFAULT_PRICING_CONFIG
+  const base = existing ?? {
+    local_price_cents: d.tierPriceCents.local,
+    standard_price_cents: d.tierPriceCents.standard,
+    high_price_cents: d.tierPriceCents.high,
+    premium_price_cents: d.tierPriceCents.premium,
+    min_monthly_cents: d.minMonthlyCents,
+    host_discount_pct: d.hostDiscount,
+    loyalty_12mo_discount_pct: d.loyalty12moDiscount,
+    max_discount_pct: d.maxDiscount,
+  }
+
   const { error } = await supabase
     .from('pricing_config')
-    .update({ ...patch, updated_at: new Date().toISOString() })
-    .eq('id', 'default')
+    .upsert(
+      { ...base, ...patch, id: 'default', updated_at: new Date().toISOString() },
+      { onConflict: 'id' }
+    )
   if (error) return { error: error.message }
   return done()
 }

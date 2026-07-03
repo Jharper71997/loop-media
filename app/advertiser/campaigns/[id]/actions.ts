@@ -234,6 +234,88 @@ export async function resumeCheckout(
   }
 }
 
+// Relaunch a CANCELED (or restored-from-Trash) campaign. Cancel/trash/archive
+// cancels the Stripe subscription outright, so the old billing is dead — bringing
+// the ad back requires a NEW payment, not a resume. This mints a fresh monthly
+// subscription Checkout for the frozen total; the webhook flips the campaign +
+// subscription back to active and re-places the ad on payment. Because the cancel
+// paused the ad, we clear that here so the placement engine (which only runs an
+// APPROVED ad) fires the moment payment lands. Demo/no-Stripe relaunches for free.
+export async function relaunchCampaign(
+  id: string,
+  basePath?: string
+): Promise<{ error?: string; checkoutUrl?: string; demo?: boolean }> {
+  const owned = await ownCampaign(id)
+  if (!owned) return { error: 'Campaign not found.' }
+  const profile = await requireProfile()
+  const admin = createAdminClient()
+
+  const { data: campaign } = await admin
+    .from('campaigns')
+    .select('id, status, monthly_total_cents, ad_id')
+    .eq('id', id)
+    .maybeSingle()
+  if (!campaign) return { error: 'Campaign not found.' }
+  if (campaign.status === 'active') return { error: 'This campaign is already live.' }
+  if (!campaign.monthly_total_cents || campaign.monthly_total_cents <= 0)
+    return { error: 'This campaign has no amount to charge. Start a new one.' }
+
+  // A previously-approved ad was paused when the campaign was canceled; approve it
+  // again so activatePlacementsIfReady runs after payment. Guarded to 'paused' so
+  // a still-pending or rejected ad isn't silently pushed live.
+  if (campaign.ad_id)
+    await admin
+      .from('ads')
+      .update({ status: 'approved' })
+      .eq('id', campaign.ad_id)
+      .eq('status', 'paused')
+
+  // Demo / no-Stripe: relaunch immediately with no charge (mirrors submitCampaign).
+  if (!process.env.STRIPE_SECRET_KEY) {
+    await admin.from('campaigns').update({ status: 'active' }).eq('id', id)
+    await admin.from('subscriptions').update({ status: 'active' }).eq('campaign_id', id)
+    await activatePlacementsIfReady(id, admin)
+    revalidate(id)
+    return { demo: true }
+  }
+
+  const { data: sub } = await admin
+    .from('subscriptions')
+    .select('id')
+    .eq('campaign_id', id)
+    .maybeSingle()
+
+  const base = appUrl()
+  const pathPrefix = basePath === '/host/advertise' ? '/host/advertise' : '/advertiser'
+  try {
+    const session = await stripe().checkout.sessions.create({
+      mode: 'subscription',
+      customer_email: profile.email,
+      line_items: [
+        {
+          quantity: 1,
+          price_data: {
+            currency: 'usd',
+            unit_amount: campaign.monthly_total_cents,
+            recurring: { interval: 'month' },
+            product_data: { name: 'Loop Network: monthly ad placement' },
+          },
+        },
+      ],
+      metadata: {
+        campaign_id: campaign.id,
+        subscription_id: sub?.id ?? '',
+        advertiser_id: profile.id,
+      },
+      success_url: `${base}${pathPrefix}/campaigns/${campaign.id}?checkout=success`,
+      cancel_url: `${base}${pathPrefix}/campaigns/${campaign.id}?checkout=canceled`,
+    })
+    return { checkoutUrl: session.url ?? undefined }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Stripe checkout failed.' }
+  }
+}
+
 // Swap the creative on an existing campaign. The new file is uploaded client-side
 // to the `creatives` bucket; here we route it through the ad-change policy:
 //

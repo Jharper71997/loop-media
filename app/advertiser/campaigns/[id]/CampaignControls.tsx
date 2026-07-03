@@ -9,7 +9,7 @@ import { Button, buttonVariants } from '@/components/ui/button'
 import { ConfirmButton } from '@/components/app/ConfirmButton'
 import { useBasePath, homeFor } from '@/lib/useBasePath'
 import { cn } from '@/lib/utils'
-import { pauseCampaign, resumeCampaign, trashCampaign, archiveCampaign, resumeCheckout } from './actions'
+import { pauseCampaign, resumeCampaign, trashCampaign, archiveCampaign, resumeCheckout, relaunchCampaign } from './actions'
 
 export function CampaignControls({ id, status }: { id: string; status: string }) {
   const router = useRouter()
@@ -39,11 +39,29 @@ export function CampaignControls({ id, status }: { id: string; status: string })
       else if (res.checkoutUrl) window.location.href = res.checkoutUrl
     })
 
+  // Canceled/restored campaign: the old subscription is dead, so going live again
+  // means a fresh payment. Send them to Checkout (or relaunch free in demo mode).
+  const relaunch = () =>
+    start(async () => {
+      const res = await relaunchCampaign(id, base)
+      if (res.error) toast.error(res.error)
+      else if (res.checkoutUrl) window.location.href = res.checkoutUrl
+      else if (res.demo) {
+        toast.success('Campaign relaunched (demo mode — no payment).')
+        router.refresh()
+      }
+    })
+
   return (
     <div className="flex flex-wrap gap-2">
       {status === 'draft' && (
         <Button disabled={pending} onClick={resume}>
           <CreditCard className="size-4" /> Resume payment
+        </Button>
+      )}
+      {status === 'canceled' && (
+        <Button disabled={pending} onClick={relaunch}>
+          <CreditCard className="size-4" /> Relaunch & pay
         </Button>
       )}
       {/* Add more screens to this live campaign (prorated). Advertiser shell only

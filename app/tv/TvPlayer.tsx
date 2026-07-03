@@ -44,6 +44,7 @@ type Manifest = {
   items: AdItem[]
   filler?: FillerCard[]
   trivia?: { code: string; url: string; qr_image: string } | null
+  advertise?: { url: string; qr_image: string } | null
   generated_at: string
   build?: string
 }
@@ -654,9 +655,21 @@ function Player({
           <div className="mt-3 text-2xl text-white/70">
             Reach everyone who walks through the door.
           </div>
-          <div className="mt-7 rounded-full bg-primary px-6 py-2 text-2xl font-semibold text-primary-foreground">
-            Get your business on Loop Network
-          </div>
+          {manifest.advertise?.qr_image ? (
+            <>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={manifest.advertise.qr_image}
+                alt="Scan to advertise"
+                className="mt-7 size-44 rounded-2xl bg-white p-3"
+              />
+              <div className="mt-3 text-2xl text-white/70">Scan to get your business on Loop Network</div>
+            </>
+          ) : (
+            <div className="mt-7 rounded-full bg-primary px-6 py-2 text-2xl font-semibold text-primary-foreground">
+              Get your business on Loop Network
+            </div>
+          )}
         </FillerFrame>
       )}
 

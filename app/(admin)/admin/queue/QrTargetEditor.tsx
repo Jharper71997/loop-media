@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { Pencil } from 'lucide-react'
+import { Pencil, ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -62,27 +62,35 @@ export function QrTargetEditor({
   }
 
   return (
-    <div className="flex items-center justify-between gap-2 text-xs">
+    <div className="space-y-1">
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
+          Scan destination
+        </span>
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+        >
+          <Pencil className="size-3" /> Edit
+        </button>
+      </div>
       {url ? (
         <a
           href={url}
           target="_blank"
           rel="noopener noreferrer"
-          className="truncate text-primary hover:underline"
-          title="Open the scan destination in a new tab"
+          className="flex items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2.5 py-1.5 text-xs text-primary hover:underline"
+          title="Open the scan destination in a new tab to review where it goes"
         >
-          QR → {url}
+          <ExternalLink className="size-3.5 shrink-0" />
+          <span className="truncate">{url}</span>
         </a>
       ) : (
-        <span className="text-muted-foreground">No scan link set</span>
+        <div className="rounded-md border border-dashed border-border px-2.5 py-1.5 text-xs text-amber-600 dark:text-amber-500">
+          No scan link submitted — add one before approving
+        </div>
       )}
-      <button
-        type="button"
-        onClick={() => setEditing(true)}
-        className="flex shrink-0 items-center gap-1 text-muted-foreground hover:text-foreground"
-      >
-        <Pencil className="size-3" /> Edit
-      </button>
     </div>
   )
 }

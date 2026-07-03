@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { LogOut, ArrowLeft, Mail, ShieldCheck } from 'lucide-react'
+import { LogOut, ArrowLeft, Mail } from 'lucide-react'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { AccountSecurity } from '@/components/app/AccountSecurity'
@@ -45,15 +45,6 @@ export function AccountScreen({
           {l.label}
         </Link>
       ))}
-
-      {role === 'admin' && (
-        <Link
-          href="/admin"
-          className={cn(buttonVariants({ variant: 'outline', size: 'lg' }), 'w-full')}
-        >
-          <ShieldCheck className="size-4" /> Back to admin console
-        </Link>
-      )}
 
       <form action="/auth/signout" method="post">
         <Button type="submit" variant="outline" size="lg" className="w-full">

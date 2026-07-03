@@ -9,8 +9,6 @@ import {
   LayoutDashboard,
   Inbox,
   Store,
-  Tv,
-  Tags,
   Users,
   DollarSign,
   Coins,
@@ -18,7 +16,6 @@ import {
   Activity,
   Newspaper,
   Palette,
-  Megaphone,
   Menu,
   LogOut,
   UserCircle,
@@ -56,10 +53,8 @@ const GROUPS: NavGroup[] = [
   {
     label: 'Inventory',
     items: [
-      { href: '/admin/venues', label: 'Venues', icon: Store },
-      { href: '/admin/tvs', label: 'TVs', icon: Tv },
-      { href: '/admin/categories', label: 'Categories & caps', icon: Tags },
-      { href: '/admin/pricing', label: 'Packages & pricing', icon: Coins },
+      { href: '/admin/venues', label: 'Venues & screens', icon: Store },
+      { href: '/admin/pricing', label: 'Pricing, packages & categories', icon: Coins },
     ],
   },
   {
@@ -198,26 +193,6 @@ function SidebarBody({
 
       <div className="flex-1 overflow-y-auto">
         <NavLinks onNavigate={onNavigate} />
-      </div>
-
-      <div className="space-y-0.5 border-t border-border pt-4">
-        <span className="px-1 text-[10px] font-medium uppercase tracking-widest text-muted-foreground/70">
-          Preview as
-        </span>
-        <Link
-          href="/advertiser"
-          onClick={onNavigate}
-          className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-        >
-          <Megaphone className="size-4 shrink-0" /> Advertiser app
-        </Link>
-        <Link
-          href="/host"
-          onClick={onNavigate}
-          className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-        >
-          <Store className="size-4 shrink-0" /> Host app
-        </Link>
       </div>
 
       <div className="border-t border-border pt-4">

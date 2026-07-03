@@ -155,7 +155,7 @@ export default async function AdminOverview() {
   const recent = feed.slice(0, 8)
 
   const liveStats = [
-    { label: 'Screens live now', value: `${liveTvs}/${totalTvs}`, icon: Tv, href: '/admin/tvs' },
+    { label: 'Screens live now', value: `${liveTvs}/${totalTvs}`, icon: Tv, href: '/admin/venues' },
     { label: 'Ads playing now', value: formatNumber(adsPlaying), icon: PlayCircle, href: '/admin/map' },
     { label: 'Pending approvals', value: formatNumber(pending ?? 0), icon: Inbox, href: '/admin/queue', highlight: (pending ?? 0) > 0 },
     { label: 'Active campaigns', value: formatNumber(activeCampaigns ?? 0), icon: Rocket, href: '/admin/advertisers' },

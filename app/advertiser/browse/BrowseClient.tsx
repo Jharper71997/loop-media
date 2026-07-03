@@ -288,11 +288,25 @@ export function BrowseClient({
         .sort((a, b) => a.distanceMi - b.distanceMi)
     : null
   const within = ranked ? ranked.filter((v) => v.distanceMi <= NEARBY_RADIUS_MI) : null
-  const noneNearby = within != null && within.length === 0
-  // Never dead-end on an empty map: if nothing is within the radius, show the
-  // handful of closest screens instead.
-  const displayVenues: BrowseVenue[] =
-    within && within.length > 0 ? within : noneNearby && ranked ? ranked.slice(0, 5) : venues
+  // Show every active screen (nearest-first once we know where they are). We used
+  // to hide anything past the radius, but the map should default to their area and
+  // still let them zoom out to the whole network — so the radius now only frames
+  // the initial view (frameBounds below); it no longer filters out screens.
+  const displayVenues: BrowseVenue[] = ranked ?? venues
+  // A ~25mi box around the advertiser to frame the map on entry. Δlat ≈ 1/69 deg
+  // per mile; Δlng widens with latitude. Null until we know their location, in
+  // which case MapView falls back to framing all venues.
+  const frameBounds: [[number, number], [number, number]] | null =
+    knowsLoc && userLoc
+      ? (() => {
+          const dLat = NEARBY_RADIUS_MI / 69
+          const dLng = dLat / Math.cos((userLoc[0] * Math.PI) / 180)
+          return [
+            [userLoc[0] - dLat, userLoc[1] - dLng],
+            [userLoc[0] + dLat, userLoc[1] + dLng],
+          ]
+        })()
+      : null
 
   return (
     <div className="space-y-4">
@@ -344,15 +358,11 @@ export function BrowseClient({
           </Button>
         </div>
       )}
-      {knowsLoc && within && within.length > 0 && (
+      {knowsLoc && (
         <p className="text-xs text-muted-foreground">
-          {within.length} screen{within.length === 1 ? '' : 's'} within {NEARBY_RADIUS_MI} miles of
-          you, closest first.
-        </p>
-      )}
-      {knowsLoc && noneNearby && (
-        <p className="text-xs text-muted-foreground">
-          No screens within {NEARBY_RADIUS_MI} miles yet — here are the closest.
+          {within && within.length > 0
+            ? `${within.length} screen${within.length === 1 ? '' : 's'} within ${NEARBY_RADIUS_MI} miles, closest first. Zoom out to see the whole network.`
+            : `No screens within ${NEARBY_RADIUS_MI} miles yet — showing the closest first. Zoom out to see all.`}
         </p>
       )}
 
@@ -372,6 +382,7 @@ export function BrowseClient({
               onToggle={toggle}
               onNotify={notify}
               userLoc={knowsLoc ? userLoc : null}
+              frameBounds={frameBounds}
             />
           </div>
 

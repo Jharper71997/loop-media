@@ -13,7 +13,8 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import type { Package } from '@/lib/db.types'
+import { DeleteButton } from '@/components/admin/DeleteButton'
+import type { Category, Package } from '@/lib/db.types'
 import { DEFAULT_PRICING_CONFIG, TIER_LABEL, type PriceTier } from '@/lib/pricing'
 import { ActiveToggle } from '../packages/ActiveToggle'
 import {
@@ -29,6 +30,10 @@ import {
   setLoyaltyDiscount,
   setMaxDiscount,
 } from './actions'
+import { AddCategory } from '../categories/AddCategory'
+import { CapInput } from '../categories/CapInput'
+import { CategoryRequests, type CategoryRequest } from '../categories/CategoryRequests'
+import { deleteCategory } from '../categories/actions'
 
 const TIERS: PriceTier[] = ['local', 'standard', 'high', 'premium']
 const TIER_BAND: Record<PriceTier, string> = {
@@ -99,18 +104,50 @@ export default async function PricingPage() {
     premium: cfg.premium_price_cents,
   }
 
+  // --- Categories, caps & pending requests (merged in from the old Categories tab) ---
+  const { data: catData } = await supabase.from('categories').select('*').order('name')
+  const categories = (catData ?? []) as Category[]
+
+  const { data: reqData } = await supabase
+    .from('category_requests')
+    .select('id, proposed_name, created_at, advertiser:profiles(email, full_name)')
+    .eq('status', 'pending')
+    .order('created_at', { ascending: false })
+  const categoryRequests: CategoryRequest[] = (
+    (reqData ?? []) as unknown as {
+      id: string
+      proposed_name: string
+      created_at: string
+      advertiser: { email: string; full_name: string | null } | null
+    }[]
+  ).map((r) => ({
+    id: r.id,
+    proposed_name: r.proposed_name,
+    created_at: r.created_at,
+    requested_by: r.advertiser?.full_name ?? r.advertiser?.email ?? 'someone',
+  }))
+
+  const capByCat = new Map<string, number>()
+  if (t) {
+    const { data: caps } = await supabase
+      .from('category_caps')
+      .select('category_id, max_advertisers')
+      .eq('territory_id', t)
+    for (const c of caps ?? []) capByCat.set(c.category_id, c.max_advertisers)
+  }
+
   return (
     <>
       <PageHeader
-        title="Packages & pricing"
+        title="Pricing, packages & categories"
         description={
           t
-            ? `Packages, per-screen tier prices, and ${activeName} overrides. Edits go live immediately.`
-            : 'Packages, per-screen tier prices, the account minimum, and discounts. Edits go live immediately.'
+            ? `Packages, per-screen tier prices, ${activeName} overrides, and category caps. Edits go live immediately.`
+            : 'Packages, per-screen tier prices, the account minimum, discounts, and the category catalog. Edits go live immediately.'
         }
       />
 
-      <div className="max-w-3xl space-y-8 p-6">
+      <div className="max-w-4xl space-y-8 p-6">
         {/* Packages */}
         <section className="space-y-3">
           <div>
@@ -230,7 +267,7 @@ export default async function PricingPage() {
                         <InlineNumber
                           initial={tierCents[tier] / 100}
                           allowEmpty={false}
-                          min={75}
+                          min={25}
                           action={setTierPrice.bind(null, tier)}
                         />
                       </div>
@@ -298,6 +335,74 @@ export default async function PricingPage() {
           <p className="text-xs text-muted-foreground">
             Volume discounts (more screens, lower rate) are fixed in code for now.
           </p>
+        </section>
+
+        {/* Categories & caps (merged from the old Categories tab) */}
+        <section className="space-y-3">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-medium">Categories &amp; caps</h2>
+              <p className="text-xs text-muted-foreground">
+                {t
+                  ? `The category catalog, plus how many advertisers each can hold in ${activeName}.`
+                  : 'The global category catalog. Select a single territory in the sidebar to set per-market advertiser caps.'}
+              </p>
+            </div>
+            <AddCategory />
+          </div>
+
+          <CategoryRequests requests={categoryRequests} />
+
+          <div className="rounded-lg border border-border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Category</TableHead>
+                  <TableHead>Slug</TableHead>
+                  {t && <TableHead>Max advertisers</TableHead>}
+                  <TableHead className="w-16" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {categories.length === 0 && (
+                  <TableRow>
+                    <TableCell
+                      colSpan={t ? 4 : 3}
+                      className="py-10 text-center text-muted-foreground"
+                    >
+                      No categories yet.
+                    </TableCell>
+                  </TableRow>
+                )}
+                {categories.map((c) => (
+                  <TableRow key={c.id}>
+                    <TableCell className="font-medium">{c.name}</TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground">
+                      {c.slug}
+                    </TableCell>
+                    {t && (
+                      <TableCell>
+                        <CapInput
+                          territoryId={t}
+                          categoryId={c.id}
+                          initial={capByCat.get(c.id) ?? null}
+                        />
+                      </TableCell>
+                    )}
+                    <TableCell>
+                      <div className="flex justify-end">
+                        <DeleteButton
+                          id={c.id}
+                          action={deleteCategory}
+                          confirmText="Delete this category? Venues/ads using it will lose their category."
+                        />
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         </section>
       </div>
     </>

@@ -133,6 +133,7 @@ export function CreativeStep({
   const qrChipRef = useRef<HTMLDivElement>(null)
   const qrDragRef = useRef(false)
   const panDragRef = useRef<{ px: number; py: number; panX: number; panY: number } | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const isVideo = !!file && file.type.startsWith('video')
   const filterStr = buildFilter(preset, brightness, contrast)
@@ -418,7 +419,14 @@ export function CreativeStep({
             type="button"
             variant={mode === 'upload' ? 'secondary' : 'outline'}
             className="h-11"
-            onClick={() => setMode('upload')}
+            onClick={() => {
+              // First press picks the Upload mode (revealing the dropzone below);
+              // pressing it again once you're in upload mode opens the file picker,
+              // so a tap on the button that literally says "Upload" always does
+              // something useful instead of silently just highlighting.
+              if (mode !== 'upload') setMode('upload')
+              else fileInputRef.current?.click()
+            }}
           >
             <Upload className="size-4" /> Upload
           </Button>
@@ -434,17 +442,24 @@ export function CreativeStep({
 
         {mode === 'upload' ? (
           <div className="space-y-2">
-            <Input
-              type="file"
-              accept="image/*,video/*"
-              className="h-11"
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            />
-            {file && (
-              <p className="text-xs text-muted-foreground">
-                {file.name} · {(file.size / 1_000_000).toFixed(1)} MB
-              </p>
-            )}
+            <label className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-border bg-muted/30 px-4 py-6 text-center transition hover:border-primary/50">
+              <Upload className="size-5 text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">
+                {file ? file.name : 'Tap to upload an image or video'}
+              </span>
+              {file && (
+                <span className="text-xs text-muted-foreground">
+                  {(file.size / 1_000_000).toFixed(1)} MB · tap to replace
+                </span>
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*,video/*"
+                className="hidden"
+                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              />
+            </label>
             <CreativeFitNotice file={file} />
 
             {file && fileUrl && (

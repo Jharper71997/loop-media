@@ -32,6 +32,18 @@ const TIERS: PriceTier[] = ['local', 'standard', 'high', 'premium']
 
 const NO_HOST = 'none'
 
+// Days of the week for the "open days" toggle. Values match the DB /
+// isWithinOpenHours convention: 0=Sunday .. 6=Saturday.
+const DAYS = [
+  { value: 0, short: 'Su', label: 'Sunday' },
+  { value: 1, short: 'Mo', label: 'Monday' },
+  { value: 2, short: 'Tu', label: 'Tuesday' },
+  { value: 3, short: 'We', label: 'Wednesday' },
+  { value: 4, short: 'Th', label: 'Thursday' },
+  { value: 5, short: 'Fr', label: 'Friday' },
+  { value: 6, short: 'Sa', label: 'Saturday' },
+]
+
 export function VenueDialog({
   venue,
   categories,
@@ -71,6 +83,11 @@ export function VenueDialog({
     contact_email: venue?.contact_email ?? '',
     contact_phone: venue?.contact_phone ?? '',
     status: venue?.status ?? 'active',
+    // Seed with the venue's hours (trimmed to HH:MM for the time inputs); new
+    // venues default to the same 10:00–22:00 / every-day fallback the filter uses.
+    business_open: (venue?.business_open ?? '10:00').slice(0, 5),
+    business_close: (venue?.business_close ?? '22:00').slice(0, 5),
+    business_days: venue?.business_days ?? [0, 1, 2, 3, 4, 5, 6],
   })
 
   function set<K extends keyof VenueInput>(key: K, value: VenueInput[K]) {
@@ -322,6 +339,60 @@ export function VenueDialog({
               </SelectContent>
             </Select>
           </Field>
+
+          <div className="space-y-2 sm:col-span-2">
+            <Label className="text-xs text-muted-foreground">Business hours</Label>
+            <div className="flex flex-wrap items-center gap-3">
+              <Input
+                type="time"
+                value={form.business_open}
+                onChange={(e) => set('business_open', e.target.value)}
+                className="w-32"
+                aria-label="Opens"
+              />
+              <span className="text-sm text-muted-foreground">to</span>
+              <Input
+                type="time"
+                value={form.business_close}
+                onChange={(e) => set('business_close', e.target.value)}
+                className="w-32"
+                aria-label="Closes"
+              />
+            </div>
+            <div className="flex gap-1.5">
+              {DAYS.map((d) => {
+                const on = form.business_days.includes(d.value)
+                return (
+                  <button
+                    key={d.value}
+                    type="button"
+                    aria-pressed={on}
+                    aria-label={d.label}
+                    onClick={() =>
+                      set(
+                        'business_days',
+                        on
+                          ? form.business_days.filter((x) => x !== d.value)
+                          : [...form.business_days, d.value].sort((a, b) => a - b)
+                      )
+                    }
+                    className={
+                      'size-9 rounded-md text-xs font-medium transition-colors ' +
+                      (on
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-muted text-muted-foreground hover:bg-muted/70')
+                    }
+                  >
+                    {d.short}
+                  </button>
+                )
+              })}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Ad impressions are only counted while the venue is open. Overnight is fine (e.g. 16:00
+              to 02:00).
+            </p>
+          </div>
 
           <DialogFooter className="sm:col-span-2">
             <Button type="submit" disabled={pending}>
