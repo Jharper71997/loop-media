@@ -12,8 +12,72 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
+import { ImageOff } from 'lucide-react'
 import { formatDateTime } from '@/lib/format'
+import { cn } from '@/lib/utils'
 import type { Profile } from '@/lib/db.types'
+
+// One creative row per advertiser: small thumbnails with a status dot, so admins
+// see what each advertiser is running at a glance (deep view is the detail page).
+type AdRow = {
+  owner_user_id: string
+  title: string | null
+  creative_url: string | null
+  creative_type: string | null
+  status: string
+  category_id: string | null
+}
+
+const STATUS_DOT: Record<string, string> = {
+  active: 'bg-emerald-500',
+  approved: 'bg-emerald-500',
+  pending: 'bg-amber-500',
+  paused: 'bg-slate-400',
+  rejected: 'bg-red-500',
+}
+
+function AdThumbs({ ads }: { ads: AdRow[] }) {
+  if (ads.length === 0)
+    return <span className="text-xs text-muted-foreground">No ads yet</span>
+  const shown = ads.slice(0, 5)
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {shown.map((ad, i) => (
+        <div
+          key={i}
+          title={`${ad.title ?? 'Untitled'} · ${ad.status}`}
+          className="relative h-10 w-16 shrink-0 overflow-hidden rounded border border-border bg-black"
+        >
+          {ad.creative_url ? (
+            ad.creative_type === 'video' ? (
+              <video src={ad.creative_url} className="h-full w-full object-contain" muted />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={ad.creative_url}
+                alt={ad.title ?? ''}
+                className="h-full w-full object-contain"
+              />
+            )
+          ) : (
+            <div className="grid h-full w-full place-items-center">
+              <ImageOff className="size-4 text-muted-foreground" />
+            </div>
+          )}
+          <span
+            className={cn(
+              'absolute right-0.5 top-0.5 size-2 rounded-full ring-1 ring-black/40',
+              STATUS_DOT[ad.status] ?? 'bg-slate-400'
+            )}
+          />
+        </div>
+      ))}
+      {ads.length > shown.length && (
+        <span className="text-xs text-muted-foreground">+{ads.length - shown.length}</span>
+      )}
+    </div>
+  )
+}
 
 export default async function AdvertisersPage() {
   const profile = await requireAdmin()
@@ -31,20 +95,24 @@ export default async function AdvertisersPage() {
   const advertisers = (data ?? []) as Profile[]
 
   const ids = advertisers.map((a) => a.id)
-  const adsByOwner = new Map<string, { total: number; active: number }>()
+  const adsByOwner = new Map<string, AdRow[]>()
   if (ids.length) {
     const { data: ads } = await supabase
       .from('ads')
-      .select('owner_user_id, status')
+      .select('owner_user_id, title, creative_url, creative_type, status, category_id')
       .eq('owner_kind', 'advertiser')
       .in('owner_user_id', ids)
-    for (const ad of ads ?? []) {
-      const cur = adsByOwner.get(ad.owner_user_id) ?? { total: 0, active: 0 }
-      cur.total += 1
-      if (ad.status === 'active') cur.active += 1
-      adsByOwner.set(ad.owner_user_id, cur)
+      .order('created_at', { ascending: false })
+    for (const ad of (ads ?? []) as AdRow[]) {
+      const arr = adsByOwner.get(ad.owner_user_id) ?? []
+      arr.push(ad)
+      adsByOwner.set(ad.owner_user_id, arr)
     }
   }
+  const countsFor = (arr: AdRow[]) => ({
+    total: arr.length,
+    active: arr.filter((x) => x.status === 'active').length,
+  })
 
   return (
     <>
@@ -62,7 +130,8 @@ export default async function AdvertisersPage() {
             </p>
           )}
           {advertisers.map((a) => {
-            const counts = adsByOwner.get(a.id) ?? { total: 0, active: 0 }
+            const ads = adsByOwner.get(a.id) ?? []
+            const counts = countsFor(ads)
             return (
               <Link
                 key={a.id}
@@ -79,6 +148,9 @@ export default async function AdvertisersPage() {
                   ) : (
                     <span className="text-xs text-muted-foreground">0 active</span>
                   )}
+                </div>
+                <div className="mt-2.5">
+                  <AdThumbs ads={ads} />
                 </div>
                 <div className="mt-2 flex flex-wrap gap-x-4 text-xs text-muted-foreground">
                   <span>
@@ -98,6 +170,7 @@ export default async function AdvertisersPage() {
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Email</TableHead>
+                <TableHead>Advertising</TableHead>
                 <TableHead>Joined</TableHead>
                 <TableHead className="text-right">Ads</TableHead>
                 <TableHead className="text-right">Active</TableHead>
@@ -106,13 +179,14 @@ export default async function AdvertisersPage() {
             <TableBody>
               {advertisers.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
+                  <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
                     No advertisers yet.
                   </TableCell>
                 </TableRow>
               )}
               {advertisers.map((a) => {
-                const counts = adsByOwner.get(a.id) ?? { total: 0, active: 0 }
+                const ads = adsByOwner.get(a.id) ?? []
+                const counts = countsFor(ads)
                 return (
                   <TableRow key={a.id} className="cursor-pointer hover:bg-accent/50">
                     <TableCell className="font-medium">
@@ -124,6 +198,9 @@ export default async function AdvertisersPage() {
                       <Link href={`/admin/advertisers/${a.id}`} className="block">
                         {a.email}
                       </Link>
+                    </TableCell>
+                    <TableCell>
+                      <AdThumbs ads={ads} />
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {formatDateTime(a.created_at)}

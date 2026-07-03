@@ -174,3 +174,59 @@ export async function notifyPaymentReceived(admin: Admin, campaignId: string): P
 
   await sendEmail({ to: who.email, subject: `Payment received for ${title}`, html })
 }
+
+// Campaign created — a confirmation the moment an advertiser sets up a campaign,
+// with a short recap (screens + monthly total) and what happens next (payment +
+// review, then it goes live). Service-only, no sell. Creates its own admin client
+// so the call site can stay on the RLS client. Best-effort; caller wraps it.
+export async function notifyCampaignCreated(campaignId: string): Promise<void> {
+  const admin = createAdminClient()
+  const { data: campaign } = await admin
+    .from('campaigns')
+    .select('id, advertiser_id, ad_id, monthly_total_cents')
+    .eq('id', campaignId)
+    .maybeSingle()
+  if (!campaign?.advertiser_id) return
+  const who = await ownerEmail(admin, campaign.advertiser_id as string)
+  if (!who) return
+
+  let title = 'Your campaign'
+  if (campaign.ad_id) {
+    const { data: ad } = await admin
+      .from('ads')
+      .select('title')
+      .eq('id', campaign.ad_id)
+      .maybeSingle()
+    if (ad?.title) title = ad.title as string
+  }
+
+  const { count } = await admin
+    .from('campaign_targets')
+    .select('venue_id', { count: 'exact', head: true })
+    .eq('campaign_id', campaign.id)
+  const screens = count ?? 0
+  const amount = campaign.monthly_total_cents
+    ? formatCents(campaign.monthly_total_cents as number)
+    : null
+  const recap = [`${screens} screen${screens === 1 ? '' : 's'}`, amount ? `${amount}/mo` : null]
+    .filter(Boolean)
+    .join(' · ')
+
+  const base = appUrl().replace(/\/$/, '')
+  const dashUrl = `${base}/advertiser/campaigns/${campaign.id}`
+
+  const html = shell({
+    eyebrow: 'Campaign created',
+    heading: `${escapeHtml(title)} is set up`,
+    body: [
+      greet(who.full_name),
+      `Thanks for setting up your campaign${recap ? ` (${escapeHtml(recap)})` : ''}.`,
+      `Here is what happens next: once your payment is confirmed and your ad clears our quick review, it starts running on your screens. We will email you at each step.`,
+    ],
+    ctaText: 'View your campaign',
+    ctaUrl: dashUrl,
+    foot: 'You can manage or cancel anytime from your dashboard.',
+  })
+
+  await sendEmail({ to: who.email, subject: `Your campaign is set up: ${title}`, html })
+}

@@ -10,6 +10,7 @@ import {
   contextToQuoteOptions,
 } from '@/lib/pricing.server'
 import { activatePlacementsIfReady } from '@/lib/placement'
+import { notifyCampaignCreated } from '@/lib/notifyAdvertiser'
 import { CREATIVE_SETUP_FEE_CENTS, CREATIVE_REFRESH_CENTS } from '@/lib/fees'
 
 export interface NewCampaignInput {
@@ -144,6 +145,15 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
     })
     .select('id')
     .single()
+
+  // Confirmation email — "your campaign is set up, here's what happens next".
+  // Fires for both the Stripe and demo paths since it sits before the branch.
+  // Best-effort: a mail hiccup must never block campaign creation or checkout.
+  try {
+    await notifyCampaignCreated(campaign.id)
+  } catch {
+    /* swallow — never fail creation on a notification error */
+  }
 
   const screenLabel = `${quote.totalScreens} screen${quote.totalScreens === 1 ? '' : 's'}`
   // Return the buyer to the tree they bought from. Whitelisted to avoid an

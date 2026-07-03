@@ -72,7 +72,7 @@ export async function createTv(input: {
       slot_seconds: input.slot_seconds,
     })
     if (!error) {
-      revalidatePath('/admin/tvs')
+      revalidatePath('/admin/venues')
       return { error: null }
     }
     lastError = error
@@ -102,7 +102,7 @@ export async function regeneratePairingCode(id: string) {
       })
       .eq('id', id)
     if (!error) {
-      revalidatePath('/admin/tvs')
+      revalidatePath('/admin/venues')
       return { error: null }
     }
     lastError = error
@@ -118,6 +118,6 @@ export async function deleteTv(id: string) {
   if (denied) return { error: denied }
   const { error } = await supabase.from('tvs').delete().eq('id', id)
   if (error) return { error: error.message }
-  revalidatePath('/admin/tvs')
+  revalidatePath('/admin/venues')
   return { error: null }
 }

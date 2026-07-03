@@ -26,10 +26,21 @@ import { createTv } from './actions'
 
 type VenueOption = { id: string; name: string }
 
-export function TvDialog({ venues }: { venues: VenueOption[] }) {
+// `presetVenueId` scopes the dialog to one venue (the per-venue "Add screen" on
+// the venues list): the venue picker is skipped and the trigger is compact.
+export function TvDialog({
+  venues,
+  presetVenueId,
+  presetVenueName,
+}: {
+  venues: VenueOption[]
+  presetVenueId?: string
+  presetVenueName?: string
+}) {
+  const preset = !!presetVenueId
   const [open, setOpen] = useState(false)
   const [pending, start] = useTransition()
-  const [venueId, setVenueId] = useState('')
+  const [venueId, setVenueId] = useState(presetVenueId ?? '')
   const [loopLen, setLoopLen] = useState(360)
   const [slot, setSlot] = useState(15)
 
@@ -51,42 +62,50 @@ export function TvDialog({ venues }: { venues: VenueOption[] }) {
       }
       toast.success('Screen created — give the technician its pairing code.')
       setOpen(false)
-      setVenueId('')
+      setVenueId(presetVenueId ?? '')
     })
   }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button size="sm" disabled={venues.length === 0} />}>
-        <Plus className="size-4" /> New TV
-      </DialogTrigger>
+      {preset ? (
+        <DialogTrigger render={<Button size="sm" variant="outline" />}>
+          <Plus className="size-4" /> Add screen
+        </DialogTrigger>
+      ) : (
+        <DialogTrigger render={<Button size="sm" disabled={venues.length === 0} />}>
+          <Plus className="size-4" /> New screen
+        </DialogTrigger>
+      )}
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>New TV</DialogTitle>
+          <DialogTitle>{preset ? `New screen · ${presetVenueName}` : 'New screen'}</DialogTitle>
           <DialogDescription>
             Creates a screen with a pairing code. A technician sets up the Pi on-site and pairs it
             with the code, then it goes live on its first heartbeat.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-4">
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Venue</Label>
-            <Select value={venueId} onValueChange={(v) => setVenueId(v ?? '')}>
-              <SelectTrigger className="w-full">
-                <SelectValue>
-                  {(v: string | null) =>
-                    venues.find((x) => x.id === v)?.name ?? 'Select a venue…'}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {venues.map((v) => (
-                  <SelectItem key={v.id} value={v.id}>
-                    {v.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {!preset && (
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Venue</Label>
+              <Select value={venueId} onValueChange={(v) => setVenueId(v ?? '')}>
+                <SelectTrigger className="w-full">
+                  <SelectValue>
+                    {(v: string | null) =>
+                      venues.find((x) => x.id === v)?.name ?? 'Select a venue…'}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {venues.map((v) => (
+                    <SelectItem key={v.id} value={v.id}>
+                      {v.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">Loop length (sec)</Label>

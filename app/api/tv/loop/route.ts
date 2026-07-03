@@ -159,12 +159,27 @@ export async function GET(req: Request) {
     }
   }
 
+  // Scan-to-advertise QR for the house / "advertise on this screen" slide: a
+  // business owner who sees it can scan to sign up and run their ad on THIS
+  // screen. Venue + tv ride along in the link so a signup can be attributed to
+  // the screen that drove it. Always present (unlike ads/trivia).
+  const advertiseUrl = `${base}/signup?ref=screen&v=${tv.venue?.id ?? ''}&tv=${tv.id}`
+  const advertise = {
+    url: advertiseUrl,
+    qr_image: await QRCode.toDataURL(advertiseUrl, {
+      margin: 1,
+      width: 240,
+      color: { dark: '#000000', light: '#ffffff' },
+    }),
+  }
+
   return NextResponse.json({
     tv: { loop_length_seconds: tv.loop_length_seconds, slot_seconds: tv.slot_seconds },
     venue: tv.venue,
     items,
     filler,
     trivia,
+    advertise,
     generated_at: now,
     // Deployment id so the long-running TV page can detect a new release and
     // reload itself (a screen otherwise runs the JS it booted with forever).

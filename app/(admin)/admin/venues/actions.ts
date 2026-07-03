@@ -24,6 +24,12 @@ export interface VenueInput {
   contact_email: string
   contact_phone: string
   status: 'active' | 'inactive'
+  // Local wall-clock 'HH:MM' open/close and days open (0=Sun..6=Sat). Drive the
+  // open-hours filter that scopes ad impressions to when the venue is actually
+  // open (see lib/openHours.ts).
+  business_open: string
+  business_close: string
+  business_days: number[]
 }
 
 export async function saveVenue(input: VenueInput) {
@@ -45,6 +51,11 @@ export async function saveVenue(input: VenueInput) {
   const payload = {
     ...rest,
     host_user_id: rest.host_user_id || null,
+    // Empty time inputs -> null so the fallback hours apply; no days selected ->
+    // null (treated as open every day by the filter).
+    business_open: rest.business_open || null,
+    business_close: rest.business_close || null,
+    business_days: rest.business_days?.length ? rest.business_days : null,
     ...(geo ? { lat: geo.lat, lng: geo.lng } : {}),
   }
 

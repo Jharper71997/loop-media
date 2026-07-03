@@ -9,8 +9,6 @@ import {
   LayoutDashboard,
   Inbox,
   Store,
-  Tv,
-  Tags,
   Users,
   DollarSign,
   Coins,
@@ -56,10 +54,8 @@ const GROUPS: NavGroup[] = [
   {
     label: 'Inventory',
     items: [
-      { href: '/admin/venues', label: 'Venues', icon: Store },
-      { href: '/admin/tvs', label: 'TVs', icon: Tv },
-      { href: '/admin/categories', label: 'Categories & caps', icon: Tags },
-      { href: '/admin/pricing', label: 'Packages & pricing', icon: Coins },
+      { href: '/admin/venues', label: 'Venues & screens', icon: Store },
+      { href: '/admin/pricing', label: 'Pricing, packages & categories', icon: Coins },
     ],
   },
   {

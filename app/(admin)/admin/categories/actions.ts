@@ -20,7 +20,7 @@ export async function createCategory(name: string) {
     .from('categories')
     .insert({ name: trimmed, slug: slugify(trimmed) })
   if (error) return { error: error.message }
-  revalidatePath('/admin/categories')
+  revalidatePath('/admin/pricing')
   return { error: null }
 }
 
@@ -48,7 +48,7 @@ export async function approveCategoryRequest(id: string) {
     if (error) return { error: error.message }
   }
   await supabase.from('category_requests').update({ status: 'approved' }).eq('id', id)
-  revalidatePath('/admin/categories')
+  revalidatePath('/admin/pricing')
   return { error: null }
 }
 
@@ -60,7 +60,7 @@ export async function dismissCategoryRequest(id: string) {
     .update({ status: 'dismissed' })
     .eq('id', id)
   if (error) return { error: error.message }
-  revalidatePath('/admin/categories')
+  revalidatePath('/admin/pricing')
   return { error: null }
 }
 
@@ -69,7 +69,7 @@ export async function deleteCategory(id: string) {
   const supabase = await createClient()
   const { error } = await supabase.from('categories').delete().eq('id', id)
   if (error) return { error: error.message }
-  revalidatePath('/admin/categories')
+  revalidatePath('/admin/pricing')
   return { error: null }
 }
 
@@ -88,6 +88,6 @@ export async function setCap(
       { onConflict: 'territory_id,category_id' }
     )
   if (error) return { error: error.message }
-  revalidatePath('/admin/categories')
+  revalidatePath('/admin/pricing')
   return { error: null }
 }
