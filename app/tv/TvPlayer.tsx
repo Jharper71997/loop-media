@@ -291,6 +291,10 @@ function Player({
   const [isFullscreen, setIsFullscreen] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const motionRef = useRef<HTMLDivElement | null>(null)
+  // Count of composited frames since boot (see the rAF loop below). The heartbeat
+  // uses the RATE of this counter to tell a truly-painting screen from a Fire
+  // Stick that's powered with its TV switched off.
+  const framesRef = useRef(0)
   // The build this page booted with. When a later poll reports a different
   // build, a new version has deployed and we reload — otherwise the screen runs
   // the JS it started with forever and never picks up fixes.
@@ -425,16 +429,39 @@ function Player({
     return () => anim.cancel()
   }, [])
 
-  // Heartbeat (30s). Skipped in admin preview so a peek doesn't fake the screen
-  // as live (the "live now" signal is the heartbeat, not the loop fetch).
-  // Only beats while the page is VISIBLE: when the stick sleeps or backgrounds
-  // (e.g. the TV is powered off and HDMI-CEC puts the Fire Stick to standby),
-  // beats stop and the admin app shows the screen offline within ~95s instead of
-  // reporting a dark TV as live. Resumes immediately on wake.
+  // Frame counter driving the "is it really painting" check in the heartbeat.
+  // A perpetual requestAnimationFrame loop ticks once per composited frame
+  // (~60/sec on an active display). When the TV is off / dimmed / in a
+  // screensaver the compositor stalls and these frames dry up — EVEN THOUGH
+  // document.visibilityState can still read 'visible' on a powered Fire Stick.
+  // That divergence is exactly how a dark TV used to report itself "live". Cheap:
+  // one integer bump per frame.
+  useEffect(() => {
+    let raf = 0
+    const loop = () => {
+      framesRef.current++
+      raf = requestAnimationFrame(loop)
+    }
+    raf = requestAnimationFrame(loop)
+    return () => cancelAnimationFrame(raf)
+  }, [])
+
+  // Heartbeat (30s) — the ONLY signal behind the admin/host "Live" dot. Skipped
+  // in admin preview so a peek doesn't fake a screen live. We beat only when the
+  // page is visible AND actually painting frames: a Fire Stick left powered with
+  // its TV switched off keeps the page "visible" and would otherwise heartbeat
+  // forever, reporting a dark TV as live. Requiring real paint (>= ~1 fps over the
+  // window) means a dimmed / screensaver / slept display stops beating and the
+  // dashboard flips to Offline within ~95s. The reliable hardware complement is
+  // HDMI-CEC on the stick (TV off -> stick standby -> page frozen -> beats stop);
+  // this paint gate is the software net under it. A wake (visibilitychange) beats
+  // immediately since that's a fresh positive signal.
   useEffect(() => {
     if (preview) return
-    const beat = () => {
-      if (document.visibilityState !== 'visible') return
+    const MIN_PAINT_FPS = 1
+    let baselineFrames = framesRef.current
+    let baselineAt = performance.now()
+    const send = () => {
       fetch('/api/tv/heartbeat', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -442,10 +469,22 @@ function Player({
         keepalive: true,
       }).catch(() => {})
     }
-    beat()
-    const id = setInterval(beat, 30 * 1000)
+    const beat = (force = false) => {
+      if (document.visibilityState !== 'visible') return
+      const now = performance.now()
+      const frames = framesRef.current - baselineFrames
+      const secs = (now - baselineAt) / 1000
+      baselineFrames = framesRef.current
+      baselineAt = now
+      // Compositor stalled since the last beat -> the screen isn't really showing
+      // anything. Don't beat; let the freshness window flip it Offline.
+      if (!force && secs > 0 && frames < secs * MIN_PAINT_FPS) return
+      send()
+    }
+    beat(true) // first beat: the page just rendered on a live screen
+    const id = setInterval(() => beat(), 30 * 1000)
     const onVisible = () => {
-      if (document.visibilityState === 'visible') beat()
+      if (document.visibilityState === 'visible') beat(true)
     }
     document.addEventListener('visibilitychange', onVisible)
     return () => {
