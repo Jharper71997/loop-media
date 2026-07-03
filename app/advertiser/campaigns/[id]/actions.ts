@@ -290,6 +290,7 @@ export async function relaunchCampaign(
   try {
     const session = await stripe().checkout.sessions.create({
       mode: 'subscription',
+      allow_promotion_codes: true,
       customer_email: profile.email,
       line_items: [
         {
