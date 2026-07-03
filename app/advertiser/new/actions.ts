@@ -158,6 +158,7 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
       const wantsCreative = !!input.creative_help_brief?.trim()
       const session = await stripe().checkout.sessions.create({
         mode: 'subscription',
+        allow_promotion_codes: true,
         customer_email: profile.email,
         line_items: [
           {

@@ -207,6 +207,7 @@ export async function resumeCheckout(
   try {
     const session = await stripe().checkout.sessions.create({
       mode: 'subscription',
+      allow_promotion_codes: true,
       customer_email: profile.email,
       line_items: [
         {
@@ -349,6 +350,7 @@ export async function startMembershipCheckout(basePath?: string): Promise<{
     const base = appUrl()
     const session = await stripe().checkout.sessions.create({
       mode: 'subscription',
+      allow_promotion_codes: true,
       customer_email: profile.email,
       line_items: [
         {
