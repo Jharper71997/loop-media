@@ -1,15 +1,16 @@
 'use client'
 
-import { useMemo, useState, useEffect, useTransition } from 'react'
+import { useCallback, useMemo, useState, useEffect, useTransition } from 'react'
 import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
-import { ChevronRight, Store, Search } from 'lucide-react'
+import { ChevronRight, Store, Search, Navigation, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { StepHeader } from '@/components/app/StepHeader'
 import { StickyCta } from '@/components/app/StickyCta'
 import { VenueCard } from '@/components/app/VenueCard'
+import { distanceMiles, NEARBY_RADIUS_MI } from '@/lib/geo'
 import { formatCents } from '@/lib/format'
 import {
   quoteCart,
@@ -38,6 +39,9 @@ export type BrowseVenue = {
   categoryFull: boolean
   ownCategory: boolean
   waitlisted: boolean
+  // Filled in client-side once we know the advertiser's location; drives the
+  // "X mi away" hint and nearest-first ordering on the browse map.
+  distanceMi?: number | null
 }
 
 export const CART_KEY = 'loop.cart.venueIds'
@@ -74,6 +78,33 @@ export function BrowseClient({
   )
   const [catQuery, setCatQuery] = useState('')
   const [pending, start] = useTransition()
+
+  // Advertiser location (browser geolocation). We center the map on them and
+  // show only the screens near them, so they don't scroll a nationwide map to
+  // find their own town. Nothing is stored — it's re-asked each visit.
+  const [geoStatus, setGeoStatus] = useState<
+    'idle' | 'locating' | 'ready' | 'denied' | 'unsupported'
+  >('idle')
+  const [userLoc, setUserLoc] = useState<[number, number] | null>(null)
+  const locate = useCallback(() => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      setGeoStatus('unsupported')
+      return
+    }
+    setGeoStatus('locating')
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setUserLoc([pos.coords.latitude, pos.coords.longitude])
+        setGeoStatus('ready')
+      },
+      () => setGeoStatus('denied'),
+      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 300_000 }
+    )
+  }, [])
+  // Ask on entry so they land straight on their own area.
+  useEffect(() => {
+    locate()
+  }, [locate])
 
   useEffect(() => {
     try {
@@ -243,13 +274,35 @@ export function BrowseClient({
   const nextTierAt = [5, 10, 15, 25].find((n) => cartVenues.length < n)
   const nextPct = nextTierAt ? volumeDiscount(nextTierAt) : null
 
+  // Rank every mappable venue by distance from the advertiser, then keep the ones
+  // within the radius (closest first). Until we know where they are (locating /
+  // denied / unsupported) we fall back to the full list so the page still works.
+  const knowsLoc = geoStatus === 'ready' && userLoc != null
+  const ranked = knowsLoc
+    ? venues
+        .filter((v) => v.lat != null && v.lng != null)
+        .map((v) => ({
+          ...v,
+          distanceMi: distanceMiles(userLoc as [number, number], [v.lat as number, v.lng as number]),
+        }))
+        .sort((a, b) => a.distanceMi - b.distanceMi)
+    : null
+  const within = ranked ? ranked.filter((v) => v.distanceMi <= NEARBY_RADIUS_MI) : null
+  const noneNearby = within != null && within.length === 0
+  // Never dead-end on an empty map: if nothing is within the radius, show the
+  // handful of closest screens instead.
+  const displayVenues: BrowseVenue[] =
+    within && within.length > 0 ? within : noneNearby && ranked ? ranked.slice(0, 5) : venues
+
   return (
     <div className="space-y-4">
       <StepHeader
         step={1}
         total={3}
         title="Tap the businesses you want"
-        subtitle="Tap any screen on the map or list to add it"
+        subtitle={
+          knowsLoc ? 'Screens near you — tap any to add' : 'Tap any screen on the map or list to add it'
+        }
         backHref={`${base}/browse`}
       />
 
@@ -274,30 +327,64 @@ export function BrowseClient({
         </button>
       )}
 
+      {/* Location status. When we know where they are, the map is centered on
+          them and the list is scoped to nearby screens. */}
+      {geoStatus === 'locating' && (
+        <p className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Loader2 className="size-3.5 animate-spin" /> Finding screens near you…
+        </p>
+      )}
+      {(geoStatus === 'denied' || geoStatus === 'unsupported') && (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/40 px-3 py-2">
+          <p className="text-xs text-muted-foreground">
+            Turn on location to see the screens closest to you. Showing everything for now.
+          </p>
+          <Button size="sm" variant="outline" className="shrink-0" onClick={locate}>
+            <Navigation className="size-4" /> Use my location
+          </Button>
+        </div>
+      )}
+      {knowsLoc && within && within.length > 0 && (
+        <p className="text-xs text-muted-foreground">
+          {within.length} screen{within.length === 1 ? '' : 's'} within {NEARBY_RADIUS_MI} miles of
+          you, closest first.
+        </p>
+      )}
+      {knowsLoc && noneNearby && (
+        <p className="text-xs text-muted-foreground">
+          No screens within {NEARBY_RADIUS_MI} miles yet — here are the closest.
+        </p>
+      )}
+
       {venues.length === 0 ? (
         <p className="rounded-xl border border-border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
           No screens available yet. Check back soon.
         </p>
       ) : (
-        <>
-          <MapView
-            venues={venues}
-            cart={cart}
-            waitlisted={waitlisted}
-            onToggle={toggle}
-            onNotify={notify}
-          />
+        // Desktop: map on the left (sticky + tall) with the list beside it, so the
+        // page fills the screen. Mobile: the two just stack.
+        <div className="lg:grid lg:grid-cols-5 lg:items-start lg:gap-6">
+          <div className="lg:col-span-3 lg:sticky lg:top-20">
+            <MapView
+              venues={displayVenues}
+              cart={cart}
+              waitlisted={waitlisted}
+              onToggle={toggle}
+              onNotify={notify}
+              userLoc={knowsLoc ? userLoc : null}
+            />
+          </div>
 
-          {nextPct != null && cartVenues.length > 0 && (
-            <p className="rounded-lg bg-primary/10 px-3 py-2 text-center text-xs text-primary">
-              Add {nextTierAt! - cartVenues.length} more screen
-              {nextTierAt! - cartVenues.length === 1 ? '' : 's'} to unlock{' '}
-              {Math.round(nextPct * 100)}% off
-            </p>
-          )}
+          <div className="mt-4 space-y-2.5 lg:col-span-2 lg:mt-0">
+            {nextPct != null && cartVenues.length > 0 && (
+              <p className="rounded-lg bg-primary/10 px-3 py-2 text-center text-xs text-primary">
+                Add {nextTierAt! - cartVenues.length} more screen
+                {nextTierAt! - cartVenues.length === 1 ? '' : 's'} to unlock{' '}
+                {Math.round(nextPct * 100)}% off
+              </p>
+            )}
 
-          <div className="space-y-2.5">
-            {venues.map((v) => (
+            {displayVenues.map((v) => (
               <VenueCard
                 key={v.id}
                 venue={v}
@@ -309,7 +396,7 @@ export function BrowseClient({
               />
             ))}
           </div>
-        </>
+        </div>
       )}
 
       <StickyCta

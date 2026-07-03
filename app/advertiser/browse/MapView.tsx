@@ -19,6 +19,7 @@ const MARKER = {
   categoryFull: '#9ca3af', // gray — category taken
   full: '#ef4444', // red — screen full
   open: '#10b981', // emerald — open / addable
+  you: '#3b82f6', // blue — the advertiser's own location pin
 }
 
 // CircleMarkers (vector) avoid Leaflet's default-icon asset issues in bundlers.
@@ -28,25 +29,52 @@ export default function MapView({
   waitlisted,
   onToggle,
   onNotify,
+  userLoc,
 }: {
   venues: BrowseVenue[]
   cart: string[]
   waitlisted: Set<string>
   onToggle: (id: string) => void
   onNotify: (v: BrowseVenue) => void
+  // The advertiser's own location (from the browser). When set, the map frames
+  // around it and drops a "you're here" pin so nearby screens read at a glance.
+  userLoc?: [number, number] | null
 }) {
-  const points = venues
+  const venuePoints = venues
     .filter((v) => v.lat != null && v.lng != null)
     .map((v) => [v.lat as number, v.lng as number] as [number, number])
+  // Include the advertiser's own pin in the framing so the map zooms to their
+  // area (with the nearby screens around it), not the whole network.
+  const points = userLoc ? [userLoc, ...venuePoints] : venuePoints
   return (
     <MapContainer
       center={US_CENTER}
       zoom={US_ZOOM}
       scrollWheelZoom={false}
-      className="h-[40vh] min-h-64 w-full overflow-hidden rounded-xl"
+      className="h-[40vh] min-h-64 w-full overflow-hidden rounded-xl lg:h-[calc(100dvh-9rem)]"
     >
       <TileLayer attribution={MAP_TILE_ATTRIBUTION} url={MAP_TILE_URL} />
       <MapFitBounds points={points} />
+      {userLoc && (
+        <>
+          {/* Soft halo so the advertiser's own pin reads as "here", distinct from
+              the tappable venue dots. */}
+          <CircleMarker
+            center={userLoc}
+            radius={20}
+            pathOptions={{ color: MARKER.you, fillColor: MARKER.you, fillOpacity: 0.12, weight: 0 }}
+          />
+          <CircleMarker
+            center={userLoc}
+            radius={7}
+            pathOptions={{ color: '#ffffff', fillColor: MARKER.you, fillOpacity: 1, weight: 2 }}
+          >
+            <Popup minWidth={120}>
+              <p className="text-xs font-medium text-foreground">You&apos;re here</p>
+            </Popup>
+          </CircleMarker>
+        </>
+      )}
       {venues
         .filter((v) => v.lat != null && v.lng != null)
         .map((v) => {

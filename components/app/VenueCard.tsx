@@ -1,6 +1,6 @@
 'use client'
 
-import { Plus, Check, Bell, BellRing } from 'lucide-react'
+import { Plus, Check, Bell, BellRing, MapPin } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -20,6 +20,9 @@ export type VenueCardData = {
   ownCategory: boolean
   open: number
   comingSoon: boolean
+  // Miles from the advertiser (browse map only). Undefined when we don't know
+  // their location; drives the "X mi away" hint on nearby recommendations.
+  distanceMi?: number | null
 }
 
 // One tappable business in the build flow. Tapping the card adds/removes when
@@ -60,7 +63,15 @@ export function VenueCard({
     >
       <div className="min-w-0">
         <div className="truncate font-medium">{venue.name}</div>
-        <div className="mt-0.5 truncate text-xs text-muted-foreground">{info}</div>
+        <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
+          <span className="truncate">{info}</span>
+          {venue.distanceMi != null && (
+            <span className="inline-flex shrink-0 items-center gap-0.5 font-medium text-foreground">
+              <MapPin className="size-3" />
+              {venue.distanceMi < 0.1 ? '<0.1' : venue.distanceMi.toFixed(1)} mi
+            </span>
+          )}
+        </div>
         {venue.comingSoon && (
           <span className="mt-1 inline-block rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
             Coming soon · screen not live yet
