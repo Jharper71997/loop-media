@@ -12,7 +12,7 @@ import { AutoRefresh } from '@/components/app/AutoRefresh'
 import { Clock } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { formatNumber, formatCents, timeAgo, isTvLive } from '@/lib/format'
-import { suggestTier, tierPriceCents, TIER_LABEL } from '@/lib/pricing'
+import { suggestTier, venuePriceCents, TIER_LABEL } from '@/lib/pricing'
 import { getPricingConfig } from '@/lib/pricing.server'
 import { isVenueListable } from '@/lib/venue'
 import { venueBusinessHours, formatBusinessHours } from '@/lib/uptime'
@@ -163,7 +163,8 @@ export default async function VenuesPage() {
                     {!t && <span>{v.territory?.name ?? '—'}</span>}
                     <span>{formatNumber(v.foot_traffic_estimate)}/mo traffic</span>
                     <span className="font-medium text-primary">
-                      {TIER_LABEL[tier]} · {formatCents(tierPriceCents(tier, pricingConfig))}/mo
+                      {v.price_cents_override != null ? 'Custom' : TIER_LABEL[tier]} ·{' '}
+                      {formatCents(venuePriceCents(v.price_cents_override, tier, pricingConfig))}/mo
                     </span>
                     <span className="inline-flex items-center gap-1">
                       <Clock className="size-3" />

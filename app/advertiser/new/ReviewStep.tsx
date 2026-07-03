@@ -44,7 +44,7 @@ export function ReviewStep({
     [cartIds, byId]
   )
   const quote = useMemo(
-    () => quoteCart(cart.map((v) => v.tier), quoteOpts, pricingConfig),
+    () => quoteCart(cart.map((v) => v.priceCents), quoteOpts, pricingConfig),
     [cart, quoteOpts, pricingConfig]
   )
 

@@ -1,7 +1,7 @@
 import { requireProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import type { Territory, PriceTier } from '@/lib/db.types'
-import { suggestTier, tierPriceCents, type QuoteOptions } from '@/lib/pricing'
+import { suggestTier, venuePriceCents, type QuoteOptions } from '@/lib/pricing'
 import {
   resolveAdvertiserContext,
   contextToQuoteOptions,
@@ -55,7 +55,7 @@ export default async function BrowsePage({
     const { data } = await supabase
       .from('venues')
       .select(
-        'id, name, venue_type, category_id, host_user_id, lat, lng, foot_traffic_estimate, price_tier, category_slots, category:categories(name), tvs(id, last_heartbeat_at, loop_length_seconds, slot_seconds)'
+        'id, name, venue_type, category_id, host_user_id, lat, lng, foot_traffic_estimate, price_tier, price_cents_override, category_slots, category:categories(name), tvs(id, last_heartbeat_at, loop_length_seconds, slot_seconds)'
       )
       .in('territory_id', marketIds)
       .eq('status', 'active')
@@ -71,6 +71,7 @@ export default async function BrowsePage({
       lng: number | null
       foot_traffic_estimate: number
       price_tier: PriceTier | null
+      price_cents_override: number | null
       category_slots: number
       category: { name: string } | null
       tvs: { id: string; last_heartbeat_at: string | null; loop_length_seconds: number; slot_seconds: number }[]
@@ -153,7 +154,7 @@ export default async function BrowsePage({
         lat: r.lat,
         lng: r.lng,
         tier,
-        priceCents: tierPriceCents(tier, pricingConfig),
+        priceCents: venuePriceCents(r.price_cents_override, tier, pricingConfig),
         screens: r.tvs.length,
         capacity,
         open,

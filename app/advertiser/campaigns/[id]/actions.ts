@@ -518,8 +518,8 @@ export async function addScreensToCampaign(
   // the new monthly total must be priced over the union, not added incrementally.
   const ctx = await resolveAdvertiserContext(advertiserId)
   const union = [...new Set([...existingVenueIds, ...toAdd])]
-  const { totalCents, tiers } = await resolveCartCents(union, contextToQuoteOptions(ctx))
-  if (!tiers.length) return { error: 'Could not price those screens. Try again.' }
+  const { totalCents, screenCents } = await resolveCartCents(union, contextToQuoteOptions(ctx))
+  if (!screenCents.length) return { error: 'Could not price those screens. Try again.' }
 
   // Add the new targets (net-new only — PK is (campaign_id, venue_id)).
   const { error: tErr } = await admin

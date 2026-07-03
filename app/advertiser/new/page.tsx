@@ -2,7 +2,7 @@ import { requireProfile, homeForRole } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import type { PriceTier } from '@/lib/db.types'
-import { suggestTier, tierPriceCents, type QuoteOptions } from '@/lib/pricing'
+import { suggestTier, venuePriceCents, type QuoteOptions } from '@/lib/pricing'
 import {
   resolveAdvertiserContext,
   contextToQuoteOptions,
@@ -21,7 +21,7 @@ export default async function ReviewPage() {
   const [{ data: venueRows }, ctx, pricingConfig] = await Promise.all([
     supabase
       .from('venues')
-      .select('id, territory_id, name, category_id, foot_traffic_estimate, price_tier')
+      .select('id, territory_id, name, category_id, foot_traffic_estimate, price_tier, price_cents_override')
       .eq('status', 'active'),
     resolveAdvertiserContext(profile.id),
     getPricingConfig(),
@@ -34,6 +34,7 @@ export default async function ReviewPage() {
     category_id: string | null
     foot_traffic_estimate: number
     price_tier: PriceTier | null
+    price_cents_override: number | null
   }
   const venues: CartVenue[] = ((venueRows ?? []) as VRow[]).map((r) => {
     const tier: PriceTier = r.price_tier ?? suggestTier(r.foot_traffic_estimate)
@@ -44,7 +45,7 @@ export default async function ReviewPage() {
       categoryId: r.category_id,
       footTraffic: r.foot_traffic_estimate,
       tier,
-      priceCents: tierPriceCents(tier, pricingConfig),
+      priceCents: venuePriceCents(r.price_cents_override, tier, pricingConfig),
     }
   })
 

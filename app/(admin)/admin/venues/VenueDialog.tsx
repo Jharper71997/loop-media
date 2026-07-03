@@ -78,6 +78,7 @@ export function VenueDialog({
     host_user_id: venue?.host_user_id ?? null,
     foot_traffic_estimate: venue?.foot_traffic_estimate ?? 0,
     price_tier: venue?.price_tier ?? null,
+    price_cents_override: venue?.price_cents_override ?? null,
     category_slots: venue?.category_slots ?? 1,
     contact_name: venue?.contact_name ?? '',
     contact_email: venue?.contact_email ?? '',
@@ -230,6 +231,24 @@ export function VenueDialog({
                 ))}
               </SelectContent>
             </Select>
+          </Field>
+
+          <Field label="Custom price ($/mo)">
+            <Input
+              type="number"
+              min={0}
+              step={1}
+              placeholder="Auto from tier"
+              value={form.price_cents_override != null ? form.price_cents_override / 100 : ''}
+              onChange={(e) => {
+                const raw = e.target.value.trim()
+                const n = Number(raw)
+                set('price_cents_override', raw === '' || Number.isNaN(n) ? null : Math.round(n * 100))
+              }}
+            />
+            <p className="text-xs text-muted-foreground">
+              Leave blank to use the tier price. A dollar amount overrides the tier for this venue only.
+            </p>
           </Field>
 
           <Field label="Advertisers per category">

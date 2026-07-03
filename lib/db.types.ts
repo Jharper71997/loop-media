@@ -75,6 +75,7 @@ export interface Venue {
   category_id: string | null
   foot_traffic_estimate: number
   price_tier: PriceTier | null
+  price_cents_override: number | null
   category_slots: number
   contact_name: string | null
   contact_email: string | null

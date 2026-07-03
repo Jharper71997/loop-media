@@ -124,7 +124,7 @@ export function BrowseClient({
     [cart, byId]
   )
   const quote = useMemo(
-    () => quoteCart(cartVenues.map((v) => v.tier), quoteOpts, pricingConfig),
+    () => quoteCart(cartVenues.map((v) => v.priceCents), quoteOpts, pricingConfig),
     [cartVenues, quoteOpts, pricingConfig]
   )
 

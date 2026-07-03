@@ -10,7 +10,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { LiveStatus } from '@/components/app/LiveStatus'
 import { AutoRefresh } from '@/components/app/AutoRefresh'
 import { formatNumber, formatCents, timeAgo, isTvLive } from '@/lib/format'
-import { suggestTier, tierPriceCents, TIER_LABEL } from '@/lib/pricing'
+import { suggestTier, venuePriceCents, TIER_LABEL } from '@/lib/pricing'
 import { getPricingConfig } from '@/lib/pricing.server'
 import type { Venue, Tv, Category, Territory, PriceTier } from '@/lib/db.types'
 import { TvDialog } from '../../tvs/TvDialog'
@@ -120,9 +120,11 @@ export default async function VenueDetail({ params }: { params: Promise<{ id: st
             <CardContent className="p-5">
               <p className="text-sm text-muted-foreground">Price / mo</p>
               <p className="mt-1 font-heading text-2xl font-bold tabular-nums">
-                {formatCents(tierPriceCents(tier, pricingConfig))}
+                {formatCents(venuePriceCents(venue.price_cents_override, tier, pricingConfig))}
               </p>
-              <p className="text-xs text-muted-foreground">{TIER_LABEL[tier]}</p>
+              <p className="text-xs text-muted-foreground">
+                {venue.price_cents_override != null ? 'Custom price' : TIER_LABEL[tier]}
+              </p>
             </CardContent>
           </Card>
           <Card>

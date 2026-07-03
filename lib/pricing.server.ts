@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import {
   quoteCart,
   suggestTier,
+  venuePriceCents,
   loyaltyCredits,
   DEFAULT_PRICING_CONFIG,
   type PriceTier,
@@ -60,24 +61,34 @@ export const getPricingConfig = cache(async (): Promise<PricingConfig> => {
 export async function resolveCartCents(
   venueIds: string[],
   opts: QuoteOptions = {}
-): Promise<{ totalCents: number; tiers: PriceTier[]; quote: Quote }> {
+): Promise<{ totalCents: number; screenCents: number[]; quote: Quote }> {
   const config = await getPricingConfig()
   const ids = [...new Set(venueIds.filter(Boolean))]
-  if (!ids.length) return { totalCents: 0, tiers: [], quote: quoteCart([], opts, config) }
+  if (!ids.length) return { totalCents: 0, screenCents: [], quote: quoteCart([], opts, config) }
 
   const supabase = await createClient()
   const { data } = await supabase
     .from('venues')
-    .select('id, price_tier, foot_traffic_estimate')
+    .select('id, price_tier, price_cents_override, foot_traffic_estimate')
     .in('id', ids)
     .eq('status', 'active')
 
-  const tiers: PriceTier[] = (data ?? []).map(
-    (v: { price_tier: PriceTier | null; foot_traffic_estimate: number }) =>
-      v.price_tier ?? suggestTier(v.foot_traffic_estimate)
+  // One entry per screen = the venue's effective price (a custom override wins
+  // over its tier price).
+  const screenCents: number[] = (data ?? []).map(
+    (v: {
+      price_tier: PriceTier | null
+      price_cents_override: number | null
+      foot_traffic_estimate: number
+    }) =>
+      venuePriceCents(
+        v.price_cents_override,
+        v.price_tier ?? suggestTier(v.foot_traffic_estimate),
+        config
+      )
   )
-  const quote = quoteCart(tiers, opts, config)
-  return { totalCents: quote.totalCents, tiers, quote }
+  const quote = quoteCart(screenCents, opts, config)
+  return { totalCents: quote.totalCents, screenCents, quote }
 }
 
 // An advertiser's standing, used for loyalty perks + the host 20% discount.
