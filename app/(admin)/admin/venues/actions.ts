@@ -19,6 +19,8 @@ export interface VenueInput {
   host_user_id: string | null
   foot_traffic_estimate: number
   price_tier: PriceTier | null
+  // Optional per-venue monthly price in cents. null = use the tier price.
+  price_cents_override: number | null
   category_slots: number
   contact_name: string
   contact_email: string

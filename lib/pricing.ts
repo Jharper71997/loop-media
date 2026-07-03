@@ -60,6 +60,17 @@ export function tierPriceCents(
   return config.tierPriceCents[tier]
 }
 
+// A venue's effective monthly per-screen price. An explicit override (cents) wins;
+// otherwise it's the tier price from config. One place so admin display, the cart
+// preview, and billing all resolve the same number.
+export function venuePriceCents(
+  priceCentsOverride: number | null | undefined,
+  tier: PriceTier,
+  config: PricingConfig = DEFAULT_PRICING_CONFIG
+): number {
+  return priceCentsOverride ?? config.tierPriceCents[tier]
+}
+
 // Starting tier suggestion from a foot-traffic estimate (~monthly visitors).
 // The venue's explicit price_tier is the real source of truth; this only seeds
 // the admin dialog.
@@ -101,20 +112,22 @@ export interface Quote {
   totalCents: number // what they pay (>= MIN_MONTHLY_CENTS once non-empty)
 }
 
-// Quote a cart of venue tiers. `tiers` is one entry per screen in the cart.
+// Quote a cart of screens. `screenCents` is one entry per screen — the venue's
+// effective monthly price (custom override or tier price), already resolved by
+// the caller (see venuePriceCents). Cent-based so a per-venue override that isn't
+// one of the four tier prices bills correctly.
 export function quoteCart(
-  tiers: PriceTier[],
+  screenCents: number[],
   opts: QuoteOptions = {},
   config: PricingConfig = DEFAULT_PRICING_CONFIG
 ): Quote {
-  const price = config.tierPriceCents
-  const totalScreens = tiers.length
-  const listCents = tiers.reduce((s, t) => s + price[t], 0)
+  const totalScreens = screenCents.length
+  const listCents = screenCents.reduce((s, c) => s + c, 0)
 
   // Comp the cheapest screens first (best advertiser experience).
-  const sorted = [...tiers].sort((a, b) => price[a] - price[b])
+  const sorted = [...screenCents].sort((a, b) => a - b)
   const freeScreens = Math.min(Math.max(opts.freeScreens ?? 0, 0), totalScreens)
-  const compedCents = sorted.slice(0, freeScreens).reduce((s, t) => s + price[t], 0)
+  const compedCents = sorted.slice(0, freeScreens).reduce((s, c) => s + c, 0)
   const subtotalCents = listCents - compedCents
   const billableScreens = totalScreens - freeScreens
 

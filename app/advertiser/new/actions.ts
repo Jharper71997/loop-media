@@ -87,8 +87,8 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
   // host (20%), and loyalty discounts + free-screen credits are applied here
   // from the buyer's standing, not the client.
   const ctx = await resolveAdvertiserContext(profile.id)
-  const { totalCents, tiers, quote } = await resolveCartCents(venueIds, contextToQuoteOptions(ctx))
-  if (!tiers.length) return { error: 'None of the selected screens are available anymore.' }
+  const { totalCents, screenCents, quote } = await resolveCartCents(venueIds, contextToQuoteOptions(ctx))
+  if (!screenCents.length) return { error: 'None of the selected screens are available anymore.' }
 
   const { data: ad, error: adErr } = await supabase
     .from('ads')
