@@ -1,0 +1,6 @@
+// Root build file — the Android Gradle Plugin version is declared here and
+// applied in app/build.gradle. Kept deliberately tiny; this project has no
+// third-party dependencies (pure Android framework WebView kiosk).
+plugins {
+    id 'com.android.application' version '8.5.2' apply false
+}
