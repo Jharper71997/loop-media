@@ -40,8 +40,9 @@ TypeScript mirror. Core tables: `territories`, `profiles`, `categories`, `catego
 
 ### Key model decisions
 
-- **Exclusivity = exact category match** — an ad is blocked from a screen only when the advertiser's
-  category equals the venue's own category.
+- **Exclusivity = host protection only** — an ad is blocked from a screen only when the advertiser's
+  category equals the venue's own line of business (protecting the host from direct competitors).
+  There is no general per-category cap: unrelated advertisers freely share a screen.
 - **Goal-based placement** — advertisers set a foot-traffic / impression goal; the engine fills the
   highest-traffic eligible screens until the goal (or the package screen cap) is met.
 - **Pricing supports both global and per-territory** — `packages.base_price_cents` with an optional

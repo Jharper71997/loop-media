@@ -55,7 +55,7 @@ export default async function BrowsePage({
     const { data } = await supabase
       .from('venues')
       .select(
-        'id, name, venue_type, category_id, host_user_id, lat, lng, foot_traffic_estimate, price_tier, price_cents_override, category_slots, category:categories(name), tvs(id, last_heartbeat_at, loop_length_seconds, slot_seconds)'
+        'id, name, venue_type, category_id, host_user_id, lat, lng, foot_traffic_estimate, price_tier, price_cents_override, category:categories(name), tvs(id, last_heartbeat_at, loop_length_seconds, slot_seconds)'
       )
       .in('territory_id', marketIds)
       .eq('status', 'active')
@@ -72,40 +72,22 @@ export default async function BrowsePage({
       foot_traffic_estimate: number
       price_tier: PriceTier | null
       price_cents_override: number | null
-      category_slots: number
       category: { name: string } | null
       tvs: { id: string; last_heartbeat_at: string | null; loop_length_seconds: number; slot_seconds: number }[]
     }
     const rows = (data ?? []) as unknown as Row[]
 
-    // One pass over active placements gives BOTH slot usage per TV and category
-    // occupancy per venue (who's already running, by category).
+    // One pass over active placements gives slot usage per TV (for open-slot counts).
     const tvIds = rows.flatMap((r) => r.tvs.map((t) => t.id))
     const usedByTv = new Map<string, number>()
-    const catOccupancy = new Map<string, Map<string, Set<string>>>() // venueId -> cat -> advertisers
-    const tvVenue = new Map<string, string>()
-    for (const r of rows) for (const t of r.tvs) tvVenue.set(t.id, r.id)
-
     if (tvIds.length) {
       const { data: placements } = await supabase
         .from('ad_placements')
-        .select('tv_id, ad:ads(category_id, owner_user_id)')
+        .select('tv_id')
         .in('tv_id', tvIds)
         .eq('status', 'active')
-      for (const p of (placements ?? []) as unknown as {
-        tv_id: string
-        ad: { category_id: string | null; owner_user_id: string } | null
-      }[]) {
+      for (const p of placements ?? []) {
         usedByTv.set(p.tv_id, (usedByTv.get(p.tv_id) ?? 0) + 1)
-        const venueId = tvVenue.get(p.tv_id)
-        const ad = Array.isArray(p.ad) ? p.ad[0] : p.ad
-        if (venueId && ad?.category_id) {
-          let byCat = catOccupancy.get(venueId)
-          if (!byCat) catOccupancy.set(venueId, (byCat = new Map()))
-          let advs = byCat.get(ad.category_id)
-          if (!advs) byCat.set(ad.category_id, (advs = new Set()))
-          advs.add(ad.owner_user_id)
-        }
       }
     }
 
@@ -133,17 +115,15 @@ export default async function BrowsePage({
       // Flips to live automatically once any TV at the venue heartbeats (<95s).
       const comingSoon = !r.tvs.some((t) => isTvLive(t.last_heartbeat_at))
 
-      // Venue-own-category exclusivity: a venue never runs a COMPETITOR's ad in
-      // its own line of business (a barbershop blocks other barbers). But the
-      // venue's OWN owner may promote themselves on their own screen.
+      // Host protection: a venue never runs a COMPETITOR's ad in its own line of
+      // business (a barbershop blocks other barbers). But the venue's OWN owner may
+      // promote themselves on their own screen. This is the ONLY exclusivity —
+      // unrelated advertisers freely share a screen.
       const ownCategory =
         !!activeCat && activeCat === r.category_id && r.host_user_id !== profile.id
-      // Slots exclusivity: full when the venue's slots for the viewer's category
-      // are taken by OTHER advertisers.
-      const catTaken = activeCat ? catOccupancy.get(r.id)?.get(activeCat)?.size ?? 0 : 0
-      const slotsFull = !!activeCat && catTaken >= (r.category_slots ?? 1)
-      // Either reason grays the venue out and blocks adding it.
-      const categoryFull = ownCategory || slotsFull
+      // Only own-business screens are blocked (kept as `categoryFull` for the
+      // card/map, which gray out and disable adding when it's true).
+      const categoryFull = ownCategory
 
       return {
         id: r.id,

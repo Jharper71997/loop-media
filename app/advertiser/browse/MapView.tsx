@@ -133,15 +133,6 @@ export default function MapView({
                         {waitlisted.has(v.id) ? 'Notify on' : 'Notify me'}
                       </Button>
                     </div>
-                  ) : v.categoryFull ? (
-                    <Button
-                      size="sm"
-                      variant={waitlisted.has(v.id) ? 'secondary' : 'outline'}
-                      className="w-full"
-                      onClick={() => onNotify(v)}
-                    >
-                      {waitlisted.has(v.id) ? 'Waitlisted' : 'Notify me'}
-                    </Button>
                   ) : v.open === 0 ? (
                     <p className="text-xs font-semibold text-destructive">Screen full</p>
                   ) : (

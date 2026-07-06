@@ -164,7 +164,8 @@ erDiagram
 - **Tenancy:** `TERRITORIES` is the spine — Holdings is the parent row, each city is a child. Almost
   every table carries a `territory_id` so a city admin sees only their world.
 - **Inventory:** `VENUES` (physical locations) each have one or more `TVS`. A venue's `category_id`
-  drives **exact-match exclusivity**.
+  drives **host protection** (a venue never runs a competitor's ad in its own line of business). That
+  is the only exclusivity — unrelated advertisers may share a screen.
 - **Advertiser path:** `PROFILES` (advertiser) → `ADS` (creative + approval) → `CAMPAIGNS` (the
   traffic goal) → `SUBSCRIPTIONS` (Stripe billing). The engine reads a campaign and writes
   `AD_PLACEMENTS` (ad × TV × slot).

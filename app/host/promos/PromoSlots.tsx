@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
 import { Upload, Trash2, Plus, ImageOff } from 'lucide-react'
 import { toast } from 'sonner'
@@ -10,19 +11,23 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import { ConfirmButton } from '@/components/app/ConfirmButton'
 import { CreativeFitNotice } from '@/components/app/CreativeFitNotice'
 import { submitHostPromo, deleteHostPromo } from './actions'
+import type { PromoVenue } from './PromoMapPicker'
 
-type Venue = { id: string; name: string }
+// Leaflet touches `window`, so the map only renders client-side.
+const PromoMapPicker = dynamic(() => import('./PromoMapPicker'), {
+  ssr: false,
+  loading: () => (
+    <div className="grid h-[40vh] min-h-64 place-items-center rounded-xl border border-border text-sm text-muted-foreground">
+      Loading map…
+    </div>
+  ),
+})
+
+type Venue = PromoVenue
 type Promo = {
   id: string
   title: string
@@ -49,11 +54,13 @@ export function PromoSlots({
   venues,
   promos,
   maxSlots,
+  homeLoc,
 }: {
   userId: string
   venues: Venue[]
   promos: Promo[]
   maxSlots: number
+  homeLoc?: [number, number] | null
 }) {
   const router = useRouter()
   const [adding, setAdding] = useState(false)
@@ -123,6 +130,7 @@ export function PromoSlots({
           <AddPromoCard
             userId={userId}
             venues={venues}
+            homeLoc={homeLoc}
             onCancel={() => setAdding(false)}
             onDone={() => {
               setAdding(false)
@@ -151,19 +159,23 @@ export function PromoSlots({
 function AddPromoCard({
   userId,
   venues,
+  homeLoc,
   onCancel,
   onDone,
 }: {
   userId: string
   venues: Venue[]
+  homeLoc?: [number, number] | null
   onCancel: () => void
   onDone: () => void
 }) {
-  const [venueId, setVenueId] = useState(venues[0]?.id ?? '')
+  // No default pick — the host taps a screen on the map to choose where it runs.
+  const [venueId, setVenueId] = useState('')
   const [title, setTitle] = useState('')
   const [qrUrl, setQrUrl] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [pending, start] = useTransition()
+  const selectedVenue = venues.find((v) => v.id === venueId)
 
   function save() {
     if (!venueId) {
@@ -212,21 +224,13 @@ function AddPromoCard({
     <Card className="sm:col-span-2">
       <CardContent className="space-y-3 p-4">
         <div className="space-y-1.5">
-          <Label className="text-xs">Run on</Label>
-          <Select value={venueId} onValueChange={(v) => setVenueId(v ?? '')}>
-            <SelectTrigger className="w-full">
-              <SelectValue>
-                {(v: string | null) => venues.find((x) => x.id === v)?.name ?? 'Select a screen'}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {venues.map((v) => (
-                <SelectItem key={v.id} value={v.id}>
-                  {v.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Label className="text-xs">Where should this run?</Label>
+          <PromoMapPicker venues={venues} value={venueId} onSelect={setVenueId} homeLoc={homeLoc} />
+          <p className="text-xs text-muted-foreground">
+            {selectedVenue
+              ? `Running on ${selectedVenue.name}`
+              : 'Tap an open screen on the map to pick where your promo runs.'}
+          </p>
         </div>
         <div className="space-y-1.5">
           <Label className="text-xs">Promo title</Label>
