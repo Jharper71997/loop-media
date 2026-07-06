@@ -1,0 +1,38 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'org.loopnetwork.tv'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "org.loopnetwork.tv"
+        minSdk 22          // Fire OS 5 (API 22) and up
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            // Signed with the auto-generated debug key so the APK installs via
+            // sideload with ZERO secret setup. The native shell almost never
+            // changes — all product logic lives in loopnetwork.org/tv and
+            // self-updates over the web — so stable release-key signing isn't
+            // needed for v1. See README for the upgrade path.
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+// No dependencies on purpose: pure android.* framework classes keep the APK
+// tiny and the CI build bulletproof (no androidx version matrix to satisfy).
+dependencies {
+}
