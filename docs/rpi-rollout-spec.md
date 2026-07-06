@@ -3,7 +3,7 @@
 > Self-contained handoff. Assumes the `loop-media` repo but NOT any prior chat.
 
 ## 0. Context
-Loop Network = indoor TV ad network. Host venues (bars, shops) show a rotating ad reel on their TVs; advertisers buy **category-exclusive** slots per screen. Repo: `loop-media` — Next.js 16 (App Router), Supabase, Stripe, Leaflet, shadcn **Base UI variant (use `render`, not `asChild`)**. The repo has its own `CLAUDE.md` — read it first. Still on temp domain `loop-network-one.vercel.app`.
+Loop Network = indoor TV ad network. Host venues (bars, shops) show a rotating ad reel on their TVs; advertisers buy slots per screen (the only exclusivity is **host protection** — a venue never runs a competitor's ad in its own line of business). Repo: `loop-media` — Next.js 16 (App Router), Supabase, Stripe, Leaflet, shadcn **Base UI variant (use `render`, not `asChild`)**. The repo has its own `CLAUDE.md` — read it first. Still on temp domain `loop-network-one.vercel.app`.
 
 **Goal:** move the venue playback device to a **Raspberry Pi in Chromium kiosk** (fleet-managed via balenaCloud), and build the app changes that support zero-touch provisioning + a public **"coming soon → live"** screen lifecycle.
 

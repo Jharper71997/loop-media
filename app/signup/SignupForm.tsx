@@ -110,7 +110,8 @@ export function SignupForm({
           </ul>
 
           {/* Capture category once, here at signup — so the buy flow never asks
-              "what do you sell?" again. Drives category exclusivity. */}
+              "what do you sell?" again. Used for targeting + host protection
+              (you can't advertise on a host screen in your own line of business). */}
           <div className="space-y-2">
             <Label htmlFor="category">What do you sell?</Label>
             <select
@@ -146,7 +147,7 @@ export function SignupForm({
               </>
             ) : (
               <p className="text-xs text-muted-foreground">
-                We lock in your category so competitors can&apos;t share your screens. You only set
+                Tell us your line of business so we place your ads on the right screens. You only set
                 this once.
               </p>
             )}

@@ -194,7 +194,7 @@ export function BrowseClient({
             shows for accounts that don't have one yet, as a quick one-time gate. */}
         <StepHeader
           title="What do you sell?"
-          subtitle="One quick thing — we lock in your category so competitors can't share your screens."
+          subtitle="One quick thing — tell us your line of business so we place your ads on the right screens."
           backHref={homeFor(base)}
         />
 
@@ -323,8 +323,8 @@ export function BrowseClient({
       {activeCatName ? (
         <p className="text-xs text-muted-foreground">
           You&apos;re advertising as a{' '}
-          <span className="font-medium text-foreground">{activeCatName}</span>, so no other{' '}
-          {activeCatName.toLowerCase()} can run on the screens you pick.{' '}
+          <span className="font-medium text-foreground">{activeCatName}</span>, so we keep your ad
+          off screens run by another {activeCatName.toLowerCase()}.{' '}
           <button
             onClick={() => router.push(`${base}/browse?pick=1`)}
             className="text-primary hover:underline"

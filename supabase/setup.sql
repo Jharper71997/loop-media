@@ -63,7 +63,8 @@ create index idx_profiles_territory on profiles(territory_id);
 -- CATALOG & VENUES
 -- ============================================================
 -- Global category catalog. Used for BOTH a venue's own type and an ad's
--- category, so exact-match exclusivity compares like-for-like.
+-- category, so host protection compares like-for-like (a venue blocks
+-- competitors in its own line of business).
 create table categories (
   id         uuid primary key default gen_random_uuid(),
   name       text not null,
@@ -89,7 +90,7 @@ create table venues (
   lat                   numeric(9,6),
   lng                   numeric(9,6),
   venue_type            text,                                          -- display label
-  category_id           uuid references categories(id) on delete set null, -- structured type for exclusivity
+  category_id           uuid references categories(id) on delete set null, -- structured type for host protection
   foot_traffic_estimate int  not null default 0 check (foot_traffic_estimate >= 0), -- ~monthly visitors
   contact_name          text,
   contact_email         text,

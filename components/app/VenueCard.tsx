@@ -26,7 +26,7 @@ export type VenueCardData = {
 }
 
 // One tappable business in the build flow. Tapping the card adds/removes when
-// available; full-by-category venues offer a notify-me waitlist instead.
+// available; screens whose TV isn't live yet offer a notify-me waitlist instead.
 export function VenueCard({
   venue,
   inCart,
@@ -92,26 +92,6 @@ export function VenueCard({
           </Badge>
         ) : venue.comingSoon ? (
           // Onboarded but its screen isn't live yet — offer the notify waitlist.
-          <Button
-            variant={waitlisted ? 'secondary' : 'outline'}
-            size="sm"
-            disabled={pending}
-            onClick={(e) => {
-              e.stopPropagation()
-              onNotify()
-            }}
-          >
-            {waitlisted ? (
-              <>
-                <BellRing className="size-4" /> Waitlisted
-              </>
-            ) : (
-              <>
-                <Bell className="size-4" /> Notify me
-              </>
-            )}
-          </Button>
-        ) : venue.categoryFull ? (
           <Button
             variant={waitlisted ? 'secondary' : 'outline'}
             size="sm"

@@ -11,7 +11,6 @@ import {
   EyeOff,
   HelpCircle,
   Tag,
-  Lock,
   Zap,
   ArrowRight,
 } from 'lucide-react'
@@ -99,9 +98,9 @@ const WHY = [
     sub: 'A QR on every ad turns a glance into a scan you can actually count.',
   },
   {
-    icon: Lock,
-    title: 'Exclusive',
-    sub: 'Your category is yours. No competitor runs on the same screen.',
+    icon: MapPin,
+    title: 'Local',
+    sub: 'Real neighborhood screens where your customers already spend time.',
   },
 ]
 
@@ -118,9 +117,9 @@ const GUIDE = [
     sub: 'You always see the price before you buy. No "request a media kit," no sales runaround.',
   },
   {
-    icon: Lock,
-    title: 'Category exclusivity',
-    sub: 'A competitor can never share the screens you run on. Your category is yours.',
+    icon: MonitorPlay,
+    title: 'Live in days',
+    sub: 'Upload your ad and it starts running on local screens within days, not weeks.',
   },
   {
     icon: Zap,
@@ -374,7 +373,7 @@ export default async function Home() {
             <ul className="space-y-1.5 text-sm">
               {[
                 'Pick venues on a map, by the screen',
-                'Competitors can never share your screens',
+                'Month to month, cancel anytime',
                 'Every scan tracked back to its venue',
               ].map((t) => (
                 <li key={t} className="flex items-start gap-2">

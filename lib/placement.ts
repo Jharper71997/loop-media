@@ -3,9 +3,10 @@
 // Given an ACTIVE campaign whose ad is APPROVED, it decides which screens the ad
 // runs on. In the per-TV cart model an advertiser hand-picks venues
 // (campaign_targets); the engine fills exactly those venues' screens:
-//   1. Exclusivity  — per VENUE per CATEGORY: a venue holds at most
-//      venues.category_slots DISTINCT advertisers of a given category (1 = full
-//      exclusivity). Ads with no category are unrestricted.
+//   1. Host protection — a venue never runs a COMPETITOR's ad in the venue's
+//      OWN line of business (venues.category_id); the venue's own host is exempt.
+//      There is no general per-category cap — unrelated advertisers freely share
+//      a screen. Ads with no category are unrestricted.
 //   2. Targeting    — placement is scoped to the campaign's picked venues
 //      (campaign_targets). No targets = all eligible venues (legacy fallback).
 //   3. Fill         — eligible screens are sorted by foot traffic (desc) and
@@ -64,8 +65,8 @@ export async function placeCampaign(
 
   const goal = camp.target_impressions ?? 0
 
-  // Exclusivity is now enforced PER VENUE (venues.category_slots) while building
-  // candidates below, not as a per-territory cap. See the candidate loop.
+  // Host protection (a venue blocks competitors in its own line of business) is
+  // enforced while building candidates below. See the candidate loop.
 
   // ---- screen cap = min(package cap, per-campaign override) ----
   // Either may be null (no limit); the effective cap is the tightest non-null one.
@@ -83,18 +84,17 @@ export async function placeCampaign(
     screenCap = screenCap == null ? override : Math.min(screenCap, override)
   }
 
-  // ---- 1. Eligible screens (territory, active, category slots free, free slot) ----
+  // ---- 1. Eligible screens (territory, active, not a competitor's line, free slot) ----
   const { data: venuesData } = await admin
     .from('venues')
     .select(
-      'id, category_id, category_slots, foot_traffic_estimate, status, host_user_id, tvs(id, status, loop_length_seconds, slot_seconds)'
+      'id, category_id, foot_traffic_estimate, status, host_user_id, tvs(id, status, loop_length_seconds, slot_seconds)'
     )
     .eq('territory_id', camp.territory_id)
     .eq('status', 'active')
   type V = {
     id: string
     category_id: string | null
-    category_slots: number | null
     foot_traffic_estimate: number
     host_user_id: string | null
     tvs: { id: string; loop_length_seconds: number; slot_seconds: number }[]
@@ -119,35 +119,20 @@ export async function placeCampaign(
     .eq('campaign_id', campaignId)
   const excludedTvs = new Set((exclRows ?? []).map((r) => r.tv_id))
 
-  // One read of active placements gives us slot occupancy per TV, which TVs this
-  // campaign already runs on, and per-venue category occupancy (distinct OTHER
-  // advertisers running each category at each venue) for exclusivity.
-  const tvToVenue = new Map<string, string>()
-  for (const v of venues) for (const t of v.tvs ?? []) tvToVenue.set(t.id, v.id)
-
+  // One read of active placements gives us slot occupancy per TV and which TVs
+  // this campaign already runs on.
   const { data: activePl } = await admin
     .from('ad_placements')
-    .select('tv_id, campaign_id, ad:ads(category_id, owner_user_id)')
+    .select('tv_id, campaign_id')
     .eq('status', 'active')
   const usedByTv = new Map<string, number>()
   const myTvs = new Set<string>()
-  const venueCatAdvertisers = new Map<string, Map<string, Set<string>>>() // venue -> cat -> advertisers
   for (const p of (activePl ?? []) as unknown as {
     tv_id: string
     campaign_id: string | null
-    ad: { category_id: string | null; owner_user_id: string } | null
   }[]) {
     usedByTv.set(p.tv_id, (usedByTv.get(p.tv_id) ?? 0) + 1)
     if (p.campaign_id === campaignId) myTvs.add(p.tv_id)
-    const venueId = tvToVenue.get(p.tv_id)
-    const pad = Array.isArray(p.ad) ? p.ad[0] : p.ad
-    if (venueId && pad?.category_id) {
-      let byCat = venueCatAdvertisers.get(venueId)
-      if (!byCat) venueCatAdvertisers.set(venueId, (byCat = new Map()))
-      let advs = byCat.get(pad.category_id)
-      if (!advs) byCat.set(pad.category_id, (advs = new Set()))
-      advs.add(pad.owner_user_id)
-    }
   }
 
   type Candidate = { tvId: string; venueId: string; traffic: number; slot: number }
@@ -163,14 +148,6 @@ export async function placeCampaign(
       ad.owner_user_id !== v.host_user_id
     )
       continue
-    // Per-venue category exclusivity: if this ad has a category, the venue can
-    // hold at most category_slots DISTINCT advertisers of that category. This
-    // advertiser is always allowed to (re)fill its own slot.
-    if (ad.category_id) {
-      const advs = new Set(venueCatAdvertisers.get(v.id)?.get(ad.category_id) ?? [])
-      advs.delete(camp.advertiser_id)
-      if (advs.size >= (v.category_slots ?? 1)) continue // category full at this venue
-    }
     for (const t of v.tvs ?? []) {
       if (myTvs.has(t.id)) continue // already running here
       if (excludedTvs.has(t.id)) continue // admin pulled this campaign off this screen

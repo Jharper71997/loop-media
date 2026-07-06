@@ -1,10 +1,14 @@
 // Phase 6 verification for the placement engine — runs the REAL engine via the
 // /api/cron/place route (started separately), not a reimplementation.
 //
-//   node scripts/smoke-placement.js prep    # approve demo ad, set a category to
-//                                            # test exclusivity, clear placements
+//   node scripts/smoke-placement.js prep    # approve demo ad, set its category to a
+//                                            # venue's own line of business to test
+//                                            # host protection, clear placements
 //   <hit the cron route to run lib/placement.ts>
-//   node scripts/smoke-placement.js check    # read back + assert exclusivity/fill
+//   node scripts/smoke-placement.js check    # read back + assert host protection/fill
+//
+// NOTE: the ONLY exclusivity is host protection — a venue never runs a competitor's
+// ad in its OWN line of business. Unrelated advertisers may freely share a screen.
 const fs = require('fs')
 const path = require('path')
 const { createClient } = require('@supabase/supabase-js')
@@ -46,7 +50,8 @@ async function prep() {
     .order('foot_traffic_estimate', { ascending: false })
 
   // Pick the highest-traffic venue that HAS a category — make the ad that
-  // category so exclusivity must skip the single most attractive screen.
+  // category so host protection must skip that venue's screen (the ad is now in
+  // the venue's own line of business).
   const top = venues.find((v) => v.category_id)
   const excludedCat = top?.category_id ?? null
 
@@ -91,7 +96,7 @@ async function check() {
     console.log(`  ${bad ? 'VIOLATION!' : 'ok'}  ${v.name}  ${v.foot_traffic_estimate}/mo  slot ${p.slot_position}`)
   }
   console.log(`\nEst impressions: ${est} / goal ${camp.target_impressions}`)
-  console.log('Exclusivity:', exclusivityViolations === 0 ? 'PASS (no same-category screen)' : `FAIL (${exclusivityViolations})`)
+  console.log('Host protection:', exclusivityViolations === 0 ? 'PASS (no same-line host screen)' : `FAIL (${exclusivityViolations})`)
   console.log('Placed something:', placements.length > 0 ? 'PASS' : 'FAIL (no screens)')
 }
 

@@ -35,7 +35,7 @@ export async function submitHostPromo(
   const supabase = await createClient()
 
   // The host's own venues define their market (territory) and business category
-  // (for exclusivity). A host with no venue has nothing to anchor a promo to.
+  // (for host protection). A host with no venue has nothing to anchor a promo to.
   const { data: ownVenues } = await supabase
     .from('venues')
     .select('id, territory_id, category_id')
@@ -63,7 +63,8 @@ export async function submitHostPromo(
   if (territoryId && target.territory_id !== territoryId) {
     return { error: 'That screen is in a different market.' }
   }
-  // Category exclusivity: a business can't advertise on a competitor's screen.
+  // Host protection: a business can't advertise on a same-line-of-business
+  // competitor's screen.
   if (hostCategory && target.category_id === hostCategory) {
     return { error: "That screen is in your own line of business, so you can't advertise there. Pick a different venue." }
   }
@@ -87,7 +88,7 @@ export async function submitHostPromo(
       owner_user_id: profile.id,
       owner_kind: 'host',
       territory_id: target.territory_id,
-      category_id: hostCategory, // the host's business category drives exclusivity
+      category_id: hostCategory, // the host's business category drives host protection
       title: input.title.trim(),
       creative_type: input.creative_type,
       creative_url: input.creative_url,
