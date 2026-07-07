@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition, type CSSProperties } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Upload, Sparkles, MapPin } from 'lucide-react'
+import { Upload, Sparkles, MapPin, SlidersHorizontal, ChevronDown } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { buttonVariants } from '@/components/ui/button'
@@ -133,6 +133,11 @@ export function CreativeStep({
   const [brightness, setBrightness] = useState(100)
   const [contrast, setContrast] = useState(100)
   const [preset, setPreset] = useState<FilterPreset>('none')
+  // Photo adjustments are collapsed by default so the common path is just
+  // upload → position the QR → continue, not a wall of sliders.
+  const [showAdjust, setShowAdjust] = useState(false)
+  // Drives the submit button copy so a slow phone upload doesn't read as frozen.
+  const [statusMsg, setStatusMsg] = useState<string | null>(null)
 
   const frameRef = useRef<HTMLDivElement>(null)
   const qrChipRef = useRef<HTMLDivElement>(null)
@@ -171,6 +176,7 @@ export function CreativeStep({
     setBrightness(100)
     setContrast(100)
     setPreset('none')
+    setShowAdjust(false)
     setNat(null)
     if (!file) {
       setFileUrl(null)
@@ -335,6 +341,7 @@ export function CreativeStep({
     if (mode === 'help' && !brief.trim()) return toast.error('Tell our team what you need designed.')
 
     start(async () => {
+      setStatusMsg(null)
       let creative_url: string | null = null
       let creative_type: 'video' | 'image' | null = null
 
@@ -355,17 +362,21 @@ export function CreativeStep({
           ext = 'png'
           contentType = 'image/png'
         }
+        setStatusMsg('Uploading your ad…')
         const path = `${userId}/${crypto.randomUUID()}.${ext}`
         const { error: upErr } = await supabase.storage
           .from('creatives')
           .upload(path, blob, { contentType })
         if (upErr) {
+          setStatusMsg(null)
           toast.error(`Upload failed: ${upErr.message}`)
           return
         }
         creative_url = supabase.storage.from('creatives').getPublicUrl(path).data.publicUrl
         creative_type = isVideo ? 'video' : 'image'
       }
+
+      setStatusMsg('Setting up your campaign…')
 
       const input: NewCampaignInput = {
         territory_id: territoryId,
@@ -384,6 +395,7 @@ export function CreativeStep({
 
       const res = await submitCampaign(input)
       if (res.error) {
+        setStatusMsg(null)
         toast.error(res.error)
         return
       }
@@ -417,7 +429,7 @@ export function CreativeStep({
         step={3}
         total={3}
         title="Add your ad"
-        subtitle="A 15-second spot. Image ads look best at 1180 × 820."
+        subtitle="A 15-second spot. Images look best at 16:9 — 1920 × 1080."
       />
 
       <div className="space-y-1.5">
@@ -594,7 +606,21 @@ export function CreativeStep({
                 </div>
 
                 {!isVideo && (
-                  <div className="space-y-4">
+                  <div className="space-y-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowAdjust((s) => !s)}
+                      className="flex w-full items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-sm font-medium transition hover:border-primary/40"
+                    >
+                      <span className="flex items-center gap-2">
+                        <SlidersHorizontal className="size-4 text-muted-foreground" /> Adjust photo
+                      </span>
+                      <ChevronDown
+                        className={`size-4 text-muted-foreground transition-transform ${showAdjust ? 'rotate-180' : ''}`}
+                      />
+                    </button>
+                    {showAdjust && (
+                    <div className="space-y-4">
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between">
                         <Label>Zoom</Label>
@@ -658,6 +684,8 @@ export function CreativeStep({
                         ))}
                       </div>
                     </div>
+                    </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -680,7 +708,7 @@ export function CreativeStep({
       </div>
 
       <StickyCta
-        label={pending ? 'Working…' : 'Continue to payment'}
+        label={pending ? statusMsg ?? 'Working…' : 'Continue to payment'}
         disabled={pending}
         onClick={onSubmit}
         priceTop="Total"

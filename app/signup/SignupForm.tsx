@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Combobox } from '@/components/ui/combobox'
 import { rememberCategory, requestCategory } from '@/app/advertiser/browse/actions'
 
 // Sentinel for "my business type isn't listed" — files a review request instead
@@ -194,21 +195,18 @@ export function SignupForm({
           {!isHost && (
             <div className="space-y-2">
               <Label htmlFor="category">What do you sell?</Label>
-              <select
-                id="category"
-                required
-                value={categoryId}
-                onChange={(e) => setCategoryId(e.target.value)}
-                className="h-11 w-full rounded-md border border-input bg-popover px-3 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 [&>option]:bg-popover [&>option]:text-popover-foreground"
-              >
-                <option value="">Choose your business type…</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-                <option value={OTHER}>Other / not listed…</option>
-              </select>
+              {/* Searchable picker — same one the buy flow uses — so a long
+                  catalog isn't a native scroll-select on first impression. */}
+              <Combobox
+                options={[
+                  ...categories.map((c) => ({ value: c.id, label: c.name })),
+                  { value: OTHER, label: 'Other / not listed…' },
+                ]}
+                value={categoryId || null}
+                onValueChange={(v) => setCategoryId(v ?? '')}
+                placeholder="Choose your business type…"
+                searchPlaceholder="Search your business type…"
+              />
 
               {categoryId === OTHER ? (
                 <>

@@ -21,7 +21,10 @@ export default async function AdvertiserAccountPage() {
     <AccountScreen
       email={profile.email}
       role={profile.role}
-      links={[{ href: '/advertiser/past', label: 'Past campaigns' }]}
+      links={[
+        { href: '/advertiser/browse?pick=1', label: 'Change business category' },
+        { href: '/advertiser/past', label: 'Past campaigns' },
+      ]}
       billing={{
         returnPath: '/advertiser/account',
         membershipBasePath: '/advertiser',

@@ -74,7 +74,9 @@ export function VenueCard({
         </div>
         {venue.comingSoon && (
           <span className="mt-1 inline-block rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-            Coming soon · screen not live yet
+            {waitlisted
+              ? "Coming soon · we'll email you the day it goes live"
+              : 'Coming soon · screen not live yet'}
           </span>
         )}
         <div className="mt-1 font-heading text-lg font-bold tabular-nums">
