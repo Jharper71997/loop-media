@@ -71,7 +71,7 @@ export function RegisterVenueForm({
         toast.error(res.error)
         return
       }
-      toast.success('Location submitted. Once approved, pair your screen with the code on your dashboard.')
+      toast.success("Location submitted. Once it's approved, we'll reach out to schedule your Fire Stick setup.")
       router.push('/host')
     })
   }
