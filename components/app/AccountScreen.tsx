@@ -1,8 +1,10 @@
 import Link from 'next/link'
-import { LogOut, ArrowLeft, Mail } from 'lucide-react'
+import { LogOut, Mail } from 'lucide-react'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { AccountSecurity } from '@/components/app/AccountSecurity'
+import { AccountBilling } from '@/components/app/AccountBilling'
+import { BackLink } from '@/components/app/BackLink'
 import { cn } from '@/lib/utils'
 
 // Shared Account tab for the advertiser + host apps.
@@ -10,10 +12,20 @@ export function AccountScreen({
   email,
   role,
   links,
+  billing,
 }: {
   email: string
   role: 'advertiser' | 'host' | 'admin'
   links?: { href: string; label: string }[]
+  // When present, renders the billing card (manage payment + membership). Omitted
+  // for surfaces with no billing (e.g. admin).
+  billing?: {
+    returnPath: string
+    membershipBasePath: '/advertiser' | '/host/advertise'
+    hasCustomer: boolean
+    pastDue: boolean
+    isMember: boolean
+  }
 }) {
   const roleLabel = role === 'host' ? 'Venue host' : role === 'admin' ? 'Admin' : 'Advertiser'
   return (
@@ -36,6 +48,16 @@ export function AccountScreen({
 
       <AccountSecurity email={email} />
 
+      {billing && (
+        <AccountBilling
+          returnPath={billing.returnPath}
+          membershipBasePath={billing.membershipBasePath}
+          hasCustomer={billing.hasCustomer}
+          pastDue={billing.pastDue}
+          isMember={billing.isMember}
+        />
+      )}
+
       {links?.map((l) => (
         <Link
           key={l.href}
@@ -52,12 +74,7 @@ export function AccountScreen({
         </Button>
       </form>
 
-      <Link
-        href="/"
-        className="flex items-center justify-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="size-3.5" /> Back to home
-      </Link>
+      <BackLink href="/" label="Back to home" className="justify-center text-xs" />
     </div>
   )
 }

@@ -128,7 +128,7 @@ export function TvDialog({
           </div>
           <DialogFooter>
             <Button type="submit" disabled={pending}>
-              {pending ? 'Creating…' : 'Create TV'}
+              {pending ? 'Creating…' : 'Create screen'}
             </Button>
           </DialogFooter>
         </form>

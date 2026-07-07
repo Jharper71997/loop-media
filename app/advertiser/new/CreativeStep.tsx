@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition, type CSSProperties } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Upload, Sparkles, MapPin } from 'lucide-react'
+import { Upload, Sparkles, MapPin, SlidersHorizontal, ChevronDown } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { buttonVariants } from '@/components/ui/button'
@@ -18,71 +18,21 @@ import { useBasePath } from '@/lib/useBasePath'
 import { formatCents } from '@/lib/format'
 import { CREATIVE_SETUP_FEE_CENTS, CREATIVE_REFRESH_CENTS } from '@/lib/fees'
 import { quoteCart, type QuoteOptions, type PricingConfig } from '@/lib/pricing'
+import {
+  EXPORT_W,
+  EXPORT_H,
+  QR_DEFAULT,
+  FILTER_PRESETS,
+  clamp,
+  buildFilter,
+  computeDraw,
+  clampPan,
+  exportImageBlob,
+  type FilterPreset,
+} from '@/lib/adCreative'
 import { CART_KEY } from '../browse/BrowseClient'
 import { submitCampaign, type NewCampaignInput } from './actions'
 import { EXCL_KEY, type CartVenue } from './types'
-
-// The exported creative is always rendered at 16:9 720p so the crop preview and
-// the offscreen-canvas export share one coordinate system (see computeDraw).
-const EXPORT_W = 1280
-const EXPORT_H = 720
-
-// Free-drag QR default — the QR CENTER as fractions of the frame. Roughly
-// bottom-right, matching the old 'bottom-right' corner so placements don't jump.
-const QR_DEFAULT = { x: 0.9, y: 0.88 }
-
-// Filter presets are plain CSS filter strings. The SAME string is set on the
-// preview <img> (style.filter) and on the export canvas (ctx.filter), so what the
-// advertiser sees is what gets baked into the uploaded PNG.
-const FILTER_PRESETS = [
-  { value: 'none', label: 'None', css: '' },
-  { value: 'warm', label: 'Warm', css: 'sepia(0.35) saturate(1.25) hue-rotate(-12deg)' },
-  { value: 'bw', label: 'B&W', css: 'grayscale(1)' },
-  { value: 'vivid', label: 'Vivid', css: 'saturate(1.6) contrast(1.08)' },
-] as const
-type FilterPreset = (typeof FILTER_PRESETS)[number]['value']
-
-const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
-
-function buildFilter(preset: FilterPreset, brightness: number, contrast: number): string {
-  const base = FILTER_PRESETS.find((p) => p.value === preset)?.css ?? ''
-  return `${base} brightness(${brightness}%) contrast(${contrast}%)`.trim()
-}
-
-// Cover-fit the natural image into the WxH frame, then zoom about center and pan.
-// Returns the draw rect in frame pixels — used for BOTH the CSS preview (as % of
-// the frame) and the canvas export, so they line up exactly.
-function computeDraw(
-  nat: { w: number; h: number },
-  zoom: number,
-  pan: { x: number; y: number },
-  W: number,
-  H: number
-) {
-  const base = Math.max(W / nat.w, H / nat.h) // cover
-  const s = base * zoom
-  const dw = nat.w * s
-  const dh = nat.h * s
-  const dx = (W - dw) / 2 + pan.x * W
-  const dy = (H - dh) / 2 + pan.y * H
-  return { dx, dy, dw, dh }
-}
-
-// Keep the (zoomed) image fully covering the frame: pan is bounded by how much
-// the drawn image overhangs each edge (as a fraction of the frame).
-function clampPan(
-  nat: { w: number; h: number },
-  zoom: number,
-  pan: { x: number; y: number },
-  W: number,
-  H: number
-) {
-  const base = Math.max(W / nat.w, H / nat.h)
-  const s = base * zoom
-  const maxX = Math.max(0, (nat.w * s - W) / (2 * W))
-  const maxY = Math.max(0, (nat.h * s - H) / (2 * H))
-  return { x: clamp(pan.x, -maxX, maxX), y: clamp(pan.y, -maxY, maxY) }
-}
 
 export function CreativeStep({
   userId,
@@ -111,6 +61,10 @@ export function CreativeStep({
   const categoryName = categoryId ? categories.find((c) => c.id === categoryId)?.name : null
   const [title, setTitle] = useState('')
   const [qrUrl, setQrUrl] = useState('')
+  // No-website fallback: when 'phone', scanners are sent to a tel: link built from
+  // the number below, so a business with no site never dead-ends at checkout.
+  const [linkMode, setLinkMode] = useState<'url' | 'phone'>('url')
+  const [phone, setPhone] = useState('')
   const [mode, setMode] = useState<'upload' | 'help'>('upload')
   const [file, setFile] = useState<File | null>(null)
   const [fileUrl, setFileUrl] = useState<string | null>(null)
@@ -129,6 +83,11 @@ export function CreativeStep({
   const [brightness, setBrightness] = useState(100)
   const [contrast, setContrast] = useState(100)
   const [preset, setPreset] = useState<FilterPreset>('none')
+  // Photo adjustments are collapsed by default so the common path is just
+  // upload → position the QR → continue, not a wall of sliders.
+  const [showAdjust, setShowAdjust] = useState(false)
+  // Drives the submit button copy so a slow phone upload doesn't read as frozen.
+  const [statusMsg, setStatusMsg] = useState<string | null>(null)
 
   const frameRef = useRef<HTMLDivElement>(null)
   const qrChipRef = useRef<HTMLDivElement>(null)
@@ -138,6 +97,17 @@ export function CreativeStep({
 
   const isVideo = !!file && file.type.startsWith('video')
   const filterStr = buildFilter(preset, brightness, contrast)
+
+  // The scan destination: either the typed URL or a tel: link from the phone
+  // fallback. Normalizes to E.164-ish (assumes US when 10 digits).
+  const phoneDigits = phone.replace(/\D/g, '')
+  const qrTarget = useMemo(() => {
+    if (linkMode === 'phone') {
+      if (phoneDigits.length < 10) return ''
+      return `tel:+${phoneDigits.length === 10 ? `1${phoneDigits}` : phoneDigits}`
+    }
+    return qrUrl.trim()
+  }, [linkMode, phoneDigits, qrUrl])
 
   useEffect(() => {
     try {
@@ -156,6 +126,7 @@ export function CreativeStep({
     setBrightness(100)
     setContrast(100)
     setPreset('none')
+    setShowAdjust(false)
     setNat(null)
     if (!file) {
       setFileUrl(null)
@@ -169,7 +140,7 @@ export function CreativeStep({
   // Render the actual scan-link QR client-side so the preview matches the TV.
   // Lazy-import keeps the qrcode lib out of the main bundle.
   useEffect(() => {
-    const url = qrUrl.trim()
+    const url = qrTarget
     if (!url) {
       setQrPreview(null)
       return
@@ -188,7 +159,7 @@ export function CreativeStep({
     return () => {
       alive = false
     }
-  }, [qrUrl])
+  }, [qrTarget])
 
   const cart = useMemo(
     () => cartIds.map((id) => byId.get(id)).filter(Boolean) as CartVenue[],
@@ -281,40 +252,21 @@ export function CreativeStep({
       }
     : { position: 'absolute', inset: 0, width: '100%', height: '100%', filter: filterStr }
 
-  // Composite the cropped + filtered photo to a 1280x720 PNG. The QR is NEVER
-  // baked in (the TV draws a tracked QR at play time) — only the photo is drawn.
-  async function exportImageBlob(src: string): Promise<Blob> {
-    const img = await new Promise<HTMLImageElement>((res, rej) => {
-      const im = new window.Image()
-      im.onload = () => res(im)
-      im.onerror = () => rej(new Error('Could not read image.'))
-      im.src = src
-    })
-    const dims = { w: img.naturalWidth, h: img.naturalHeight }
-    const canvas = document.createElement('canvas')
-    canvas.width = EXPORT_W
-    canvas.height = EXPORT_H
-    const ctx = canvas.getContext('2d')
-    if (!ctx) throw new Error('Canvas is not available.')
-    ctx.fillStyle = '#000000'
-    ctx.fillRect(0, 0, EXPORT_W, EXPORT_H)
-    ctx.filter = filterStr // same string as the preview img
-    const d = computeDraw(dims, zoom, pan, EXPORT_W, EXPORT_H)
-    ctx.drawImage(img, d.dx, d.dy, d.dw, d.dh)
-    const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'))
-    if (!blob) throw new Error('Could not render image.')
-    return blob
-  }
-
   function onSubmit() {
     if (cart.length === 0) return toast.error('Your cart is empty. Pick screens first.')
     if (!title.trim()) return toast.error('Give your ad a title.')
-    if (!qrUrl.trim()) return toast.error('Add the link people go to when they scan your ad.')
+    if (!qrTarget)
+      return toast.error(
+        linkMode === 'phone'
+          ? 'Enter a phone number so scanners can reach you.'
+          : 'Add the link people go to when they scan your ad.'
+      )
     if (mode === 'upload' && !file)
       return toast.error('Upload your ad image or switch to "Request creative help".')
     if (mode === 'help' && !brief.trim()) return toast.error('Tell our team what you need designed.')
 
     start(async () => {
+      setStatusMsg(null)
       let creative_url: string | null = null
       let creative_type: 'video' | 'image' | null = null
 
@@ -327,7 +279,7 @@ export function CreativeStep({
         let contentType = file.type
         if (!isVideo && fileUrl) {
           try {
-            blob = await exportImageBlob(fileUrl)
+            blob = await exportImageBlob(fileUrl, { zoom, pan, filterStr })
           } catch (e) {
             toast.error(e instanceof Error ? e.message : 'Could not process image.')
             return
@@ -335,11 +287,13 @@ export function CreativeStep({
           ext = 'png'
           contentType = 'image/png'
         }
+        setStatusMsg('Uploading your ad…')
         const path = `${userId}/${crypto.randomUUID()}.${ext}`
         const { error: upErr } = await supabase.storage
           .from('creatives')
           .upload(path, blob, { contentType })
         if (upErr) {
+          setStatusMsg(null)
           toast.error(`Upload failed: ${upErr.message}`)
           return
         }
@@ -347,13 +301,15 @@ export function CreativeStep({
         creative_type = isVideo ? 'video' : 'image'
       }
 
+      setStatusMsg('Setting up your campaign…')
+
       const input: NewCampaignInput = {
         territory_id: territoryId,
         venue_ids: cart.map((v) => v.id),
         exclusive_venue_ids: [...exclSet],
         category_id: categoryId,
         title,
-        qr_target_url: qrUrl.trim(),
+        qr_target_url: qrTarget,
         qr_x: qrX,
         qr_y: qrY,
         creative_type,
@@ -364,6 +320,7 @@ export function CreativeStep({
 
       const res = await submitCampaign(input)
       if (res.error) {
+        setStatusMsg(null)
         toast.error(res.error)
         return
       }
@@ -397,7 +354,7 @@ export function CreativeStep({
         step={3}
         total={3}
         title="Add your ad"
-        subtitle="A 15-second spot. Image ads look best at 1180 × 820."
+        subtitle="A 15-second spot. Images look best at 16:9 — 1920 × 1080."
       />
 
       <div className="space-y-1.5">
@@ -413,18 +370,46 @@ export function CreativeStep({
       )}
 
       <div className="space-y-1.5">
-        <Label>Link when scanned</Label>
-        <Input
-          type="url"
-          className="h-11"
-          placeholder="https://your-site.com/offer"
-          value={qrUrl}
-          onChange={(e) => setQrUrl(e.target.value)}
-          required
-        />
-        <p className="text-xs text-muted-foreground">
-          A QR code on your ad sends scanners here. This is how you track results.
-        </p>
+        <div className="flex items-center justify-between">
+          <Label>{linkMode === 'phone' ? 'Phone number when scanned' : 'Link when scanned'}</Label>
+          <button
+            type="button"
+            className="text-xs font-medium text-primary hover:underline"
+            onClick={() => setLinkMode((m) => (m === 'url' ? 'phone' : 'url'))}
+          >
+            {linkMode === 'url' ? "I don't have a website" : 'Use a website link instead'}
+          </button>
+        </div>
+        {linkMode === 'phone' ? (
+          <>
+            <Input
+              type="tel"
+              inputMode="tel"
+              className="h-11"
+              placeholder="(555) 123-4567"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              required
+            />
+            <p className="text-xs text-muted-foreground">
+              No website? Scanning your ad opens their phone to call you — the scan is still tracked.
+            </p>
+          </>
+        ) : (
+          <>
+            <Input
+              type="url"
+              className="h-11"
+              placeholder="https://your-site.com/offer"
+              value={qrUrl}
+              onChange={(e) => setQrUrl(e.target.value)}
+              required
+            />
+            <p className="text-xs text-muted-foreground">
+              A QR code on your ad sends scanners here. This is how you track results.
+            </p>
+          </>
+        )}
       </div>
 
       <div className="space-y-3">
@@ -516,7 +501,7 @@ export function CreativeStep({
                       style={imgStyle}
                     />
                   )}
-                  {qrUrl.trim() && (
+                  {qrTarget && (
                     <div
                       ref={qrChipRef}
                       onPointerDown={onQrDown}
@@ -546,7 +531,21 @@ export function CreativeStep({
                 </div>
 
                 {!isVideo && (
-                  <div className="space-y-4">
+                  <div className="space-y-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowAdjust((s) => !s)}
+                      className="flex w-full items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-sm font-medium transition hover:border-primary/40"
+                    >
+                      <span className="flex items-center gap-2">
+                        <SlidersHorizontal className="size-4 text-muted-foreground" /> Adjust photo
+                      </span>
+                      <ChevronDown
+                        className={`size-4 text-muted-foreground transition-transform ${showAdjust ? 'rotate-180' : ''}`}
+                      />
+                    </button>
+                    {showAdjust && (
+                    <div className="space-y-4">
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between">
                         <Label>Zoom</Label>
@@ -610,6 +609,8 @@ export function CreativeStep({
                         ))}
                       </div>
                     </div>
+                    </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -632,7 +633,7 @@ export function CreativeStep({
       </div>
 
       <StickyCta
-        label={pending ? 'Working…' : 'Continue to payment'}
+        label={pending ? statusMsg ?? 'Working…' : 'Continue to payment'}
         disabled={pending}
         onClick={onSubmit}
         priceTop="Total"

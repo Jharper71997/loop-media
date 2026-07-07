@@ -3,10 +3,12 @@ import { headers } from 'next/headers'
 import { Tv as TvIcon, MapPin, Megaphone, Percent, Plus } from 'lucide-react'
 import { requireProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { timeAgo, isTvLive } from '@/lib/format'
+import { timeAgo, isTvLive, formatNumber } from '@/lib/format'
 import type { Tv, Venue } from '@/lib/db.types'
 import { OnboardingTour } from '@/components/app/OnboardingTour'
 import { LiveStatus } from '@/components/app/LiveStatus'
@@ -101,6 +103,44 @@ export default async function HostHome() {
   const allTvs = venues.flatMap((v) => v.tvs)
   const onlineCount = allTvs.filter((t) => isTvLive(t.last_heartbeat_at)).length
 
+  // Performance at their venues over the last 30 days: real QR scans driven,
+  // measured ad plays, and trivia players. Counted with the admin client scoped to
+  // THIS host's own venue/screen ids (which we already loaded above), so the
+  // numbers are correct regardless of per-table RLS on aggregate reads.
+  const venueIds = venues.map((v) => v.id)
+  const since = new Date()
+  since.setUTCDate(since.getUTCDate() - 30)
+  const sinceIso = since.toISOString()
+  let scans30 = 0
+  let plays30 = 0
+  let trivia30 = 0
+  if (venueIds.length) {
+    const adminRead = createAdminClient()
+    const [scanRes, triviaRes, playRes] = await Promise.all([
+      adminRead
+        .from('qr_scans')
+        .select('id', { count: 'exact', head: true })
+        .in('venue_id', venueIds)
+        .eq('is_bot', false)
+        .gte('scanned_at', sinceIso),
+      adminRead
+        .from('trivia_players')
+        .select('id', { count: 'exact', head: true })
+        .in('venue_id', venueIds)
+        .gte('created_at', sinceIso),
+      tvIds.length
+        ? adminRead
+            .from('ad_plays')
+            .select('id', { count: 'exact', head: true })
+            .in('tv_id', tvIds)
+            .gte('played_at', sinceIso)
+        : Promise.resolve({ count: 0 }),
+    ])
+    scans30 = scanRes.count ?? 0
+    trivia30 = triviaRes.count ?? 0
+    plays30 = playRes.count ?? 0
+  }
+
   return (
     <div className="space-y-8">
       <OnboardingTour role="host" />
@@ -135,12 +175,13 @@ export default async function HostHome() {
         </Card>
       ) : (
         <>
-          {/* Summary tiles */}
-          <div className="grid gap-4 sm:grid-cols-2">
+          {/* Performance at your venues — what a screen is actually driving, so
+              hosting reads as worth it rather than a black box. */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Card>
               <CardContent className="p-5">
                 <p className="text-sm text-muted-foreground">Screens online</p>
-                <p className="text-2xl font-semibold">
+                <p className="text-2xl font-semibold tabular-nums">
                   {onlineCount}
                   <span className="text-base font-normal text-muted-foreground">
                     {' '}
@@ -151,14 +192,22 @@ export default async function HostHome() {
             </Card>
             <Card>
               <CardContent className="p-5">
-                <p className="text-sm text-muted-foreground">Promo slots used</p>
-                <p className="text-2xl font-semibold">
-                  {promosUsed ?? 0}
-                  <span className="text-base font-normal text-muted-foreground">
-                    {' '}
-                    / {PROMO_SLOTS}
-                  </span>
+                <p className="text-sm text-muted-foreground">Scans driven · 30d</p>
+                <p className="text-2xl font-semibold tabular-nums text-primary">
+                  {formatNumber(scans30)}
                 </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-5">
+                <p className="text-sm text-muted-foreground">Ads played · 30d</p>
+                <p className="text-2xl font-semibold tabular-nums">{formatNumber(plays30)}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-5">
+                <p className="text-sm text-muted-foreground">Trivia players · 30d</p>
+                <p className="text-2xl font-semibold tabular-nums">{formatNumber(trivia30)}</p>
               </CardContent>
             </Card>
           </div>
@@ -170,11 +219,22 @@ export default async function HostHome() {
                 <CardContent className="p-5">
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div>
-                      <h2 className="font-medium">{v.name}</h2>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="font-medium">{v.name}</h2>
+                        {v.status !== 'active' && (
+                          <Badge variant="warning">Pending review</Badge>
+                        )}
+                      </div>
                       <p className="flex items-center gap-1 text-xs text-muted-foreground">
                         <MapPin className="size-3" /> {v.address ?? 'Address on file'}
                         {v.category?.name && <span>· {v.category.name}</span>}
                       </p>
+                      {v.status !== 'active' && (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          We&apos;re reviewing your venue — pair your screen now; paid ads start
+                          running once it&apos;s approved.
+                        </p>
+                      )}
                     </div>
                     <RemoveLocationButton
                       venueId={v.id}
@@ -250,7 +310,8 @@ export default async function HostHome() {
             <div className="text-sm">
               <p className="font-medium">Promote your business — free</p>
               <p className="text-muted-foreground">
-                You get {PROMO_SLOTS} free promo slots to run on other Loop screens around town.
+                You&apos;ve used {promosUsed ?? 0} of your {PROMO_SLOTS} free promo slots on other
+                Loop screens around town.
               </p>
             </div>
             <Link href="/host/promos" className={cn(buttonVariants(), 'shrink-0')}>

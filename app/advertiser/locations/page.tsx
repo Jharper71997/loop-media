@@ -131,7 +131,9 @@ export default async function LocationsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="font-heading text-2xl font-bold tracking-tight">Locations</h1>
-        <p className="text-sm text-muted-foreground">The real places your ad is running.</p>
+        <p className="text-sm text-muted-foreground">
+          Every venue your ad plays at — live status, scans, and the map.
+        </p>
       </div>
 
       {venues.length === 0 ? (

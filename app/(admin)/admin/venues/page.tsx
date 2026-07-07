@@ -5,6 +5,7 @@ import { getTerritoryContext } from '@/lib/territory'
 import { createClient } from '@/lib/supabase/server'
 import { kioskUrl } from '@/lib/tv'
 import { PageHeader } from '@/components/admin/PageHeader'
+import { ListSearch } from '@/components/admin/ListSearch'
 import { DeleteButton } from '@/components/admin/DeleteButton'
 import { LiveStatus } from '@/components/app/LiveStatus'
 import { CopyField } from '@/components/app/CopyField'
@@ -40,10 +41,15 @@ function StatusBadge({ v }: { v: VenueRow }) {
   return <Badge variant="warning">Needs data</Badge>
 }
 
-export default async function VenuesPage() {
+export default async function VenuesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; status?: string }>
+}) {
   const profile = await requireAdmin()
   const territory = await getTerritoryContext(profile)
   const t = territory.activeId
+  const { q, status } = await searchParams
   const supabase = await createClient()
   const pricingConfig = await getPricingConfig()
 
@@ -60,6 +66,9 @@ export default async function VenuesPage() {
     .select('*, category:categories(name), territory:territories(name)')
     .order('name')
   if (t) vq = vq.eq('territory_id', t)
+  if (q?.trim()) vq = vq.ilike('name', `%${q.trim()}%`)
+  if (status === 'active') vq = vq.eq('status', 'active')
+  else if (status === 'inactive') vq = vq.eq('status', 'inactive')
 
   const [{ data: venues }, { data: categories }, { data: hostProfiles }] = await Promise.all([
     vq,
@@ -115,7 +124,7 @@ export default async function VenuesPage() {
 
   return (
     <>
-      <AutoRefresh seconds={20} />
+      <AutoRefresh seconds={60} />
       <PageHeader
         title="Venues & screens"
         description={`${rows.length} venue${rows.length === 1 ? '' : 's'} · ${liveCount} of ${allTvs.length} screen${allTvs.length === 1 ? '' : 's'} live now`}
@@ -131,9 +140,16 @@ export default async function VenuesPage() {
       />
 
       <div className="space-y-3 p-5 md:p-6">
+        <ListSearch
+          placeholder="Search venues by name…"
+          statusOptions={[
+            { value: 'active', label: 'Active' },
+            { value: 'inactive', label: 'Hidden' },
+          ]}
+        />
         {rows.length === 0 && (
           <p className="rounded-xl border border-border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
-            No venues yet. Add your first location.
+            {q?.trim() || status ? 'No venues match your search.' : 'No venues yet. Add your first location.'}
           </p>
         )}
 
@@ -232,10 +248,14 @@ export default async function VenuesPage() {
                             display={`/tv?device=…${tv.device_id.slice(-6)}`}
                             label="Copy link"
                           />
+                        ) : tv.pairing_code ? (
+                          <CopyField
+                            value={tv.pairing_code}
+                            display={tv.pairing_code}
+                            label="Copy code"
+                          />
                         ) : (
-                          <code className="rounded bg-muted px-2 py-1 font-mono text-xs">
-                            {tv.pairing_code ?? '—'}
-                          </code>
+                          <code className="rounded bg-muted px-2 py-1 font-mono text-xs">—</code>
                         )}
                         <div className="flex gap-1">
                           <RegenerateButton id={tv.id} />

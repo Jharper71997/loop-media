@@ -52,7 +52,19 @@ export default function MapView({
   // frame all venues (national when there's no location). Markers are unaffected.
   const framePoints: [number, number][] =
     frameBounds ?? (userLoc ? [userLoc, ...venuePoints] : venuePoints)
+  // Legend so the 6-color marker palette isn't a guessing game. "You" only shows
+  // once we know their location.
+  const legend: { color: string; label: string }[] = [
+    { color: MARKER.open, label: 'Open' },
+    { color: MARKER.cart, label: 'In cart' },
+    { color: MARKER.comingSoon, label: 'Coming soon' },
+    { color: MARKER.categoryFull, label: 'Category taken' },
+    { color: MARKER.full, label: 'Full' },
+    ...(userLoc ? [{ color: MARKER.you, label: 'You' }] : []),
+  ]
+
   return (
+    <div className="space-y-2">
     <MapContainer
       center={US_CENTER}
       zoom={US_ZOOM}
@@ -132,6 +144,9 @@ export default function MapView({
                       >
                         {waitlisted.has(v.id) ? 'Notify on' : 'Notify me'}
                       </Button>
+                      <p className="text-xs text-muted-foreground">
+                        We&apos;ll email you the day it goes live.
+                      </p>
                     </div>
                   ) : v.open === 0 ? (
                     <p className="text-xs font-semibold text-destructive">Screen full</p>
@@ -151,5 +166,18 @@ export default function MapView({
           )
         })}
     </MapContainer>
+      <div className="flex flex-wrap gap-x-3 gap-y-1.5 px-1 text-[11px] text-muted-foreground">
+        {legend.map((l) => (
+          <span key={l.label} className="inline-flex items-center gap-1.5">
+            <span
+              className="size-2.5 shrink-0 rounded-full"
+              style={{ backgroundColor: l.color }}
+              aria-hidden
+            />
+            {l.label}
+          </span>
+        ))}
+      </div>
+    </div>
   )
 }

@@ -12,7 +12,6 @@ import { resolveAdvertiserContext } from '@/lib/pricing.server'
 import { PERF_WINDOW_DAYS } from '@/lib/analytics'
 import { MoneyStat } from '@/components/app/MoneyStat'
 import { OnboardingTour } from '@/components/app/OnboardingTour'
-import AdsMap, { type AdsMapVenue } from './AdsMap'
 
 type CampaignRow = {
   id: string
@@ -177,20 +176,6 @@ export default async function AdvertiserDashboard({
   }
 
   const allVenues = [...byVenue.values()]
-  const mapVenues: AdsMapVenue[] = allVenues.map((v) => ({
-    id: v.id,
-    name: v.name,
-    lat: v.lat,
-    lng: v.lng,
-    ads: v.ads,
-  }))
-  const geoVenues = mapVenues.filter((v) => v.lat != null && v.lng != null)
-  const center: [number, number] = geoVenues.length
-    ? [
-        geoVenues.reduce((s, v) => s + (v.lat as number), 0) / geoVenues.length,
-        geoVenues.reduce((s, v) => s + (v.lng as number), 0) / geoVenues.length,
-      ]
-    : [34.7541, -77.4302]
 
   // The real, named places the ad is actually running (active campaigns) — live first.
   const playingVenues = allVenues
@@ -241,7 +226,9 @@ export default async function AdvertiserDashboard({
       <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="font-heading text-2xl font-bold tracking-tight">Your ads</h1>
-          <p className="text-sm text-muted-foreground">The real places your ad is running.</p>
+          <p className="text-sm text-muted-foreground">
+            Your campaigns and where they&apos;re running, at a glance.
+          </p>
         </div>
         {hasCampaigns && (
           <Link href="/advertiser/browse" className={cn(buttonVariants({ size: 'sm' }))}>
@@ -314,7 +301,12 @@ export default async function AdvertiserDashboard({
                     ))}
                   </CardContent>
                 </Card>
-                {geoVenues.length > 0 && <AdsMap venues={mapVenues} center={center} />}
+                <Link
+                  href="/advertiser/locations"
+                  className="flex items-center justify-center gap-1 text-sm text-primary hover:underline"
+                >
+                  See every location on the map <MapPin className="size-3.5" />
+                </Link>
               </div>
             ) : (
               <Card>

@@ -43,61 +43,72 @@ export function AddScreensClient({ campaignId, venues }: { campaignId: string; v
     })
   }
 
+  if (venues.length === 0) {
+    return (
+      <Card>
+        <CardContent className="py-10 text-center text-sm text-muted-foreground">
+          No more screens are available in this market right now.
+        </CardContent>
+      </Card>
+    )
+  }
+
   return (
     <div className="space-y-4">
-      <Button onClick={submit} disabled={!selected.size || pending} size="lg" className="h-12 w-full">
-        {pending
-          ? 'Adding…'
-          : selected.size
-            ? `Add ${selected.size} screen${selected.size === 1 ? '' : 's'}`
-            : 'Select screens to add'}
-      </Button>
-      <p className="text-xs text-muted-foreground">
-        We&apos;ll prorate the difference onto your next invoice; your monthly total updates right
-        away.
-      </p>
-
-      {venues.length === 0 ? (
-        <Card>
-          <CardContent className="py-10 text-center text-sm text-muted-foreground">
-            No more screens are available in this market right now.
-          </CardContent>
-        </Card>
-      ) : (
-        <Card className="py-0">
-          <CardContent className="divide-y divide-border p-0">
-            {venues.map((v) => {
-              const on = selected.has(v.id)
-              return (
-                <button
-                  key={v.id}
-                  type="button"
-                  onClick={() => toggle(v.id)}
+      <Card className="py-0">
+        <CardContent className="divide-y divide-border p-0">
+          {venues.map((v) => {
+            const on = selected.has(v.id)
+            return (
+              <button
+                key={v.id}
+                type="button"
+                onClick={() => toggle(v.id)}
+                className={cn(
+                  'flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left transition',
+                  on ? 'bg-primary/10' : 'hover:bg-muted/50'
+                )}
+              >
+                <div className="min-w-0">
+                  <p className="truncate font-medium">{v.name}</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {[v.city, v.state].filter(Boolean).join(', ') || 'Local venue'}
+                  </p>
+                </div>
+                <span
                   className={cn(
-                    'flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left transition',
-                    on ? 'bg-primary/10' : 'hover:bg-muted/50'
+                    'grid size-6 shrink-0 place-items-center rounded-full border',
+                    on ? 'border-primary bg-primary text-primary-foreground' : 'border-border'
                   )}
                 >
-                  <div className="min-w-0">
-                    <p className="truncate font-medium">{v.name}</p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {[v.city, v.state].filter(Boolean).join(', ') || 'Local venue'}
-                    </p>
-                  </div>
-                  <span
-                    className={cn(
-                      'grid size-6 shrink-0 place-items-center rounded-full border',
-                      on ? 'border-primary bg-primary text-primary-foreground' : 'border-border'
-                    )}
-                  >
-                    {on && <Check className="size-4" />}
-                  </span>
-                </button>
-              )
-            })}
-          </CardContent>
-        </Card>
-      )}
+                  {on && <Check className="size-4" />}
+                </span>
+              </button>
+            )
+          })}
+        </CardContent>
+      </Card>
+
+      {/* Pin the commit action to the bottom so it's always in reach on a long
+          list — offset to clear the tab bar (this page keeps its nav). */}
+      <div className="sticky bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-10 -mx-4 border-t border-border bg-background/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-xl sm:border">
+        <Button
+          onClick={submit}
+          disabled={!selected.size || pending}
+          size="lg"
+          className="h-12 w-full"
+        >
+          {pending
+            ? 'Adding…'
+            : selected.size
+              ? `Add ${selected.size} screen${selected.size === 1 ? '' : 's'}`
+              : 'Select screens to add'}
+        </Button>
+        <p className="mt-2 text-xs text-muted-foreground">
+          We&apos;ll prorate the difference onto your next invoice; your monthly total updates right
+          away.
+        </p>
+      </div>
     </div>
   )
 }

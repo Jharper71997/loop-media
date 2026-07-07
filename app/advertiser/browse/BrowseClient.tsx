@@ -15,6 +15,7 @@ import { formatCents } from '@/lib/format'
 import {
   quoteCart,
   volumeDiscount,
+  MIN_MONTHLY_CENTS,
   type PriceTier,
   type QuoteOptions,
   type PricingConfig,
@@ -101,10 +102,9 @@ export function BrowseClient({
       { enableHighAccuracy: false, timeout: 10_000, maximumAge: 300_000 }
     )
   }, [])
-  // Ask on entry so they land straight on their own area.
-  useEffect(() => {
-    locate()
-  }, [locate])
+  // NOTE: we intentionally do NOT auto-locate on mount — firing the OS permission
+  // dialog before the advertiser has seen a single screen reads as hostile. They
+  // tap "Use my location" (below) when they want nearest-first.
 
   useEffect(() => {
     try {
@@ -317,7 +317,7 @@ export function BrowseClient({
         subtitle={
           knowsLoc ? 'Screens near you — tap any to add' : 'Tap any screen on the map or list to add it'
         }
-        backHref={`${base}/browse`}
+        backHref={homeFor(base)}
       />
 
       {activeCatName ? (
@@ -348,10 +348,12 @@ export function BrowseClient({
           <Loader2 className="size-3.5 animate-spin" /> Finding screens near you…
         </p>
       )}
-      {(geoStatus === 'denied' || geoStatus === 'unsupported') && (
+      {(geoStatus === 'idle' || geoStatus === 'denied' || geoStatus === 'unsupported') && (
         <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/40 px-3 py-2">
           <p className="text-xs text-muted-foreground">
-            Turn on location to see the screens closest to you. Showing everything for now.
+            {geoStatus === 'idle'
+              ? 'See the screens closest to you first, or browse the whole map below.'
+              : 'Turn on location to see the screens closest to you. Showing everything for now.'}
           </p>
           <Button size="sm" variant="outline" className="shrink-0" onClick={locate}>
             <Navigation className="size-4" /> Use my location
@@ -392,6 +394,15 @@ export function BrowseClient({
                 Add {nextTierAt! - cartVenues.length} more screen
                 {nextTierAt! - cartVenues.length === 1 ? '' : 's'} to unlock{' '}
                 {Math.round(nextPct * 100)}% off
+              </p>
+            )}
+
+            {/* The sticky total floors up to the account minimum; without a note
+                that number reads as a bug when the cart is small. */}
+            {quote.floorApplied && cartVenues.length > 0 && (
+              <p className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-center text-xs text-muted-foreground">
+                {formatCents(pricingConfig?.minMonthlyCents ?? MIN_MONTHLY_CENTS)}/mo account
+                minimum — add more screens to use it all.
               </p>
             )}
 

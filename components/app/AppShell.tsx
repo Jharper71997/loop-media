@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
-import { LogOut } from 'lucide-react'
+import { LogOut, ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { BottomNav, type AppRole } from './BottomNav'
@@ -60,6 +60,17 @@ export function AppShell({
             </span>
           </Link>
           <div className="flex items-center gap-1.5">
+            {/* The guided buy flow hides the tab bar for both roles. A host inside
+                it would otherwise have no signposted way back to Venue/Promos/
+                Account, so give them a persistent "Hosting" exit. */}
+            {role === 'host' && hideNav && (
+              <Link
+                href="/host"
+                className="flex items-center gap-1 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition hover:text-foreground"
+              >
+                <ArrowLeft className="size-3.5" /> Hosting
+              </Link>
+            )}
             {crossLink && (
               <Link
                 href={crossLink.href}

@@ -1,8 +1,7 @@
-import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
 import { requireProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { Card, CardContent } from '@/components/ui/card'
+import { BackLink } from '@/components/app/BackLink'
 import { RegisterVenueForm } from './RegisterVenueForm'
 
 export default async function RegisterVenuePage() {
@@ -14,12 +13,7 @@ export default async function RegisterVenuePage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <Link
-        href="/host"
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="size-4" /> Back to dashboard
-      </Link>
+      <BackLink href="/host" label="Back to dashboard" />
 
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Register a location</h1>

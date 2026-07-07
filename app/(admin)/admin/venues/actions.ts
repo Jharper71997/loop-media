@@ -2,8 +2,15 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { requireAdmin } from '@/lib/auth'
 import { geocodeAddress } from '@/lib/geocode'
+import {
+  genPairingCode,
+  TV_PAIRING_CODE_LEN,
+  DEFAULT_LOOP_SECONDS,
+  DEFAULT_SLOT_SECONDS,
+} from '@/lib/tv'
 import type { PriceTier } from '@/lib/db.types'
 
 export interface VenueInput {
@@ -34,12 +41,15 @@ export interface VenueInput {
   business_open: string
   business_close: string
   business_days: number[]
+  // New venues only: also stand up the first screen with a pairing code, so a
+  // location isn't created then left with "no screen yet" as a separate step.
+  create_screen?: boolean
 }
 
 export async function saveVenue(input: VenueInput) {
   await requireAdmin()
   const supabase = await createClient()
-  const { id, ...rest } = input
+  const { id, create_screen, ...rest } = input
 
   // Coordinates come ONLY from the address (no lat/lng inputs). Re-geocode on
   // every save so editing the address moves the pin.
@@ -63,11 +73,36 @@ export async function saveVenue(input: VenueInput) {
     ...(geo ? { lat: geo.lat, lng: geo.lng } : {}),
   }
 
-  const { error } = id
-    ? await supabase.from('venues').update(payload).eq('id', id)
-    : await supabase.from('venues').insert(payload)
+  if (id) {
+    const { error } = await supabase.from('venues').update(payload).eq('id', id)
+    if (error) return { error: error.message }
+  } else {
+    const { data: created, error } = await supabase
+      .from('venues')
+      .insert(payload)
+      .select('id')
+      .single()
+    if (error || !created) return { error: error?.message ?? 'Could not create venue.' }
 
-  if (error) return { error: error.message }
+    // Stand up the first screen right away (same pattern as host self-registration)
+    // so the location is usable without a second click. Best-effort with a retry on
+    // the rare pairing-code clash.
+    if (create_screen) {
+      const admin = createAdminClient()
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const { error: tvErr } = await admin.from('tvs').insert({
+          venue_id: created.id,
+          pairing_code: genPairingCode(TV_PAIRING_CODE_LEN),
+          status: 'unpaired',
+          loop_length_seconds: DEFAULT_LOOP_SECONDS,
+          slot_seconds: DEFAULT_SLOT_SECONDS,
+        })
+        if (!tvErr) break
+        if (!/duplicate|unique/i.test(tvErr.message)) break
+      }
+    }
+  }
+
   revalidatePath('/admin/venues')
   revalidatePath('/admin/map')
   return { error: null }

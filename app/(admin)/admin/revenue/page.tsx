@@ -13,6 +13,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { formatCents, formatNumber } from '@/lib/format'
+import { ExportCsvButton } from '@/components/admin/ExportCsvButton'
 import { ActivateButton } from './ActivateButton'
 
 type SubRow = {
@@ -57,11 +58,22 @@ export default async function RevenuePage() {
     amount_cents: number
     paid_at: string
   }[]
-  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()
+  const now = new Date()
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+  const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString()
   const collectedAllTime = payments.reduce((acc, p) => acc + (p.amount_cents ?? 0), 0)
   const collectedThisMonth = payments
     .filter((p) => p.paid_at >= monthStart)
     .reduce((acc, p) => acc + (p.amount_cents ?? 0), 0)
+  const collectedLastMonth = payments
+    .filter((p) => p.paid_at >= lastMonthStart && p.paid_at < monthStart)
+    .reduce((acc, p) => acc + (p.amount_cents ?? 0), 0)
+  // Month-over-month change in collected cash (only meaningful once last month
+  // had revenue).
+  const momPct =
+    collectedLastMonth > 0
+      ? Math.round(((collectedThisMonth - collectedLastMonth) / collectedLastMonth) * 100)
+      : null
   const payingAdvertisers = new Set(payments.map((p) => p.advertiser_id).filter(Boolean)).size
 
   // Monthly price per subscription = the cart total frozen at checkout.
@@ -88,12 +100,28 @@ export default async function RevenuePage() {
   // Paid intent but stuck in draft (webhook never fired) → admin can activate.
   const needsActivation = subs.filter((s) => s.campaign?.status === 'draft')
 
-  const stats = [
-    { label: 'Collected this month', value: formatCents(collectedThisMonth), icon: DollarSign },
+  const stats: { label: string; value: string; icon: typeof DollarSign; sub?: string }[] = [
+    {
+      label: 'Collected this month',
+      value: formatCents(collectedThisMonth),
+      icon: DollarSign,
+      sub:
+        momPct != null
+          ? `${momPct >= 0 ? '+' : ''}${momPct}% vs last month (${formatCents(collectedLastMonth)})`
+          : undefined,
+    },
     { label: 'Collected all-time', value: formatCents(collectedAllTime), icon: TrendingUp },
     { label: 'Paying advertisers', value: formatNumber(payingAdvertisers), icon: Users },
     { label: 'Contracted MRR (projected)', value: formatCents(mrr), icon: DollarSign },
   ]
+
+  // CSV of every subscription (advertiser-facing figures) for offline reporting.
+  const csvRows = subs.map((s) => ({
+    ad: s.campaign?.ad?.title ?? 'Campaign',
+    status: s.status,
+    territory: territoryName(s.territory_id ?? 'none'),
+    monthly_usd: ((priceById.get(s.id) ?? 0) / 100).toFixed(2),
+  }))
 
   return (
     <>
@@ -102,6 +130,7 @@ export default async function RevenuePage() {
         description={
           t ? territory.territories.find((x) => x.id === t)?.name : 'All territories'
         }
+        action={<ExportCsvButton filename="loop-revenue.csv" rows={csvRows} />}
       />
 
       <div className="space-y-6 p-6">
@@ -112,6 +141,7 @@ export default async function RevenuePage() {
                 <div>
                   <p className="text-sm text-muted-foreground">{s.label}</p>
                   <p className="mt-1 text-2xl font-semibold tabular-nums">{s.value}</p>
+                  {s.sub && <p className="mt-0.5 text-xs text-muted-foreground">{s.sub}</p>}
                 </div>
                 <s.icon className="size-5 text-muted-foreground" />
               </CardContent>

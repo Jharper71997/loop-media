@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Check } from 'lucide-react'
+import { Check, MailCheck } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -16,35 +16,48 @@ import {
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Combobox } from '@/components/ui/combobox'
 import { rememberCategory, requestCategory } from '@/app/advertiser/browse/actions'
 
 // Sentinel for "my business type isn't listed" — files a review request instead
 // of locking a real category.
 const OTHER = '__other__'
 
-// Advertiser sign-up only. Hosts register their venue at /host/register.
+// Sign-up form for both audiences. Advertiser is the default/primary funnel and
+// captures a business category here; the host variant (role="host") is a
+// clearly-secondary path that skips the category and routes into venue
+// registration once the account exists.
 export function SignupForm({
+  role = 'advertiser',
   categories = [],
 }: {
+  role?: 'advertiser' | 'host'
   categories?: { id: string; name: string }[]
 }) {
+  const isHost = role === 'host'
   const [categoryId, setCategoryId] = useState('')
   const [otherText, setOtherText] = useState('')
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  // Set once a confirm-email signup succeeds: swaps the form for a
+  // check-your-email screen instead of stranding the user on a toast.
+  const [awaitingConfirm, setAwaitingConfirm] = useState(false)
+  const [resending, setResending] = useState(false)
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
     const isOther = categoryId === OTHER
-    if (!categoryId) {
-      toast.error('Pick what you sell so we can lock in your category.')
-      return
-    }
-    if (isOther && !otherText.trim()) {
-      toast.error('Tell us what your business does so we can review it.')
-      return
+    if (!isHost) {
+      if (!categoryId) {
+        toast.error('Pick what you sell so we can lock in your category.')
+        return
+      }
+      if (isOther && !otherText.trim()) {
+        toast.error('Tell us what your business does so we can review it.')
+        return
+      }
     }
     setLoading(true)
     const supabase = createClient()
@@ -54,11 +67,11 @@ export function SignupForm({
       options: {
         data: {
           full_name: fullName,
-          role: 'advertiser',
-          ...(categoryId && !isOther ? { category_id: categoryId } : {}),
+          role,
+          ...(!isHost && categoryId && !isOther ? { category_id: categoryId } : {}),
           // Stash the proposed type in metadata too, so it survives an email-confirm
           // signup that has no session to file the request below.
-          ...(isOther ? { category_request: otherText.trim() } : {}),
+          ...(!isHost && isOther ? { category_request: otherText.trim() } : {}),
         },
       },
     })
@@ -67,41 +80,107 @@ export function SignupForm({
       toast.error(error.message)
       return
     }
-    // With a session (no email confirmation) record their choice now. A real pick
-    // saves to the profile so the buy flow never asks again; an "Other" files a
-    // review request for an admin to approve, and they browse everything meanwhile.
-    if (data.session) {
+    // With a session (no email confirmation) record an advertiser's choice now. A
+    // real pick saves to the profile so the buy flow never asks again; an "Other"
+    // files a review request for an admin to approve. Hosts skip this entirely.
+    if (data.session && !isHost) {
       try {
         if (isOther) await requestCategory(otherText.trim())
         else if (categoryId) await rememberCategory(categoryId)
       } catch {}
     }
-    // Flag a fresh sign-up so the dashboard shows the first-run walkthrough once.
-    try {
-      localStorage.setItem('loop.signup', '1')
-      sessionStorage.setItem('loop.signup', '1')
-    } catch {}
     if (data.session) {
-      window.location.assign('/advertiser')
+      if (isHost) {
+        // A fresh host has an account but no venue yet — send them straight into
+        // venue registration (they now pass the host gate on that route).
+        window.location.assign('/host/register')
+      } else {
+        // Flag a fresh sign-up so the dashboard shows the first-run walkthrough once.
+        try {
+          localStorage.setItem('loop.signup', '1')
+          sessionStorage.setItem('loop.signup', '1')
+        } catch {}
+        window.location.assign('/advertiser')
+      }
     } else {
-      toast.success('Account created — check your email to confirm, then log in.')
+      // Email confirmation is on: show the check-your-email screen.
+      setAwaitingConfirm(true)
     }
+  }
+
+  async function resend() {
+    setResending(true)
+    const supabase = createClient()
+    const { error } = await supabase.auth.resend({ type: 'signup', email })
+    setResending(false)
+    if (error) toast.error(error.message)
+    else toast.success('Confirmation email sent again.')
+  }
+
+  if (awaitingConfirm) {
+    return (
+      <Card>
+        <CardHeader className="items-center text-center">
+          <span className="mb-2 grid size-12 place-items-center rounded-full bg-primary/15 text-primary">
+            <MailCheck className="size-6" />
+          </span>
+          <CardTitle>Check your email</CardTitle>
+          <CardDescription>
+            We sent a confirmation link to <span className="font-medium text-foreground">{email}</span>.
+            Open it to finish setting up your account.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <a href="https://mail.google.com" target="_blank" rel="noreferrer" className="block">
+            <Button type="button" size="lg" className="h-12 w-full text-base">
+              Open email
+            </Button>
+          </a>
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            disabled={resending}
+            onClick={resend}
+          >
+            {resending ? 'Sending…' : "Didn't get it? Resend"}
+          </Button>
+          <p className="text-center text-sm text-muted-foreground">
+            Already confirmed?{' '}
+            <Link href="/login" className="text-primary hover:underline">
+              Log in
+            </Link>
+          </p>
+        </CardContent>
+      </Card>
+    )
   }
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Create your advertiser account</CardTitle>
-        <CardDescription>Put your business on local screens.</CardDescription>
+        <CardTitle>{isHost ? 'Host a screen' : 'Create your advertiser account'}</CardTitle>
+        <CardDescription>
+          {isHost
+            ? 'Run the loop on your own TV and unlock free promo slots.'
+            : 'Put your business on local screens.'}
+        </CardDescription>
       </CardHeader>
       <form onSubmit={onSubmit}>
         <CardContent className="space-y-4">
           <ul className="space-y-1.5 rounded-lg border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
-            {[
-              'Your ad on local TVs where your customers already go',
-              'Live in minutes — you manage it yourself',
-              'A QR on every ad tracks your real results',
-            ].map((t) => (
+            {(isHost
+              ? [
+                  'Trivia, a leaderboard, and clean local ads on your screen',
+                  'Free to host — we handle content and support',
+                  '2 free promo slots on other Loop screens around town',
+                ]
+              : [
+                  'Your ad on local TVs where your customers already go',
+                  'Live in minutes — you manage it yourself',
+                  'A QR on every ad tracks your real results',
+                ]
+            ).map((t) => (
               <li key={t} className="flex gap-2">
                 <Check className="mt-0.5 size-3.5 shrink-0 text-primary" />
                 <span>{t}</span>
@@ -109,49 +188,49 @@ export function SignupForm({
             ))}
           </ul>
 
-          {/* Capture category once, here at signup — so the buy flow never asks
-              "what do you sell?" again. Used for targeting + host protection
-              (you can't advertise on a host screen in your own line of business). */}
-          <div className="space-y-2">
-            <Label htmlFor="category">What do you sell?</Label>
-            <select
-              id="category"
-              required
-              value={categoryId}
-              onChange={(e) => setCategoryId(e.target.value)}
-              className="h-11 w-full rounded-md border border-input bg-popover px-3 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 [&>option]:bg-popover [&>option]:text-popover-foreground"
-            >
-              <option value="">Choose your business type…</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-              <option value={OTHER}>Other / not listed…</option>
-            </select>
+          {/* Advertisers capture their category once, here at signup — so the buy
+              flow never re-asks "what do you sell?". Used for targeting + host
+              protection. Hosts pick a category per venue during registration,
+              so we don't ask here. */}
+          {!isHost && (
+            <div className="space-y-2">
+              <Label htmlFor="category">What do you sell?</Label>
+              {/* Searchable picker — same one the buy flow uses — so a long
+                  catalog isn't a native scroll-select on first impression. */}
+              <Combobox
+                options={[
+                  ...categories.map((c) => ({ value: c.id, label: c.name })),
+                  { value: OTHER, label: 'Other / not listed…' },
+                ]}
+                value={categoryId || null}
+                onValueChange={(v) => setCategoryId(v ?? '')}
+                placeholder="Choose your business type…"
+                searchPlaceholder="Search your business type…"
+              />
 
-            {categoryId === OTHER ? (
-              <>
-                <Input
-                  id="otherCategory"
-                  placeholder="Tell us what your business does"
-                  required
-                  value={otherText}
-                  onChange={(e) => setOtherText(e.target.value)}
-                  className="h-11"
-                />
+              {categoryId === OTHER ? (
+                <>
+                  <Input
+                    id="otherCategory"
+                    placeholder="Tell us what your business does"
+                    required
+                    value={otherText}
+                    onChange={(e) => setOtherText(e.target.value)}
+                    className="h-11"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    We&apos;ll review your business type and add it. You can browse every screen in
+                    the meantime.
+                  </p>
+                </>
+              ) : (
                 <p className="text-xs text-muted-foreground">
-                  We&apos;ll review your business type and add it. You can browse every screen in
-                  the meantime.
+                  Tell us your line of business so we place your ads on the right screens. You only set
+                  this once.
                 </p>
-              </>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                Tell us your line of business so we place your ads on the right screens. You only set
-                this once.
-              </p>
-            )}
-          </div>
+              )}
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="fullName">Full name</Label>
@@ -191,7 +270,7 @@ export function SignupForm({
         </CardContent>
         <CardFooter className="mt-6 flex-col gap-3">
           <Button type="submit" size="lg" className="h-12 w-full text-base" disabled={loading}>
-            {loading ? 'Creating…' : 'Create account'}
+            {loading ? 'Creating…' : isHost ? 'Create host account' : 'Create account'}
           </Button>
           <p className="text-center text-sm text-muted-foreground">
             Already have an account?{' '}
@@ -199,12 +278,21 @@ export function SignupForm({
               Log in
             </Link>
           </p>
-          <p className="text-center text-xs text-muted-foreground">
-            Have a screen to host instead?{' '}
-            <Link href="/host/register" className="text-primary hover:underline">
-              Host a screen
-            </Link>
-          </p>
+          {isHost ? (
+            <p className="text-center text-xs text-muted-foreground">
+              Want to advertise instead?{' '}
+              <Link href="/signup" className="text-primary hover:underline">
+                Create an advertiser account
+              </Link>
+            </p>
+          ) : (
+            <p className="text-center text-xs text-muted-foreground">
+              Have a screen to host instead?{' '}
+              <Link href="/signup/host" className="text-primary hover:underline">
+                Host a screen
+              </Link>
+            </p>
+          )}
         </CardFooter>
       </form>
     </Card>

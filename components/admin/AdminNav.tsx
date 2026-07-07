@@ -68,7 +68,13 @@ const GROUPS: NavGroup[] = [
   },
 ]
 
-function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
+function NavLinks({
+  onNavigate,
+  counts,
+}: {
+  onNavigate?: () => void
+  counts?: Record<string, number>
+}) {
   const pathname = usePathname()
   return (
     <nav className="flex flex-col gap-4">
@@ -81,6 +87,7 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
           )}
           {group.items.map(({ href, label, icon: Icon, exact }) => {
             const active = exact ? pathname === href : pathname.startsWith(href)
+            const n = counts?.[href] ?? 0
             return (
               <Link
                 key={href}
@@ -98,6 +105,11 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
                 )}
                 <Icon className={cn('size-4 shrink-0', active && 'text-primary')} />
                 {label}
+                {n > 0 && (
+                  <span className="ml-auto min-w-5 rounded-full bg-primary/15 px-1.5 py-0.5 text-center text-[10px] font-semibold tabular-nums text-primary">
+                    {n}
+                  </span>
+                )}
               </Link>
             )
           })}
@@ -178,10 +190,12 @@ function Wordmark() {
 function SidebarBody({
   profile,
   territory,
+  counts,
   onNavigate,
 }: {
   profile: Profile
   territory: TerritoryContext
+  counts?: Record<string, number>
   onNavigate?: () => void
 }) {
   return (
@@ -194,7 +208,7 @@ function SidebarBody({
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        <NavLinks onNavigate={onNavigate} />
+        <NavLinks onNavigate={onNavigate} counts={counts} />
       </div>
 
       <div className="border-t border-border pt-4">
@@ -224,9 +238,12 @@ function SidebarBody({
 export function AdminNav({
   profile,
   territory,
+  counts,
 }: {
   profile: Profile
   territory: TerritoryContext
+  // Live badge counts keyed by nav href (e.g. { '/admin/queue': 3 }).
+  counts?: Record<string, number>
 }) {
   const [open, setOpen] = useState(false)
 
@@ -235,7 +252,7 @@ export function AdminNav({
       {/* Desktop sidebar */}
       <aside className="hidden w-64 shrink-0 border-r border-border bg-card/30 md:block">
         <div className="sticky top-0 h-screen">
-          <SidebarBody profile={profile} territory={territory} />
+          <SidebarBody profile={profile} territory={territory} counts={counts} />
         </div>
       </aside>
 
@@ -251,6 +268,7 @@ export function AdminNav({
             <SidebarBody
               profile={profile}
               territory={territory}
+              counts={counts}
               onNavigate={() => setOpen(false)}
             />
           </SheetContent>

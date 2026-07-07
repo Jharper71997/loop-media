@@ -10,8 +10,11 @@ import { deleteFiller, type FillerType } from './actions'
 
 export const dynamic = 'force-dynamic'
 
+// "Trivia card" is the static between-ad card — distinct from the phone-played
+// Trivia game (its own admin section). The label spells that out to avoid the
+// naming collision.
 const TYPE_LABELS: Record<string, string> = {
-  trivia: 'Trivia',
+  trivia: 'Trivia card',
   event: 'Local event',
   sports: 'Game day',
   promo: 'Featured',
@@ -24,6 +27,7 @@ type FillerRow = {
   payload: { headline?: string; sub?: string; foot?: string; auto?: boolean }
   active: boolean
   expires_at: string | null
+  territory: { name: string } | null
 }
 
 export default async function FillerPage() {
@@ -32,34 +36,35 @@ export default async function FillerPage() {
   const t = territory.activeId
   const supabase = await createClient()
 
-  let rows: FillerRow[] = []
-  if (t) {
-    const { data } = await supabase
-      .from('filler_content')
-      .select('id, type, payload, active, expires_at')
-      .eq('territory_id', t)
-      .order('created_at', { ascending: false })
-    rows = (data ?? []) as FillerRow[]
-  }
+  // Consistent with the rest of admin: "All markets" shows every territory's
+  // cards (read-only labels), and the switcher scopes to one. Authoring still
+  // targets a specific territory, so the Add button only appears with one active.
+  let fq = supabase
+    .from('filler_content')
+    .select('id, type, payload, active, expires_at, territory:territories(name)')
+    .order('created_at', { ascending: false })
+  if (t) fq = fq.eq('territory_id', t)
+  const { data } = await fq
+  const rows = (data ?? []) as unknown as FillerRow[]
 
   return (
     <>
       <PageHeader
         title="Filler cards"
-        description="Trivia, local events and notes that play between ads on every screen in this territory"
-        action={<FillerDialog territoryId={t ?? ''} />}
+        description={
+          t
+            ? 'Cards that play between ads on every screen in this market'
+            : 'Cards that play between ads — across all markets. Pick a market to add one.'
+        }
+        action={t ? <FillerDialog territoryId={t} /> : undefined}
       />
 
       <div className="space-y-3 p-5 md:p-6">
-        {!t && (
-          <div className="rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-warning">
-            Pick a single territory in the sidebar to author its filler cards.
-          </div>
-        )}
-
-        {t && rows.length === 0 && (
+        {rows.length === 0 && (
           <div className="rounded-xl border border-border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
-            No filler cards yet. Add trivia or a local event to fill the gaps between ads.
+            {t
+              ? 'No filler cards yet. Add trivia or a local event to fill the gaps between ads.'
+              : 'No filler cards in any market yet.'}
           </div>
         )}
 
@@ -72,8 +77,9 @@ export default async function FillerPage() {
               className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-border bg-card p-4"
             >
               <div className="min-w-0">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <Badge variant="secondary">{TYPE_LABELS[r.type] ?? r.type}</Badge>
+                  {!t && r.territory?.name && <Badge variant="outline">{r.territory.name}</Badge>}
                   {auto && <Badge variant="outline">Auto</Badge>}
                   {!r.active && <Badge variant="outline">Paused</Badge>}
                   {expired && <Badge variant="outline">Expired</Badge>}
@@ -90,9 +96,9 @@ export default async function FillerPage() {
                 )}
               </div>
               <div className="flex items-center gap-1">
-                {!auto && (
+                {!auto && t && (
                   <FillerDialog
-                    territoryId={t ?? ''}
+                    territoryId={t}
                     existing={{
                       id: r.id,
                       type: r.type as FillerType,

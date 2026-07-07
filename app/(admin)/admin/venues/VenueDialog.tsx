@@ -90,6 +90,8 @@ export function VenueDialog({
     business_open: (venue?.business_open ?? '10:00').slice(0, 5),
     business_close: (venue?.business_close ?? '22:00').slice(0, 5),
     business_days: venue?.business_days ?? [0, 1, 2, 3, 4, 5, 6],
+    // New venues get their first screen created alongside them by default.
+    create_screen: !venue,
   })
 
   function set<K extends keyof VenueInput>(key: K, value: VenueInput[K]) {
@@ -434,6 +436,18 @@ export function VenueDialog({
               to 02:00).
             </p>
           </div>
+
+          {!isEdit && (
+            <label className="flex items-center gap-2 text-sm sm:col-span-2">
+              <input
+                type="checkbox"
+                checked={!!form.create_screen}
+                onChange={(e) => set('create_screen', e.target.checked)}
+                className="size-4 accent-primary"
+              />
+              Also add the first screen (generates a pairing code)
+            </label>
+          )}
 
           <DialogFooter className="sm:col-span-2">
             <Button type="submit" disabled={pending}>
