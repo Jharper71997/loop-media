@@ -322,14 +322,14 @@ export function BrowseClient({
 
       {activeCatName ? (
         <p className="text-xs text-muted-foreground">
-          You&apos;re advertising as a{' '}
+          You&apos;re advertising in{' '}
           <span className="font-medium text-foreground">{activeCatName}</span>, so we keep your ad
-          off screens run by another {activeCatName.toLowerCase()}.{' '}
+          off screens that already run a competing {activeCatName} business.{' '}
           <button
             onClick={() => router.push(`${base}/browse?pick=1`)}
             className="text-primary hover:underline"
           >
-            Not a {activeCatName.toLowerCase()}? Change
+            Wrong category? Change
           </button>
         </p>
       ) : (
