@@ -15,7 +15,7 @@ type TriviaState = {
   you: { answered: boolean; choiceIdx: number | null; score: number } | null
 }
 
-type Join = { player_id: string; venue_id: string; venue_name: string }
+type Join = { player_id: string; venue_id: string; venue_name: string; token: string }
 
 export function PlayClient({ code }: { code: string }) {
   const storeKey = `lm_trivia_${code}`
@@ -35,7 +35,12 @@ export function PlayClient({ code }: { code: string }) {
   useEffect(() => {
     try {
       const raw = localStorage.getItem(storeKey)
-      if (raw) setJoin(JSON.parse(raw))
+      if (raw) {
+        const j = JSON.parse(raw)
+        // Require a token — a pre-upgrade session without one must rejoin so the
+        // answer endpoint accepts it.
+        if (j && j.token) setJoin(j)
+      }
     } catch {
       /* ignore */
     }
@@ -59,6 +64,7 @@ export function PlayClient({ code }: { code: string }) {
           player_id: data.player_id,
           venue_id: data.venue_id,
           venue_name: data.venue_name,
+          token: data.token,
         }
         localStorage.setItem(storeKey, JSON.stringify(j))
         setJoin(j)
@@ -115,7 +121,7 @@ export function PlayClient({ code }: { code: string }) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           player_id: join.player_id,
-          venue_id: join.venue_id,
+          token: join.token,
           choice_idx: picked,
         }),
       })

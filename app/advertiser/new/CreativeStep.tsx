@@ -20,7 +20,7 @@ import { CREATIVE_SETUP_FEE_CENTS, CREATIVE_REFRESH_CENTS } from '@/lib/fees'
 import { quoteCart, type QuoteOptions, type PricingConfig } from '@/lib/pricing'
 import { CART_KEY } from '../browse/BrowseClient'
 import { submitCampaign, type NewCampaignInput } from './actions'
-import type { CartVenue } from './types'
+import { EXCL_KEY, type CartVenue } from './types'
 
 // The exported creative is always rendered at 16:9 720p so the crop preview and
 // the offscreen-canvas export share one coordinate system (see computeDraw).
@@ -104,6 +104,7 @@ export function CreativeStep({
   const byId = useMemo(() => new Map(venues.map((v) => [v.id, v])), [venues])
 
   const [cartIds, setCartIds] = useState<string[]>([])
+  const [exclIds, setExclIds] = useState<string[]>([])
   // Reuse the line of business they already picked in browse Step 1 (saved on
   // their profile) — we don't re-ask the category here.
   const categoryId = defaultCategoryId ?? null
@@ -142,6 +143,8 @@ export function CreativeStep({
     try {
       const raw = sessionStorage.getItem(CART_KEY)
       if (raw) setCartIds(JSON.parse(raw) as string[])
+      const rawExcl = sessionStorage.getItem(EXCL_KEY)
+      if (rawExcl) setExclIds(JSON.parse(rawExcl) as string[])
     } catch {}
   }, [])
 
@@ -196,7 +199,17 @@ export function CreativeStep({
     [cart, quoteOpts, pricingConfig]
   )
   const territoryId = cart[0]?.territoryId ?? ''
-  const totalWithCreative = quote.totalCents + (mode === 'help' ? CREATIVE_REFRESH_CENTS : 0)
+  // Exclusivity, reconciled with the current cart + availability (matches ReviewStep).
+  const exclSet = useMemo(() => {
+    const inCart = new Set(cart.filter((v) => v.exclusivityAvailable).map((v) => v.id))
+    return new Set(exclIds.filter((id) => inCart.has(id)))
+  }, [exclIds, cart])
+  const exclusivityCents = useMemo(
+    () => cart.reduce((s, v) => s + (exclSet.has(v.id) ? v.exclusivityCents : 0), 0),
+    [cart, exclSet]
+  )
+  const totalWithCreative =
+    quote.totalCents + exclusivityCents + (mode === 'help' ? CREATIVE_REFRESH_CENTS : 0)
 
   // Drag the QR chip anywhere; clamp so the whole chip stays inside the frame.
   function onQrDown(e: React.PointerEvent) {
@@ -337,6 +350,7 @@ export function CreativeStep({
       const input: NewCampaignInput = {
         territory_id: territoryId,
         venue_ids: cart.map((v) => v.id),
+        exclusive_venue_ids: [...exclSet],
         category_id: categoryId,
         title,
         qr_target_url: qrUrl.trim(),
@@ -355,6 +369,7 @@ export function CreativeStep({
       }
       try {
         sessionStorage.removeItem(CART_KEY)
+        sessionStorage.removeItem(EXCL_KEY)
       } catch {}
       if (res.checkoutUrl) {
         window.location.assign(res.checkoutUrl)

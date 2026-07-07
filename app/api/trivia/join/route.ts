@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { isNameAllowed } from '@/lib/profanity'
+import { signPlayerToken } from '@/lib/triviaToken'
 
 // Join a venue's trivia game from a phone. Public (no login): we mint a player
 // row keyed to the venue and hand back its id, which the phone keeps locally.
@@ -31,5 +32,11 @@ export async function POST(req: Request) {
     .single()
   if (error || !player) return NextResponse.json({ error: 'Could not join.' }, { status: 500 })
 
-  return NextResponse.json({ player_id: player.id, venue_id: venue.id, venue_name: venue.name })
+  // Token binds this player_id to the phone; required by /api/trivia/answer.
+  return NextResponse.json({
+    player_id: player.id,
+    venue_id: venue.id,
+    venue_name: venue.name,
+    token: signPlayerToken(player.id),
+  })
 }

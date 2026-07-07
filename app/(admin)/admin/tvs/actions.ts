@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { requireAdmin, adminCanTerritory } from '@/lib/auth'
 import type { Profile } from '@/lib/db.types'
-import { genPairingCode } from '@/lib/tv'
+import { genPairingCode, TV_PAIRING_CODE_LEN } from '@/lib/tv'
 
 type Supa = Awaited<ReturnType<typeof createClient>>
 
@@ -66,7 +66,7 @@ export async function createTv(input: {
   for (let attempt = 0; attempt < 5; attempt++) {
     const { error } = await supabase.from('tvs').insert({
       venue_id: input.venue_id,
-      pairing_code: genPairingCode(),
+      pairing_code: genPairingCode(TV_PAIRING_CODE_LEN),
       status: 'unpaired',
       loop_length_seconds: input.loop_length_seconds,
       slot_seconds: input.slot_seconds,
@@ -94,7 +94,7 @@ export async function regeneratePairingCode(id: string) {
     const { error } = await supabase
       .from('tvs')
       .update({
-        pairing_code: genPairingCode(),
+        pairing_code: genPairingCode(TV_PAIRING_CODE_LEN),
         device_id: null,
         status: 'unpaired',
         last_heartbeat_at: null,

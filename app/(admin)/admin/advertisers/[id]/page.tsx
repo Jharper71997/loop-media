@@ -111,6 +111,7 @@ export default async function AdvertiserDetail({
       .from('qr_scans')
       .select('ad_id')
       .in('ad_id', adIds)
+      .eq('is_bot', false)
       .gte('scanned_at', since.toISOString())
     for (const s of scanData ?? []) scansByAd.set(s.ad_id, (scansByAd.get(s.ad_id) ?? 0) + 1)
   }

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { roundNumber, roundPhase } from '@/lib/trivia'
+import { roundNumber, roundPhase, dayNumber, shuffledOrder } from '@/lib/trivia'
 
 // Live trivia state for a venue: the current question, phase/timer, today's
 // leaderboard, and (if a player id is passed) that player's answer + score.
@@ -12,16 +12,37 @@ export async function GET(req: Request) {
   if (!venueId) return NextResponse.json({ error: 'Missing venue.' }, { status: 400 })
 
   const supabase = createAdminClient()
+
+  // The polling venue's market, so local (territory-scoped) questions can be mixed
+  // in with the global set for that venue.
+  const { data: venueRow } = await supabase
+    .from('venues')
+    .select('territory_id')
+    .eq('id', venueId)
+    .maybeSingle()
+  const venueTerritory = (venueRow?.territory_id as string | null) ?? null
+
   const { data: qs } = await supabase
     .from('trivia_questions')
-    .select('prompt, choices, correct_idx')
+    .select('prompt, choices, correct_idx, territory_id, venue_id')
     .eq('active', true)
     // created_at alone is not unique (seed rows share a timestamp). The id
-    // tiebreaker makes the order deterministic so questions[round % count] is
-    // stable across polls — otherwise the question can bounce mid-round.
+    // tiebreaker makes the base order deterministic before the per-day shuffle.
     .order('created_at', { ascending: true })
     .order('id', { ascending: true })
-  const questions = (qs ?? []) as { prompt: string; choices: string[]; correct_idx: number }[]
+  const all = (qs ?? []) as {
+    prompt: string
+    choices: string[]
+    correct_idx: number
+    territory_id: string | null
+    venue_id: string | null
+  }[]
+  // Scope: global (both null) + this venue's territory + this exact venue.
+  const questions = all.filter(
+    (q) =>
+      (q.venue_id == null || q.venue_id === venueId) &&
+      (q.territory_id == null || q.territory_id === venueTerritory)
+  )
   if (!questions.length) {
     return NextResponse.json({ error: 'No questions configured.' }, { status: 503 })
   }
@@ -29,7 +50,10 @@ export async function GET(req: Request) {
   const now = Date.now()
   const round = roundNumber(now)
   const { phase, endsInMs } = roundPhase(now)
-  const q = questions[round % questions.length]
+  // Per-day shuffled order walked by round: same question for every poll in a round,
+  // a fresh order each day, and all questions cycle before any repeats.
+  const order = shuffledOrder(questions.length, dayNumber(now))
+  const q = questions[order[round % questions.length]]
 
   // Score = the player's current STREAK of correct answers in a row. One wrong
   // answer resets them to zero — the whole game is how many you can get right in

@@ -10,6 +10,8 @@ import {
   dailySeries,
   locationRows,
   venuesCenter,
+  measuredPlaysTotal,
+  estImpressionsPerMonth,
   PERF_WINDOW_DAYS,
   type RunningVenue,
   type ScanRow,
@@ -20,6 +22,7 @@ import {
   formatUptimePct,
   UPTIME_WINDOW_DAYS,
 } from '@/lib/uptime'
+import { isWithinOpenHours } from '@/lib/openHours'
 import { CampaignControls } from './CampaignControls'
 import { BackLink } from './BackLink'
 import { ReplaceCreative } from './ReplaceCreative'
@@ -79,10 +82,22 @@ export default async function CampaignDetail({
   // Distinct running venues + the screens at each (one venue can host several TVs).
   const venueMap = new Map<string, RunningVenue>()
   const venueHours = new Map<string, ReturnType<typeof venueBusinessHours>>()
+  const tvToVenueId = new Map<string, string>()
+  // Per-tv open-hours (for filtering ad_plays exactly like the admin TV page).
+  const tvOpenHours = new Map<
+    string,
+    { business_open: string | null; business_close: string | null; business_days: number[] | null }
+  >()
   for (const p of placements) {
     const v = p.tv?.venue
     const tvId = p.tv?.id
     if (!v || !tvId) continue
+    tvToVenueId.set(tvId, v.id)
+    tvOpenHours.set(tvId, {
+      business_open: v.business_open,
+      business_close: v.business_close,
+      business_days: v.business_days,
+    })
     const existing = venueMap.get(v.id)
     if (existing) existing.tvIds.push(tvId)
     else {
@@ -93,6 +108,7 @@ export default async function CampaignDetail({
         lng: v.lng,
         footTraffic: v.foot_traffic_estimate ?? 0,
         tvIds: [tvId],
+        plays: 0,
       })
       venueHours.set(v.id, venueBusinessHours(v))
     }
@@ -136,12 +152,38 @@ export default async function CampaignDetail({
       .from('qr_scans')
       .select('tv_id, scanned_at')
       .eq('ad_id', c.ad_id)
+      .eq('is_bot', false)
       .gte('scanned_at', since.toISOString())
     scans = (scanData ?? []) as ScanRow[]
   }
 
+  // Measured "times shown" from proof-of-play. Open-hours filtered per screen so a
+  // play at 3am with the TV left on isn't counted as an impression (matches the
+  // admin screen page). Attributed back to the venue and attached to RunningVenue.
+  if (c.ad_id && runningTvIds.length) {
+    const since = new Date()
+    since.setUTCDate(since.getUTCDate() - PERF_WINDOW_DAYS)
+    const { data: playData } = await supabase
+      .from('ad_plays')
+      .select('tv_id, played_at')
+      .eq('ad_id', c.ad_id)
+      .in('tv_id', runningTvIds)
+      .gte('played_at', since.toISOString())
+    const playsByVenue = new Map<string, number>()
+    for (const p of (playData ?? []) as { tv_id: string; played_at: string }[]) {
+      const hours = tvOpenHours.get(p.tv_id)
+      if (hours && !isWithinOpenHours(p.played_at, hours)) continue
+      const vid = tvToVenueId.get(p.tv_id)
+      if (!vid) continue
+      playsByVenue.set(vid, (playsByVenue.get(vid) ?? 0) + 1)
+    }
+    for (const v of venues) v.plays = playsByVenue.get(v.venueId) ?? 0
+  }
+
   const locations = venues.length
   const totalScans = scans.length
+  const totalPlays = measuredPlaysTotal(venues)
+  const estReach = estImpressionsPerMonth(venues)
 
   const series = dailySeries(venues, scans)
   const rows = locationRows(venues, scans)
@@ -269,8 +311,17 @@ export default async function CampaignDetail({
               </div>
             )}
             <div className="grid grid-cols-2 gap-3">
+              <Stat
+                label="Times shown"
+                sub={`measured · ${PERF_WINDOW_DAYS}d`}
+                value={totalPlays}
+                accent
+              />
               <Stat label="QR scans" sub={`measured · ${PERF_WINDOW_DAYS}d`} value={totalScans} accent />
               <Stat label="Screens" sub="live" value={locations} />
+              {estReach > 0 && (
+                <Stat label="Est. reach" sub="monthly · estimate" value={estReach} />
+              )}
             </div>
           </CardContent>
         </Card>
@@ -336,6 +387,10 @@ export default async function CampaignDetail({
                         <span className="font-medium">{r.name}</span>
                         <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground">
                           <span>
+                            {formatNumber(r.plays)}{' '}
+                            <span className="text-muted-foreground/70">shown · 30d</span>
+                          </span>
+                          <span>
                             {formatNumber(r.scans)}{' '}
                             <span className="text-muted-foreground/70">scans · 30d</span>
                           </span>
@@ -355,7 +410,8 @@ export default async function CampaignDetail({
           )}
 
           <p className="text-xs text-muted-foreground">
-            QR scans are measured — each one is a real person who scanned your on-screen code.
+            Times shown and QR scans are both measured on the screens themselves, counted only during
+            each venue&apos;s open hours. Reach is an estimate from venue foot traffic.
           </p>
         </div>
       )}

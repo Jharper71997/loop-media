@@ -7,6 +7,7 @@ import {
   quoteCart,
   suggestTier,
   venuePriceCents,
+  venueExclusivityCents,
   loyaltyCredits,
   DEFAULT_PRICING_CONFIG,
   type PriceTier,
@@ -16,15 +17,17 @@ import {
 } from '@/lib/pricing'
 
 // Read the editable pricing knobs from the DB (admin-tunable at /admin/pricing).
-// Falls back to DEFAULT_PRICING_CONFIG if the row/table is missing. Cached per
-// request so a page that prices many venues only hits the DB once.
+// Falls back to DEFAULT_PRICING_CONFIG (which now mirrors the 0023 seed) if the
+// row/table is missing, and LOGS LOUDLY when it does — a silent fallback used to
+// bill the wrong rate. Cached per request so a page that prices many venues only
+// hits the DB once.
 export const getPricingConfig = cache(async (): Promise<PricingConfig> => {
   try {
     const supabase = await createClient()
     const { data } = await supabase
       .from('pricing_config')
       .select(
-        'local_price_cents, standard_price_cents, high_price_cents, premium_price_cents, min_monthly_cents, host_discount_pct, loyalty_12mo_discount_pct, max_discount_pct'
+        'local_price_cents, standard_price_cents, high_price_cents, premium_price_cents, min_monthly_cents, host_discount_pct, loyalty_12mo_discount_pct, max_discount_pct, exclusivity_price_cents'
       )
       .eq('id', 'default')
       .maybeSingle()
@@ -37,8 +40,14 @@ export const getPricingConfig = cache(async (): Promise<PricingConfig> => {
       host_discount_pct: number | string
       loyalty_12mo_discount_pct: number | string
       max_discount_pct: number | string
+      exclusivity_price_cents: number | null
     } | null
-    if (!row) return DEFAULT_PRICING_CONFIG
+    if (!row) {
+      console.error(
+        '[pricing] pricing_config "default" row missing — using fallback config. Apply migrations 0023/0037.'
+      )
+      return DEFAULT_PRICING_CONFIG
+    }
     return {
       tierPriceCents: {
         local: row.local_price_cents,
@@ -50,45 +59,59 @@ export const getPricingConfig = cache(async (): Promise<PricingConfig> => {
       hostDiscount: Number(row.host_discount_pct),
       loyalty12moDiscount: Number(row.loyalty_12mo_discount_pct),
       maxDiscount: Number(row.max_discount_pct),
+      exclusivityPriceCents:
+        row.exclusivity_price_cents ?? DEFAULT_PRICING_CONFIG.exclusivityPriceCents,
     }
-  } catch {
+  } catch (err) {
+    console.error('[pricing] failed to read pricing_config — using fallback config:', err)
     return DEFAULT_PRICING_CONFIG
   }
 })
 
 // Re-price a set of picked venues from the DB (never trust a client-supplied
 // total). Returns the authoritative cents to bill, plus the per-venue tiers.
+// `exclusiveVenueIds` are venues the buyer is paying to own their category at —
+// each adds a monthly exclusivity upcharge ON TOP of the discounted screen total
+// (the upcharge is a premium add-on and is deliberately NOT discounted or floored).
 export async function resolveCartCents(
   venueIds: string[],
-  opts: QuoteOptions = {}
-): Promise<{ totalCents: number; screenCents: number[]; quote: Quote }> {
+  opts: QuoteOptions = {},
+  exclusiveVenueIds: string[] = []
+): Promise<{ totalCents: number; screenCents: number[]; quote: Quote; exclusivityCents: number }> {
   const config = await getPricingConfig()
   const ids = [...new Set(venueIds.filter(Boolean))]
-  if (!ids.length) return { totalCents: 0, screenCents: [], quote: quoteCart([], opts, config) }
+  if (!ids.length)
+    return { totalCents: 0, screenCents: [], quote: quoteCart([], opts, config), exclusivityCents: 0 }
 
   const supabase = await createClient()
   const { data } = await supabase
     .from('venues')
-    .select('id, price_tier, price_cents_override, foot_traffic_estimate')
+    .select('id, price_tier, price_cents_override, foot_traffic_estimate, exclusivity_price_cents')
     .in('id', ids)
     .eq('status', 'active')
 
+  type VRow = {
+    id: string
+    price_tier: PriceTier | null
+    price_cents_override: number | null
+    foot_traffic_estimate: number
+    exclusivity_price_cents: number | null
+  }
+  const rows = (data ?? []) as VRow[]
+
   // One entry per screen = the venue's effective price (a custom override wins
   // over its tier price).
-  const screenCents: number[] = (data ?? []).map(
-    (v: {
-      price_tier: PriceTier | null
-      price_cents_override: number | null
-      foot_traffic_estimate: number
-    }) =>
-      venuePriceCents(
-        v.price_cents_override,
-        v.price_tier ?? suggestTier(v.foot_traffic_estimate),
-        config
-      )
+  const screenCents: number[] = rows.map((v) =>
+    venuePriceCents(v.price_cents_override, v.price_tier ?? suggestTier(v.foot_traffic_estimate), config)
   )
   const quote = quoteCart(screenCents, opts, config)
-  return { totalCents: quote.totalCents, screenCents, quote }
+
+  const exclusiveSet = new Set(exclusiveVenueIds.filter(Boolean))
+  const exclusivityCents = rows
+    .filter((v) => exclusiveSet.has(v.id))
+    .reduce((sum, v) => sum + venueExclusivityCents(v.exclusivity_price_cents, config), 0)
+
+  return { totalCents: quote.totalCents + exclusivityCents, screenCents, quote, exclusivityCents }
 }
 
 // An advertiser's standing, used for loyalty perks + the host 20% discount.

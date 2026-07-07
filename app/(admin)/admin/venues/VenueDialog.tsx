@@ -79,6 +79,7 @@ export function VenueDialog({
     foot_traffic_estimate: venue?.foot_traffic_estimate ?? 0,
     price_tier: venue?.price_tier ?? null,
     price_cents_override: venue?.price_cents_override ?? null,
+    exclusivity_price_cents: venue?.exclusivity_price_cents ?? null,
     category_slots: venue?.category_slots ?? 1,
     contact_name: venue?.contact_name ?? '',
     contact_email: venue?.contact_email ?? '',
@@ -248,6 +249,27 @@ export function VenueDialog({
             />
             <p className="text-xs text-muted-foreground">
               Leave blank to use the tier price. A dollar amount overrides the tier for this venue only.
+            </p>
+          </Field>
+
+          <Field label="Exclusivity price ($/mo)">
+            <Input
+              type="number"
+              min={0}
+              step={1}
+              placeholder="Network default"
+              value={form.exclusivity_price_cents != null ? form.exclusivity_price_cents / 100 : ''}
+              onChange={(e) => {
+                const raw = e.target.value.trim()
+                const n = Number(raw)
+                set(
+                  'exclusivity_price_cents',
+                  raw === '' || Number.isNaN(n) ? null : Math.round(n * 100)
+                )
+              }}
+            />
+            <p className="text-xs text-muted-foreground">
+              Upcharge for an advertiser to own their category here. Blank uses the network default.
             </p>
           </Field>
 

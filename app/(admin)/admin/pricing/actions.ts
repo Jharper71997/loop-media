@@ -49,6 +49,7 @@ async function updateConfig(patch: Record<string, number>) {
     host_discount_pct: d.hostDiscount,
     loyalty_12mo_discount_pct: d.loyalty12moDiscount,
     max_discount_pct: d.maxDiscount,
+    exclusivity_price_cents: d.exclusivityPriceCents,
   }
 
   const { error } = await supabase
@@ -93,4 +94,11 @@ export async function setLoyaltyDiscount(value: number | null) {
 export async function setMaxDiscount(value: number | null) {
   await requireAdmin()
   return updateConfig({ max_discount_pct: clampPct(value) })
+}
+
+// Network-default exclusivity upcharge entered in dollars; stored as cents. A
+// per-venue override (venues.exclusivity_price_cents) wins where set.
+export async function setExclusivityPrice(value: number | null) {
+  await requireAdmin()
+  return updateConfig({ exclusivity_price_cents: Math.max(0, Math.round((value ?? 0) * 100)) })
 }

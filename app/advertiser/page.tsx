@@ -114,6 +114,7 @@ export default async function AdvertiserDashboard({
           .from('qr_scans')
           .select('id', { count: 'exact', head: true })
           .in('ad_id', adIds)
+          .eq('is_bot', false)
           .gte('scanned_at', scanCutoff)
       : Promise.resolve({ count: 0 }),
   ])

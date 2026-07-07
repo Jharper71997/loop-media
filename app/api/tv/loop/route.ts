@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import QRCode from 'qrcode'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { genPairingCode } from '@/lib/tv'
+import { genPairingCode, deviceSecretOk } from '@/lib/tv'
 
 // Public base URL the phone-scannable QR must point at (the deployed domain in
 // prod; localhost in dev). Prefers explicit env, then forwarded host headers.
@@ -24,7 +24,7 @@ export async function GET(req: Request) {
   const supabase = createAdminClient()
   const { data: tvRow } = await supabase
     .from('tvs')
-    .select('id, loop_length_seconds, slot_seconds, venue:venues(id, name, lat, lng, play_code, trivia_enabled, territory:territories(id, name))')
+    .select('id, device_secret, loop_length_seconds, slot_seconds, venue:venues(id, name, lat, lng, play_code, trivia_enabled, territory:territories(id, name))')
     .eq('device_id', device)
     .maybeSingle()
 
@@ -34,6 +34,7 @@ export async function GET(req: Request) {
 
   const tv = tvRow as unknown as {
     id: string
+    device_secret: string | null
     loop_length_seconds: number
     slot_seconds: number
     venue: {
@@ -45,6 +46,13 @@ export async function GET(req: Request) {
       trivia_enabled: boolean | null
       territory: { id: string; name: string } | null
     } | null
+  }
+
+  // A device WITH a secret must present it (x-device-secret header or ?secret=).
+  // Legacy null-secret screens are grandfathered (deviceSecretOk). Blocks a leaked
+  // device_id from pulling the loop as a spoofed screen.
+  if (!deviceSecretOk(tv.device_secret, req)) {
+    return NextResponse.json({ error: 'Device secret mismatch.' }, { status: 403 })
   }
 
   const now = new Date().toISOString()

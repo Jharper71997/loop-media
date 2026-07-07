@@ -29,6 +29,7 @@ import {
   setHostDiscount,
   setLoyaltyDiscount,
   setMaxDiscount,
+  setExclusivityPrice,
 } from './actions'
 import { AddCategory } from '../categories/AddCategory'
 import { CapInput } from '../categories/CapInput'
@@ -52,6 +53,7 @@ type ConfigRow = {
   host_discount_pct: number
   loyalty_12mo_discount_pct: number
   max_discount_pct: number
+  exclusivity_price_cents: number
 }
 
 export default async function PricingPage() {
@@ -95,6 +97,7 @@ export default async function PricingPage() {
     host_discount_pct: d.hostDiscount,
     loyalty_12mo_discount_pct: d.loyalty12moDiscount,
     max_discount_pct: d.maxDiscount,
+    exclusivity_price_cents: d.exclusivityPriceCents,
   }
 
   const tierCents: Record<PriceTier, number> = {
@@ -327,6 +330,17 @@ export default async function PricingPage() {
                     allowEmpty={false}
                     min={0}
                     action={setMaxDiscount}
+                  />
+                </SettingRow>
+                <SettingRow
+                  label="Category exclusivity ($/mo)"
+                  hint="Default upcharge to own a category at a venue (per-venue override wins)."
+                >
+                  <InlineNumber
+                    initial={(cfg.exclusivity_price_cents ?? d.exclusivityPriceCents) / 100}
+                    allowEmpty={false}
+                    min={0}
+                    action={setExclusivityPrice}
                   />
                 </SettingRow>
               </TableBody>

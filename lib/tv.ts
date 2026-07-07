@@ -2,17 +2,38 @@
 
 import { randomInt, randomUUID } from 'node:crypto'
 
-// Human-friendly pairing code, e.g. "K7P2" (no ambiguous 0/O/1/I). Used by the
-// admin TV tools, host self-provisioning, and the /tv pairing form. Uses CSPRNG
-// (randomInt), not Math.random. 4 chars from a 32-char alphabet (~1M codes) —
-// short enough to read off a TV and type on a remote. This is the screen's
-// PERMANENT key: the pair endpoint no longer consumes it, so a host can re-view
-// it on their dashboard and re-add a device anytime (see app/api/tv/pair).
-export function genPairingCode(): string {
+// Human-friendly code, e.g. "K7P2" (no ambiguous 0/O/1/I). Uses CSPRNG
+// (randomInt), not Math.random. `len` chars from a 32-char alphabet. Used for both
+// TV pairing codes and trivia join codes — pass the length for the context.
+export function genPairingCode(len = 4): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
   let s = ''
-  for (let i = 0; i < 4; i++) s += chars[randomInt(chars.length)]
+  for (let i = 0; i < len; i++) s += chars[randomInt(chars.length)]
   return s
+}
+
+// TV pairing codes GRANT CONTROL of a screen (a valid code binds a device), so
+// they use a longer 8-char code (~1.1e12 space) that — with the /api/tv/pair rate
+// limit — can't be brute-forced. Trivia join codes stay short (default 4) since
+// they only let a phone join a game and must be typed by a customer. This is the
+// screen's permanent key: the pair endpoint keeps it, so a host can re-view it on
+// their dashboard and re-add a device anytime (see app/api/tv/pair).
+export const TV_PAIRING_CODE_LEN = 8
+
+// Per-device secret check (migration 0036). Devices paired before secrets existed
+// have a NULL stored secret and are grandfathered through (so a live screen never
+// breaks on deploy); they gain one when they next re-pair. A device that HAS a
+// secret must present the matching value via the x-device-secret header (or
+// ?secret= on a provisioned kiosk URL).
+export function deviceSecretOk(
+  storedSecret: string | null | undefined,
+  req: Request
+): boolean {
+  if (!storedSecret) return true // legacy / unprovisioned device — grandfathered
+  const provided =
+    req.headers.get('x-device-secret') ||
+    new URL(req.url).searchParams.get('secret')
+  return !!provided && provided === storedSecret
 }
 
 // Opaque device identity baked into a provisioned screen's kiosk URL
