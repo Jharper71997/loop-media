@@ -158,7 +158,7 @@ export default async function AdminOverview() {
 
   const liveStats = [
     { label: 'Screens live now', value: `${liveTvs}/${totalTvs}`, icon: Tv, href: '/admin/venues' },
-    { label: 'Ads playing now', value: formatNumber(adsPlaying), icon: PlayCircle, href: '/admin/map' },
+    { label: 'Ads playing now', value: formatNumber(adsPlaying), icon: PlayCircle, href: '/admin/venues' },
     { label: 'Pending approvals', value: formatNumber(pending ?? 0), icon: Inbox, href: '/admin/queue', highlight: (pending ?? 0) > 0 },
     { label: 'Active campaigns', value: formatNumber(activeCampaigns ?? 0), icon: Rocket, href: '/admin/advertisers' },
     { label: 'QR scans · 24h', value: formatNumber(scansToday ?? 0), icon: QrCode, href: '/admin/advertisers' },
