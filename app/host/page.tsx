@@ -1,5 +1,4 @@
 import Link from 'next/link'
-import { headers } from 'next/headers'
 import { Tv as TvIcon, MapPin, Megaphone, Percent, Plus } from 'lucide-react'
 import { requireProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
@@ -34,14 +33,6 @@ const PROMO_SLOTS = 2
 export default async function HostHome() {
   const profile = await requireProfile()
   const supabase = await createClient()
-
-  // Build the /tv link from the domain the host is actually on, at runtime, so
-  // it's always correct regardless of NEXT_PUBLIC_APP_URL (which is frozen at
-  // build time and easy to leave stale across renames/redeploys).
-  const h = await headers()
-  const host = h.get('host')
-  const proto = h.get('x-forwarded-proto') ?? 'https'
-  const tvUrl = host ? `${proto}://${host}/tv` : `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/tv`
 
   const { data: venuesData } = await supabase
     .from('venues')
@@ -231,8 +222,8 @@ export default async function HostHome() {
                       </p>
                       {v.status !== 'active' && (
                         <p className="mt-1 text-xs text-muted-foreground">
-                          We&apos;re reviewing your venue — pair your screen now; paid ads start
-                          running once it&apos;s approved.
+                          We&apos;re reviewing your venue — we&apos;ll reach out to schedule your
+                          Fire Stick setup; paid ads start running once it&apos;s approved.
                         </p>
                       )}
                     </div>
@@ -257,13 +248,11 @@ export default async function HostHome() {
                                 <TvIcon className="size-4" />
                                 {paired
                                   ? `Last check-in ${timeAgo(t.last_heartbeat_at)}`
-                                  : 'New screen, not paired yet'}
+                                  : 'Screen not live yet'}
                               </span>
                               <LiveStatus lastHeartbeat={t.last_heartbeat_at} paired={paired} />
                             </div>
-                            {t.pairing_code && (
-                              <TvSetupSteps code={t.pairing_code} tvUrl={tvUrl} paired={paired} />
-                            )}
+                            <TvSetupSteps paired={paired} />
                           </div>
                         )
                       })

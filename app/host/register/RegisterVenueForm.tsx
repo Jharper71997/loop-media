@@ -202,9 +202,9 @@ export function RegisterVenueForm({
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Once your location is approved, we&apos;ll show a pairing code on your dashboard. Open the
-        Loop Network player (the /tv page) on your TV&apos;s built-in browser or any cheap streaming
-        stick, enter the code, and your loop starts playing. Works on any smart TV.
+        Once your location is approved, we&apos;ll reach out to schedule a quick setup — we bring a
+        Loop Network Fire Stick with the app already loaded and get it running on your TV. Nothing
+        for you to download, plug into a computer, or configure.
       </p>
 
       <Button type="submit" size="lg" disabled={pending}>
