@@ -2,16 +2,13 @@ import { requireAdmin } from '@/lib/auth'
 import { getTerritoryContext } from '@/lib/territory'
 import { createClient } from '@/lib/supabase/server'
 import { PageHeader } from '@/components/admin/PageHeader'
-import { Badge } from '@/components/ui/badge'
-import { ImageOff } from 'lucide-react'
-import { formatDateTime } from '@/lib/format'
 import type { Ad } from '@/lib/db.types'
-import { ReviewButtons } from './ReviewButtons'
-import { QrTargetEditor } from './QrTargetEditor'
+import { QueueBoard, type QueueItem } from './QueueBoard'
 
 type QueueAd = Ad & {
   owner: { full_name: string | null; email: string } | null
   category: { name: string } | null
+  territory: { name: string } | null
 }
 
 export default async function QueuePage() {
@@ -22,12 +19,46 @@ export default async function QueuePage() {
 
   let q = supabase
     .from('ads')
-    .select('*, owner:profiles!owner_user_id(full_name, email), category:categories(name)')
+    .select(
+      '*, owner:profiles!owner_user_id(full_name, email), category:categories(name), territory:territories(name)'
+    )
     .eq('status', 'pending')
     .order('created_at', { ascending: true })
   if (t) q = q.eq('territory_id', t)
   const { data } = await q
   const ads = (data ?? []) as QueueAd[]
+
+  // Decision context: is there a paid (active) campaign behind each ad, and who's
+  // the advertiser to link to. A pending ad on an active campaign was paid for;
+  // one on a draft campaign hasn't been.
+  const adIds = ads.map((a) => a.id)
+  const paidByAd = new Map<string, boolean>()
+  const advertiserByAd = new Map<string, string>()
+  if (adIds.length) {
+    const { data: camps } = await supabase
+      .from('campaigns')
+      .select('ad_id, advertiser_id, status')
+      .in('ad_id', adIds)
+    for (const c of (camps ?? []) as { ad_id: string; advertiser_id: string; status: string }[]) {
+      if (c.status === 'active' || c.status === 'paused') paidByAd.set(c.ad_id, true)
+      if (!advertiserByAd.has(c.ad_id)) advertiserByAd.set(c.ad_id, c.advertiser_id)
+    }
+  }
+
+  const items: QueueItem[] = ads.map((ad) => ({
+    id: ad.id,
+    title: ad.title,
+    ownerName: ad.owner?.full_name ?? ad.owner?.email ?? 'Unknown',
+    ownerId: advertiserByAd.get(ad.id) ?? ad.owner_user_id ?? null,
+    ownerKind: ad.owner_kind,
+    category: ad.category?.name ?? 'No category',
+    territory: ad.territory?.name ?? null,
+    createdAt: ad.created_at,
+    isPaid: paidByAd.get(ad.id) ?? false,
+    creativeUrl: ad.creative_url,
+    creativeType: ad.creative_type,
+    qrTargetUrl: ad.qr_target_url,
+  }))
 
   return (
     <>
@@ -35,71 +66,8 @@ export default async function QueuePage() {
         title="Approval queue"
         description={`${ads.length} ad${ads.length === 1 ? '' : 's'} awaiting review`}
       />
-
       <div className="p-5 md:p-6">
-        {ads.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-border py-16 text-center text-muted-foreground">
-            🎉 Nothing to review. The queue is empty.
-          </div>
-        ) : (
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {ads.map((ad) => (
-              <div
-                key={ad.id}
-                className="flex flex-col overflow-hidden rounded-lg border border-border bg-card"
-              >
-                <div className="relative flex aspect-video items-center justify-center bg-black">
-                  {ad.creative_url ? (
-                    ad.creative_type === 'video' ? (
-                      <video
-                        src={ad.creative_url}
-                        className="h-full w-full object-contain"
-                        controls
-                        muted
-                        playsInline
-                      />
-                    ) : (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={ad.creative_url}
-                        alt={ad.title}
-                        className="h-full w-full object-contain"
-                      />
-                    )
-                  ) : (
-                    <div className="flex flex-col items-center gap-1 text-muted-foreground">
-                      <ImageOff className="size-6" />
-                      <span className="text-xs">No creative uploaded</span>
-                    </div>
-                  )}
-                  <Badge className="absolute top-2 left-2 capitalize" variant="secondary">
-                    {ad.creative_type}
-                  </Badge>
-                </div>
-
-                <div className="flex flex-1 flex-col gap-3 p-4">
-                  <div>
-                    <div className="font-medium">{ad.title}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {ad.owner?.full_name ?? ad.owner?.email ?? 'Unknown'} ·{' '}
-                      {ad.category?.name ?? 'No category'}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Badge variant="outline" className="capitalize">
-                      {ad.owner_kind}
-                    </Badge>
-                    <span>{formatDateTime(ad.created_at)}</span>
-                  </div>
-                  <QrTargetEditor adId={ad.id} initialUrl={ad.qr_target_url} />
-                  <div className="mt-auto pt-1">
-                    <ReviewButtons id={ad.id} />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        <QueueBoard ads={items} nowMs={Date.now()} />
       </div>
     </>
   )

@@ -3,6 +3,7 @@ import { requireAdmin } from '@/lib/auth'
 import { getTerritoryContext } from '@/lib/territory'
 import { createClient } from '@/lib/supabase/server'
 import { PageHeader } from '@/components/admin/PageHeader'
+import { ListSearch } from '@/components/admin/ListSearch'
 import {
   Table,
   TableBody,
@@ -79,10 +80,15 @@ function AdThumbs({ ads }: { ads: AdRow[] }) {
   )
 }
 
-export default async function AdvertisersPage() {
+export default async function AdvertisersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; status?: string }>
+}) {
   const profile = await requireAdmin()
   const territory = await getTerritoryContext(profile)
   const t = territory.activeId
+  const { q: query, status } = await searchParams
   const supabase = await createClient()
 
   let q = supabase
@@ -91,8 +97,9 @@ export default async function AdvertisersPage() {
     .eq('role', 'advertiser')
     .order('created_at', { ascending: false })
   if (t) q = q.eq('territory_id', t)
+  if (query?.trim()) q = q.or(`full_name.ilike.%${query.trim()}%,email.ilike.%${query.trim()}%`)
   const { data } = await q
-  const advertisers = (data ?? []) as Profile[]
+  let advertisers = (data ?? []) as Profile[]
 
   const ids = advertisers.map((a) => a.id)
   const adsByOwner = new Map<string, AdRow[]>()
@@ -112,7 +119,14 @@ export default async function AdvertisersPage() {
   const countsFor = (arr: AdRow[]) => ({
     total: arr.length,
     active: arr.filter((x) => x.status === 'active').length,
+    pending: arr.filter((x) => x.status === 'pending').length,
   })
+  const hasPending = (id: string) => (adsByOwner.get(id) ?? []).some((x) => x.status === 'pending')
+
+  // Status filter: advertisers with an ad waiting in review, or with a live ad.
+  if (status === 'pending') advertisers = advertisers.filter((a) => hasPending(a.id))
+  else if (status === 'active')
+    advertisers = advertisers.filter((a) => countsFor(adsByOwner.get(a.id) ?? []).active > 0)
 
   return (
     <>
@@ -121,7 +135,15 @@ export default async function AdvertisersPage() {
         description={`${advertisers.length} advertiser${advertisers.length === 1 ? '' : 's'}`}
       />
 
-      <div className="p-5 md:p-6">
+      <div className="space-y-4 p-5 md:p-6">
+        <ListSearch
+          placeholder="Search by name or email…"
+          statusOptions={[
+            { value: 'pending', label: 'Has pending ad' },
+            { value: 'active', label: 'Has live ad' },
+          ]}
+        />
+
         {/* Mobile cards */}
         <div className="space-y-2.5 md:hidden">
           {advertisers.length === 0 && (
@@ -143,11 +165,14 @@ export default async function AdvertisersPage() {
                     <div className="truncate font-medium">{a.full_name ?? '—'}</div>
                     <div className="truncate text-xs text-muted-foreground">{a.email}</div>
                   </div>
-                  {counts.active > 0 ? (
-                    <Badge>{counts.active} active</Badge>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">0 active</span>
-                  )}
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    {counts.active > 0 ? (
+                      <Badge>{counts.active} active</Badge>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">0 active</span>
+                    )}
+                    {counts.pending > 0 && <Badge variant="warning">Pending review</Badge>}
+                  </div>
                 </div>
                 <div className="mt-2.5">
                   <AdThumbs ads={ads} />
@@ -190,8 +215,12 @@ export default async function AdvertisersPage() {
                 return (
                   <TableRow key={a.id} className="cursor-pointer hover:bg-accent/50">
                     <TableCell className="font-medium">
-                      <Link href={`/admin/advertisers/${a.id}`} className="block hover:underline">
+                      <Link
+                        href={`/admin/advertisers/${a.id}`}
+                        className="flex items-center gap-2 hover:underline"
+                      >
                         {a.full_name ?? '—'}
+                        {counts.pending > 0 && <Badge variant="warning">Pending</Badge>}
                       </Link>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
