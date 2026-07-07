@@ -303,7 +303,13 @@ export default async function CampaignDetail({
               )}
             </p>
             {c.ad_id && c.status !== 'canceled' && (
-              <ReplaceCreative campaignId={c.id} userId={profile.id} />
+              <ReplaceCreative
+                campaignId={c.id}
+                userId={profile.id}
+                qrTargetUrl={c.ad?.qr_target_url}
+                qrX={c.ad?.qr_x}
+                qrY={c.ad?.qr_y}
+              />
             )}
             {showUpsell && <MembershipUpsell />}
           </CardContent>

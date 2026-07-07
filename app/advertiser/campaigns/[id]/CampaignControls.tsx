@@ -1,12 +1,26 @@
 'use client'
 
-import { useTransition } from 'react'
+import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Pause, Play, Trash2, Archive, Plus, CreditCard } from 'lucide-react'
+import { Pause, Play, Trash2, Archive, Plus, CreditCard, MoreHorizontal } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button, buttonVariants } from '@/components/ui/button'
-import { ConfirmButton } from '@/components/app/ConfirmButton'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu'
 import { useBasePath, homeFor } from '@/lib/useBasePath'
 import { cn } from '@/lib/utils'
 import { pauseCampaign, resumeCampaign, trashCampaign, archiveCampaign, resumeCheckout, relaunchCampaign } from './actions'
@@ -18,6 +32,8 @@ export function CampaignControls({ id, status }: { id: string; status: string })
   // Hosts have no "Past campaigns" page; send them home (their dashboard).
   const pastHref = base === '/host/advertise' ? '/host' : '/advertiser/past'
   const [pending, start] = useTransition()
+  // Which destructive confirmation is open (routine actions run without one).
+  const [dialog, setDialog] = useState<null | 'archive' | 'delete'>(null)
 
   const run = (fn: (id: string) => Promise<{ error: string | null }>, ok: string, to?: string) =>
     start(async () => {
@@ -52,72 +68,127 @@ export function CampaignControls({ id, status }: { id: string; status: string })
       }
     })
 
+  const confirmArchive = () =>
+    start(async () => {
+      const res = await archiveCampaign(id)
+      if (res.error) {
+        toast.error(res.error)
+        return
+      }
+      toast.success('Moved to Past campaigns')
+      setDialog(null)
+      router.push(pastHref)
+    })
+
+  const confirmDelete = () =>
+    start(async () => {
+      const res = await trashCampaign(id)
+      if (res.error) {
+        toast.error(res.error)
+        return
+      }
+      toast.success('Moved to Trash')
+      setDialog(null)
+      router.push(home)
+    })
+
   return (
-    <div className="flex flex-wrap gap-2">
-      {status === 'draft' && (
-        <Button disabled={pending} onClick={resume}>
-          <CreditCard className="size-4" /> Resume payment
-        </Button>
-      )}
-      {status === 'canceled' && (
-        <Button disabled={pending} onClick={relaunch}>
-          <CreditCard className="size-4" /> Relaunch & pay
-        </Button>
-      )}
-      {/* Add more screens to this live campaign (prorated). Advertiser shell only
-          — the host advertise tree doesn't carry this subpage. */}
-      {status === 'active' && base === '/advertiser' && (
-        <Link href={`/advertiser/campaigns/${id}/add`} className={cn(buttonVariants(), 'gap-1.5')}>
-          <Plus className="size-4" /> Add screens
-        </Link>
-      )}
-      {status === 'paused' && (
-        <Button disabled={pending} onClick={() => run(resumeCampaign, 'Campaign resumed')}>
-          <Play className="size-4" /> Resume
-        </Button>
-      )}
-      {status === 'active' && (
-        <Button
-          variant="outline"
-          disabled={pending}
-          onClick={() => run(pauseCampaign, 'Campaign paused')}
-        >
-          <Pause className="size-4" /> Pause
-        </Button>
-      )}
-      {status !== 'canceled' && (
-        <ConfirmButton
-          onConfirm={async () => {
-            const res = await archiveCampaign(id)
-            if (!res.error) router.push(pastHref)
-            return res
-          }}
-          title="End this campaign?"
-          description="It stops running and moves to Past campaigns, but stays saved with its performance."
-          confirmText="Archive"
-          confirmVariant="default"
-          successToast="Moved to Past campaigns"
-          variant="outline"
-          size="default"
-        >
-          <Archive className="size-4" /> Archive
-        </ConfirmButton>
-      )}
-      <ConfirmButton
-        onConfirm={async () => {
-          const res = await trashCampaign(id)
-          if (!res.error) router.push(home)
-          return res
-        }}
-        title="Move this campaign to Trash?"
-        description="Your ad stops running. It stays saved and you can restore it anytime."
-        confirmText="Delete"
-        successToast="Moved to Trash"
-        variant="destructive"
-        size="default"
-      >
-        <Trash2 className="size-4" /> Delete
-      </ConfirmButton>
-    </div>
+    <>
+      <div className="flex flex-wrap items-center gap-2">
+        {/* Primary actions — the routine, non-destructive ones. */}
+        {status === 'draft' && (
+          <Button disabled={pending} onClick={resume}>
+            <CreditCard className="size-4" /> Resume payment
+          </Button>
+        )}
+        {status === 'canceled' && (
+          <Button disabled={pending} onClick={relaunch}>
+            <CreditCard className="size-4" /> Relaunch & pay
+          </Button>
+        )}
+        {/* Add more screens to this live campaign (prorated). Advertiser shell only
+            — the host advertise tree doesn't carry this subpage. */}
+        {status === 'active' && base === '/advertiser' && (
+          <Link href={`/advertiser/campaigns/${id}/add`} className={cn(buttonVariants(), 'gap-1.5')}>
+            <Plus className="size-4" /> Add screens
+          </Link>
+        )}
+        {status === 'paused' && (
+          <Button disabled={pending} onClick={() => run(resumeCampaign, 'Campaign resumed')}>
+            <Play className="size-4" /> Resume
+          </Button>
+        )}
+        {status === 'active' && (
+          <Button
+            variant="outline"
+            disabled={pending}
+            onClick={() => run(pauseCampaign, 'Campaign paused')}
+          >
+            <Pause className="size-4" /> Pause
+          </Button>
+        )}
+
+        {/* Destructive actions live behind an overflow menu so they aren't a
+            mis-tap away from Pause/Add screens. */}
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button variant="ghost" size="icon" aria-label="More actions" disabled={pending} />
+            }
+          >
+            <MoreHorizontal className="size-4" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="min-w-40">
+            {status !== 'canceled' && (
+              <DropdownMenuItem onClick={() => setDialog('archive')}>
+                <Archive className="size-4" /> Archive
+              </DropdownMenuItem>
+            )}
+            {status !== 'canceled' && <DropdownMenuSeparator />}
+            <DropdownMenuItem variant="destructive" onClick={() => setDialog('delete')}>
+              <Trash2 className="size-4" /> Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      <Dialog open={dialog === 'archive'} onOpenChange={(o) => !o && setDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>End this campaign?</DialogTitle>
+            <DialogDescription>
+              It stops running and moves to Past campaigns, but stays saved with its performance.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" size="sm" disabled={pending} onClick={() => setDialog(null)}>
+              Cancel
+            </Button>
+            <Button size="sm" disabled={pending} onClick={confirmArchive}>
+              {pending ? 'Working…' : 'Archive'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={dialog === 'delete'} onOpenChange={(o) => !o && setDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Move this campaign to Trash?</DialogTitle>
+            <DialogDescription>
+              Your ad stops running. It stays saved and you can restore it anytime.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" size="sm" disabled={pending} onClick={() => setDialog(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" size="sm" disabled={pending} onClick={confirmDelete}>
+              {pending ? 'Working…' : 'Delete'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
