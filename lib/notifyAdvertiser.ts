@@ -175,6 +175,46 @@ export async function notifyPaymentReceived(admin: Admin, campaignId: string): P
   await sendEmail({ to: who.email, subject: `Payment received for ${title}`, html })
 }
 
+// Payment failed (a renewal charge Stripe couldn't collect). We pause the ad until
+// payment is fixed; this is the heads-up. Service-only, no sell.
+export async function notifyPaymentFailed(admin: Admin, campaignId: string): Promise<void> {
+  const { data: campaign } = await admin
+    .from('campaigns')
+    .select('id, advertiser_id, ad_id')
+    .eq('id', campaignId)
+    .maybeSingle()
+  if (!campaign?.advertiser_id) return
+  const who = await ownerEmail(admin, campaign.advertiser_id as string)
+  if (!who) return
+
+  let title = 'Your campaign'
+  if (campaign.ad_id) {
+    const { data: ad } = await admin
+      .from('ads')
+      .select('title')
+      .eq('id', campaign.ad_id)
+      .maybeSingle()
+    if (ad?.title) title = ad.title as string
+  }
+  const base = appUrl().replace(/\/$/, '')
+  const dashUrl = `${base}/advertiser/campaigns/${campaign.id}`
+
+  const html = shell({
+    eyebrow: 'Payment issue',
+    heading: 'We could not process your payment',
+    body: [
+      greet(who.full_name),
+      `Your latest payment for ${escapeHtml(title)} did not go through, so the ad is paused for now.`,
+      `Update your payment method and the ad starts running again automatically as soon as the charge clears.`,
+    ],
+    ctaText: 'View your campaign',
+    ctaUrl: dashUrl,
+    foot: 'If you think this is a mistake, reply to this email and we will help.',
+  })
+
+  await sendEmail({ to: who.email, subject: `Payment issue for ${title}`, html })
+}
+
 // Campaign created — a confirmation the moment an advertiser sets up a campaign,
 // with a short recap (screens + monthly total) and what happens next (payment +
 // review, then it goes live). Service-only, no sell. Creates its own admin client

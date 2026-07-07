@@ -1,18 +1,19 @@
 // Advertiser performance helpers — turn raw placements + QR scans into a daily
 // series and a per-location breakdown for the campaign detail page.
 //
-// Two kinds of number live here, and the UI must keep them honest:
-//   • Estimated impressions — derived from each venue's monthly foot_traffic_estimate.
-//     TVs don't report plays (see app/api/tv/loop/route.ts), so this is an estimate.
+// Three kinds of number live here, and the UI must keep them honest:
+//   • Times shown (plays) — MEASURED proof-of-play from ad_plays (device-secret
+//     authenticated, open-hours filtered). This is the real "how many times did my
+//     ad play" number and leads the UI.
 //   • QR scans — MEASURED events (app/r/[code]/route.ts), attributed to a screen + day.
-//
-// Phase 2 (impression_days rollup + device play-counts) will make estimates vary by
-// real online-days and add real plays; these helpers are the seam for that swap.
+//   • Estimated reach — derived from each venue's monthly foot_traffic_estimate. A
+//     clearly-labeled ESTIMATE, never presented as measured.
 
 export const PERF_WINDOW_DAYS = 30
 
 // A distinct venue the campaign's ad is currently running at, with the screen ids
-// there (one venue can host several TVs).
+// there (one venue can host several TVs). `plays` is measured over the window and
+// attached by the caller after aggregating ad_plays (0 when not yet computed).
 export type RunningVenue = {
   venueId: string
   name: string
@@ -20,6 +21,8 @@ export type RunningVenue = {
   lng: number | null
   footTraffic: number // ~monthly visitors
   tvIds: string[]
+  plays?: number // measured plays over the reporting window
+  venueType?: string | null // e.g. 'Sports Bar' — for the report's venue-type mix
 }
 
 export type ScanRow = { tv_id: string | null; scanned_at: string }
@@ -32,6 +35,12 @@ export type LocationRow = {
   estPerDay: number
   estPerMonth: number
   scans: number
+  plays: number // measured times shown over the window
+}
+
+// Total measured plays across the running venues.
+export function measuredPlaysTotal(venues: RunningVenue[]): number {
+  return venues.reduce((s, v) => s + (v.plays ?? 0), 0)
 }
 
 // Steady per-day estimate: a venue's monthly visitors spread evenly. Counted once
@@ -93,8 +102,9 @@ export function locationRows(venues: RunningVenue[], scans: ScanRow[]): Location
       estPerDay: estPerDay(v.footTraffic),
       estPerMonth: v.footTraffic,
       scans: scansByVenue.get(v.venueId) ?? 0,
+      plays: v.plays ?? 0,
     }))
-    .sort((a, b) => b.estPerMonth - a.estPerMonth)
+    .sort((a, b) => b.plays - a.plays || b.estPerMonth - a.estPerMonth)
 }
 
 // Mean lat/lng of running venues; falls back to Jacksonville, NC (first market).

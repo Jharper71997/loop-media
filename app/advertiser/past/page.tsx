@@ -75,6 +75,7 @@ export default async function PastCampaignsPage() {
         .from('qr_scans')
         .select('ad_id')
         .in('ad_id', adIds)
+        .eq('is_bot', false)
       const byAd = new Map<string, number>()
       for (const s of (scanData ?? []) as { ad_id: string }[])
         byAd.set(s.ad_id, (byAd.get(s.ad_id) ?? 0) + 1)

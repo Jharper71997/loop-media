@@ -1,13 +1,15 @@
 import { requireProfile, homeForRole } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import type { PriceTier } from '@/lib/db.types'
-import { suggestTier, venuePriceCents, type QuoteOptions } from '@/lib/pricing'
+import { suggestTier, venuePriceCents, venueExclusivityCents, type QuoteOptions } from '@/lib/pricing'
 import {
   resolveAdvertiserContext,
   contextToQuoteOptions,
   getPricingConfig,
 } from '@/lib/pricing.server'
+import { availableExclusiveVenueIds } from '@/lib/exclusivity'
 import { CreativeStep } from '../CreativeStep'
 import type { CartVenue } from '../types'
 
@@ -22,7 +24,9 @@ export default async function CreativePage() {
     supabase.from('categories').select('id, name').order('name'),
     supabase
       .from('venues')
-      .select('id, territory_id, name, category_id, foot_traffic_estimate, price_tier, price_cents_override')
+      .select(
+        'id, territory_id, name, category_id, foot_traffic_estimate, price_tier, price_cents_override, exclusivity_price_cents'
+      )
       .eq('status', 'active'),
     resolveAdvertiserContext(profile.id),
     getPricingConfig(),
@@ -36,8 +40,23 @@ export default async function CreativePage() {
     foot_traffic_estimate: number
     price_tier: PriceTier | null
     price_cents_override: number | null
+    exclusivity_price_cents: number | null
   }
-  const venues: CartVenue[] = ((venueRows ?? []) as VRow[]).map((r) => {
+  const rows = (venueRows ?? []) as VRow[]
+
+  // Exclusivity availability for the buyer's category (matches the review step).
+  let availableExcl = new Set<string>()
+  if (profile.category_id) {
+    const admin = createAdminClient()
+    availableExcl = await availableExclusiveVenueIds(
+      admin,
+      profile.category_id,
+      profile.id,
+      rows.map((r) => r.id)
+    )
+  }
+
+  const venues: CartVenue[] = rows.map((r) => {
     const tier: PriceTier = r.price_tier ?? suggestTier(r.foot_traffic_estimate)
     return {
       id: r.id,
@@ -47,6 +66,8 @@ export default async function CreativePage() {
       footTraffic: r.foot_traffic_estimate,
       tier,
       priceCents: venuePriceCents(r.price_cents_override, tier, pricingConfig),
+      exclusivityCents: venueExclusivityCents(r.exclusivity_price_cents, pricingConfig),
+      exclusivityAvailable: availableExcl.has(r.id),
     }
   })
 

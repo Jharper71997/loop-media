@@ -2,20 +2,30 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { requireProfile } from '@/lib/auth'
 import { stripe, appUrl } from '@/lib/stripe'
 import {
   resolveCartCents,
   resolveAdvertiserContext,
   contextToQuoteOptions,
+  getPricingConfig,
 } from '@/lib/pricing.server'
+import { venueExclusivityCents } from '@/lib/pricing'
 import { activatePlacementsIfReady } from '@/lib/placement'
+import {
+  venuesWithActiveExclusive,
+  availableExclusiveVenueIds,
+  activateExclusiveSlots,
+} from '@/lib/exclusivity'
 import { notifyCampaignCreated } from '@/lib/notifyAdvertiser'
 import { CREATIVE_SETUP_FEE_CENTS, CREATIVE_REFRESH_CENTS } from '@/lib/fees'
 
 export interface NewCampaignInput {
   territory_id: string
   venue_ids: string[] // the cart — screens the advertiser picked off the map
+  // Subset of venue_ids the buyer is paying to own their category at (exclusivity).
+  exclusive_venue_ids?: string[]
   category_id: string | null
   title: string
   qr_target_url: string | null
@@ -83,11 +93,47 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
     .in('id', venueIds)
   const territoryId = vTerr?.find((v) => v.territory_id)?.territory_id ?? input.territory_id
 
+  // Paid exclusivity (server-authoritative; the client toggle is only a hint).
+  // 1) Never place where a COMPETITOR already owns the category exclusively.
+  // 2) Only sell exclusivity where it's actually available (no competitor active,
+  //    not already taken) — a slot that filled since page load is silently dropped.
+  const admin = createAdminClient()
+  let exclusiveIds: string[] = []
+  if (input.category_id) {
+    const foreign = await venuesWithActiveExclusive(admin, input.category_id, venueIds)
+    const blockedByExclusive = new Set(
+      [...foreign.entries()].filter(([, adv]) => adv !== profile.id).map(([vid]) => vid)
+    )
+    venueIds = venueIds.filter((id) => !blockedByExclusive.has(id))
+    if (!venueIds.length) {
+      return {
+        error:
+          'Those screens are owned exclusively by another advertiser in your category. Pick different screens.',
+      }
+    }
+    const requested = [...new Set((input.exclusive_venue_ids ?? []).filter(Boolean))].filter((id) =>
+      venueIds.includes(id)
+    )
+    if (requested.length) {
+      const available = await availableExclusiveVenueIds(
+        admin,
+        input.category_id,
+        profile.id,
+        requested
+      )
+      exclusiveIds = requested.filter((id) => available.has(id))
+    }
+  }
+
   // Authoritative re-price from the DB (never trust a client total). Volume,
   // host (20%), and loyalty discounts + free-screen credits are applied here
-  // from the buyer's standing, not the client.
+  // from the buyer's standing, not the client. Exclusivity upcharges add on top.
   const ctx = await resolveAdvertiserContext(profile.id)
-  const { totalCents, screenCents, quote } = await resolveCartCents(venueIds, contextToQuoteOptions(ctx))
+  const { totalCents, screenCents, quote } = await resolveCartCents(
+    venueIds,
+    contextToQuoteOptions(ctx),
+    exclusiveIds
+  )
   if (!screenCents.length) return { error: 'None of the selected screens are available anymore.' }
 
   const { data: ad, error: adErr } = await supabase
@@ -127,6 +173,32 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
   await supabase
     .from('campaign_targets')
     .insert(venueIds.map((venue_id) => ({ campaign_id: campaign.id, venue_id })))
+
+  // Stage bought exclusivity as PENDING; payment confirmation (webhook / demo
+  // path) flips it to active. Pending blocks nothing, so an abandoned checkout
+  // leaves no live exclusive behind.
+  if (exclusiveIds.length && input.category_id) {
+    const config = await getPricingConfig()
+    const { data: exVenues } = await supabase
+      .from('venues')
+      .select('id, exclusivity_price_cents')
+      .in('id', exclusiveIds)
+    const priceByVenue = new Map<string, number>()
+    for (const v of (exVenues ?? []) as { id: string; exclusivity_price_cents: number | null }[]) {
+      priceByVenue.set(v.id, venueExclusivityCents(v.exclusivity_price_cents, config))
+    }
+    await admin.from('exclusive_slots').insert(
+      exclusiveIds.map((venue_id) => ({
+        venue_id,
+        category_id: input.category_id,
+        campaign_id: campaign.id,
+        advertiser_id: profile.id,
+        territory_id: territoryId,
+        status: 'pending',
+        price_cents: priceByVenue.get(venue_id) ?? null,
+      }))
+    )
+  }
 
   if (input.creative_help_brief?.trim()) {
     await supabase
@@ -226,6 +298,7 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
     .eq('id', sub?.id ?? '')
   await supabase.from('campaigns').update({ status: 'active' }).eq('id', campaign.id)
   await activatePlacementsIfReady(campaign.id)
+  await activateExclusiveSlots(admin, campaign.id)
   revalidatePath(homePath)
   return { campaignId: campaign.id, demo: true }
 }

@@ -4,7 +4,9 @@ import { stripe } from '@/lib/stripe'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { activatePlacementsIfReady } from '@/lib/placement'
 import { applyAdChange } from '@/lib/adChanges'
-import { notifyPaymentReceived } from '@/lib/notifyAdvertiser'
+import { notifyPaymentReceived, notifyPaymentFailed } from '@/lib/notifyAdvertiser'
+import { pauseCampaignForNonpayment, resumeCampaignAfterPayment } from '@/lib/campaignStatus'
+import { activateExclusiveSlots, releaseExclusiveSlots } from '@/lib/exclusivity'
 
 function mapSubStatus(sub: Stripe.Subscription): string {
   return sub.pause_collection
@@ -194,6 +196,12 @@ async function handleEvent(
       await supabase.from('campaigns').update({ status: 'active' }).eq('id', campaignId)
       // Place onto screens if the ad is already approved (else admin approval will).
       await activatePlacementsIfReady(campaignId, supabase)
+      // Materialize any bought category exclusivity now that it's paid.
+      try {
+        await activateExclusiveSlots(supabase, campaignId)
+      } catch {
+        /* exclusivity activation is best-effort; never fail the webhook */
+      }
       // Best-effort service receipt. Event dedupe above prevents a double send.
       try {
         await notifyPaymentReceived(supabase, campaignId)
@@ -229,6 +237,12 @@ async function handleEvent(
       .eq('stripe_subscription_id', sub.id)
     if (row?.campaign_id) {
       await supabase.from('campaigns').update({ status: 'canceled' }).eq('id', row.campaign_id)
+      // Free any category exclusivity this campaign held.
+      try {
+        await releaseExclusiveSlots(supabase, row.campaign_id)
+      } catch {
+        /* best-effort; never fail the webhook */
+      }
     }
     // End a membership if that's what was canceled.
     await supabase
@@ -283,5 +297,51 @@ async function handleEvent(
       stripe_customer_id: typeof inv.customer === 'string' ? inv.customer : null,
       paid_at: now,
     })
+    // A recovered charge clears past_due right away. Without this the sub row stays
+    // past_due until the separate customer.subscription.updated event lands, which
+    // transiently drops it from the active-subscription query and can zero the
+    // advertiser's loyalty tenure on a re-price in that window.
+    if (subId) {
+      await supabase
+        .from('subscriptions')
+        .update({ status: 'active' })
+        .eq('stripe_subscription_id', subId)
+        .eq('status', 'past_due')
+    }
+    // If this campaign was paused for non-payment, a successful (retry) charge
+    // brings it back. No-op for a campaign that's already active.
+    if (campaignId) {
+      try {
+        await resumeCampaignAfterPayment(supabase, campaignId)
+      } catch {
+        /* recovery is best-effort; never fail the webhook */
+      }
+    }
+  } else if (event.type === 'invoice.payment_failed') {
+    // A renewal charge Stripe couldn't collect (declined/expired card). Pause the
+    // ad so a non-paying advertiser doesn't keep running free through Stripe's
+    // retry window; invoice.paid above un-pauses it when a retry succeeds.
+    const inv = event.data.object as Stripe.Invoice
+    const subId =
+      typeof (inv as unknown as { subscription?: string | null }).subscription === 'string'
+        ? ((inv as unknown as { subscription?: string }).subscription as string)
+        : null
+    if (!subId) return
+    const { data: subRow } = await supabase
+      .from('subscriptions')
+      .select('campaign_id')
+      .eq('stripe_subscription_id', subId)
+      .maybeSingle()
+    if (!subRow?.campaign_id) return
+    await supabase
+      .from('subscriptions')
+      .update({ status: 'past_due' })
+      .eq('stripe_subscription_id', subId)
+    await pauseCampaignForNonpayment(supabase, subRow.campaign_id)
+    try {
+      await notifyPaymentFailed(supabase, subRow.campaign_id)
+    } catch {
+      /* email is best-effort; never fail the webhook */
+    }
   }
 }

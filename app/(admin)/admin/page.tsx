@@ -73,6 +73,7 @@ export default async function AdminOverview() {
     let q = supabase
       .from('qr_scans')
       .select('id', { count: 'exact', head: true })
+      .eq('is_bot', false)
       .gte('scanned_at', sinceIso)
     if (scopedAdIds) q = q.in('ad_id', scopedAdIds.length ? scopedAdIds : ['00000000-0000-0000-0000-000000000000'])
     return q
@@ -92,6 +93,7 @@ export default async function AdminOverview() {
     let q = supabase
       .from('qr_scans')
       .select('scanned_at, ad:ads(title), tv:tvs(venue:venues(name))')
+      .eq('is_bot', false)
       .order('scanned_at', { ascending: false })
       .limit(6)
     if (scopedAdIds) q = q.in('ad_id', scopedAdIds.length ? scopedAdIds : ['00000000-0000-0000-0000-000000000000'])

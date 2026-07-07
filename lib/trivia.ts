@@ -22,3 +22,31 @@ export function roundPhase(nowMs: number = Date.now()): { phase: Phase; endsInMs
   }
   return { phase: 'results', endsInMs: Math.round((ROUND_SECONDS - inRound) * 1000) }
 }
+
+// UTC day index — the seed for the per-day question shuffle, so the order varies
+// day to day but is identical for every poll on the same day (all phones + the TV).
+export function dayNumber(nowMs: number = Date.now()): number {
+  return Math.floor(nowMs / 1000 / 86400)
+}
+
+// Deterministic per-day permutation of [0..n). Seeded Fisher-Yates over an xorshift32
+// PRNG so every caller on the same day computes the same order (never Math.random,
+// which would bounce the live question between polls). Walk it by round to cycle all
+// questions before any repeats, with a fresh order each day.
+export function shuffledOrder(n: number, seed: number): number[] {
+  const idx = Array.from({ length: n }, (_, i) => i)
+  let s = seed >>> 0 || 1
+  const next = () => {
+    s ^= s << 13
+    s >>>= 0
+    s ^= s >> 17
+    s ^= s << 5
+    s >>>= 0
+    return s / 0x100000000
+  }
+  for (let i = n - 1; i > 0; i--) {
+    const j = Math.floor(next() * (i + 1))
+    ;[idx[i], idx[j]] = [idx[j], idx[i]]
+  }
+  return idx
+}

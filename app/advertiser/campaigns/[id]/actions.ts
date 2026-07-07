@@ -14,6 +14,11 @@ import {
   resolveAdvertiserContext,
   contextToQuoteOptions,
 } from '@/lib/pricing.server'
+import {
+  campaignExclusiveVenueIds,
+  releaseExclusiveSlots,
+  reactivateExclusiveSlots,
+} from '@/lib/exclusivity'
 
 // Verify the signed-in advertiser owns this campaign, then mutate via service
 // role (placements/subscriptions aren't writable under the advertiser's RLS).
@@ -51,6 +56,7 @@ export async function pauseCampaign(id: string) {
   if (c.ad_id) await admin.from('ads').update({ status: 'paused' }).eq('id', c.ad_id)
   await admin.from('ad_placements').update({ status: 'paused' }).eq('campaign_id', id).eq('status', 'active')
   await admin.from('subscriptions').update({ status: 'paused' }).eq('campaign_id', id)
+  await releaseExclusiveSlots(admin, id)
 
   const subId = await stripeSubId(admin, id)
   if (subId && process.env.STRIPE_SECRET_KEY) {
@@ -68,8 +74,24 @@ export async function resumeCampaign(id: string) {
   const c = await ownCampaign(id)
   if (!c) return { error: 'Campaign not found.' }
   const admin = createAdminClient()
+  // A pause for NON-PAYMENT (dunning sets the sub 'past_due') can't be cleared for
+  // free from here — that would run the ad through the rest of the retry window
+  // unpaid. The advertiser must fix payment; invoice.paid then auto-resumes it.
+  const { data: subRow } = await admin
+    .from('subscriptions')
+    .select('status')
+    .eq('campaign_id', id)
+    .maybeSingle()
+  if (subRow?.status === 'past_due') {
+    return {
+      error:
+        'Your last payment did not go through. Update your payment method and the ad resumes automatically.',
+    }
+  }
   await admin.from('campaigns').update({ status: 'active' }).eq('id', id)
-  if (c.ad_id) await admin.from('ads').update({ status: 'approved' }).eq('id', c.ad_id)
+  // Only re-approve an ad WE paused — never push a still-pending or rejected ad live.
+  if (c.ad_id)
+    await admin.from('ads').update({ status: 'approved' }).eq('id', c.ad_id).eq('status', 'paused')
   await admin.from('ad_placements').update({ status: 'active' }).eq('campaign_id', id).eq('status', 'paused')
   await admin.from('subscriptions').update({ status: 'active' }).eq('campaign_id', id)
 
@@ -80,6 +102,7 @@ export async function resumeCampaign(id: string) {
     .eq('campaign_id', id)
     .eq('status', 'active')
   if (!count) await activatePlacementsIfReady(id, admin)
+  await reactivateExclusiveSlots(admin, id)
 
   const subId = await stripeSubId(admin, id)
   if (subId && process.env.STRIPE_SECRET_KEY) {
@@ -101,6 +124,7 @@ export async function cancelCampaign(id: string) {
   if (c.ad_id) await admin.from('ads').update({ status: 'paused' }).eq('id', c.ad_id)
   await admin.from('ad_placements').update({ status: 'ended' }).eq('campaign_id', id)
   await admin.from('subscriptions').update({ status: 'canceled' }).eq('campaign_id', id)
+  await releaseExclusiveSlots(admin, id)
 
   const subId = await stripeSubId(admin, id)
   if (subId && process.env.STRIPE_SECRET_KEY) {
@@ -128,6 +152,7 @@ export async function trashCampaign(id: string) {
   if (c.ad_id) await admin.from('ads').update({ status: 'paused' }).eq('id', c.ad_id)
   await admin.from('ad_placements').update({ status: 'ended' }).eq('campaign_id', id)
   await admin.from('subscriptions').update({ status: 'canceled' }).eq('campaign_id', id)
+  await releaseExclusiveSlots(admin, id)
 
   const subId = await stripeSubId(admin, id)
   if (subId && process.env.STRIPE_SECRET_KEY) {
@@ -156,6 +181,7 @@ export async function archiveCampaign(id: string) {
   if (c.ad_id) await admin.from('ads').update({ status: 'paused' }).eq('id', c.ad_id)
   await admin.from('ad_placements').update({ status: 'ended' }).eq('campaign_id', id)
   await admin.from('subscriptions').update({ status: 'canceled' }).eq('campaign_id', id)
+  await releaseExclusiveSlots(admin, id)
 
   const subId = await stripeSubId(admin, id)
   if (subId && process.env.STRIPE_SECRET_KEY) {
@@ -275,6 +301,9 @@ export async function relaunchCampaign(
     await admin.from('campaigns').update({ status: 'active' }).eq('id', id)
     await admin.from('subscriptions').update({ status: 'active' }).eq('campaign_id', id)
     await activatePlacementsIfReady(id, admin)
+    // Re-take any exclusivity the campaign held before it was canceled (its slots
+    // were released on cancel). The Stripe path does this in the webhook on payment.
+    await reactivateExclusiveSlots(admin, id)
     revalidate(id)
     return { demo: true }
   }
@@ -341,8 +370,10 @@ export async function replaceCreative(
 
   const admin = createAdminClient()
   const profile = await requireProfile()
-  // Creative changes are free for everyone — we don't charge to swap a creative.
-  const free = true
+  // Members (active unlimited-changes membership) swap creatives free; everyone
+  // else pays the $10 fee via the Checkout below. Demo / no-Stripe setups are free
+  // too (nothing to charge against).
+  const free = (await hasUnlimitedChanges(admin, profile.id)) || !process.env.STRIPE_SECRET_KEY
 
   // Record the change either way (audit + the webhook needs the row to apply).
   const { data: change, error: insErr } = await admin
@@ -518,7 +549,13 @@ export async function addScreensToCampaign(
   // the new monthly total must be priced over the union, not added incrementally.
   const ctx = await resolveAdvertiserContext(advertiserId)
   const union = [...new Set([...existingVenueIds, ...toAdd])]
-  const { totalCents, screenCents } = await resolveCartCents(union, contextToQuoteOptions(ctx))
+  // Keep any exclusivity upcharge the campaign already holds in the new total.
+  const heldExclusives = await campaignExclusiveVenueIds(admin, id)
+  const { totalCents, screenCents } = await resolveCartCents(
+    union,
+    contextToQuoteOptions(ctx),
+    heldExclusives
+  )
   if (!screenCents.length) return { error: 'Could not price those screens. Try again.' }
 
   // Add the new targets (net-new only — PK is (campaign_id, venue_id)).
@@ -571,6 +608,105 @@ export async function addScreensToCampaign(
 
   revalidate(id)
   return { added: toAdd.length, newMonthlyCents: totalCents }
+}
+
+// Remove screens from an existing ACTIVE campaign, prorating the subscription DOWN.
+// The removed screens' placements end and the lower monthly total prorates onto the
+// next invoice as a Stripe CREDIT (policy: credit toward future billing, not a cash
+// refund). At least one screen must remain — to drop them all, cancel the campaign.
+export async function removeScreensFromCampaign(
+  id: string,
+  venueIds: string[]
+): Promise<{ error?: string; removed?: number; newMonthlyCents?: number }> {
+  const c = await ownCampaign(id)
+  if (!c) return { error: 'Campaign not found.' }
+  const ids = [...new Set((venueIds ?? []).filter(Boolean))]
+  if (!ids.length) return { error: 'Pick at least one screen to remove.' }
+
+  const admin = createAdminClient()
+  const advertiserId = c.advertiser_id
+
+  const { data: camp } = await admin.from('campaigns').select('status').eq('id', id).maybeSingle()
+  if (!camp) return { error: 'Campaign not found.' }
+  if (camp.status !== 'active') return { error: 'Only an active campaign can change screens.' }
+
+  const { data: existingTargets } = await admin
+    .from('campaign_targets')
+    .select('venue_id')
+    .eq('campaign_id', id)
+  const existingVenueIds = (existingTargets ?? []).map((t) => t.venue_id as string)
+  const existingSet = new Set(existingVenueIds)
+  const toRemove = ids.filter((v) => existingSet.has(v))
+  if (!toRemove.length) return { error: 'None of those screens are on this campaign.' }
+
+  const remaining = existingVenueIds.filter((v) => !toRemove.includes(v))
+  if (!remaining.length) {
+    return { error: 'That would remove every screen. Cancel the campaign instead.' }
+  }
+
+  // Re-price the REDUCED set (discounts/floor are non-linear, so re-price the whole
+  // remaining union — don't subtract incrementally). Exclusivity upcharges follow
+  // the screens: a removed venue's exclusive is dropped from the total (and freed).
+  const ctx = await resolveAdvertiserContext(advertiserId)
+  const heldExclusives = await campaignExclusiveVenueIds(admin, id)
+  const remainingExclusives = heldExclusives.filter((v) => !toRemove.includes(v))
+  const { totalCents, screenCents } = await resolveCartCents(
+    remaining,
+    contextToQuoteOptions(ctx),
+    remainingExclusives
+  )
+  if (!screenCents.length) return { error: 'Could not re-price the campaign. Try again.' }
+
+  // Drop the targets and end any live placements on the removed venues' screens.
+  await admin.from('campaign_targets').delete().eq('campaign_id', id).in('venue_id', toRemove)
+  // Free any exclusivity held at the removed venues.
+  await releaseExclusiveSlots(admin, id, toRemove)
+  const { data: removedTvs } = await admin.from('tvs').select('id').in('venue_id', toRemove)
+  const removedTvIds = (removedTvs ?? []).map((t) => t.id as string)
+  if (removedTvIds.length) {
+    await admin
+      .from('ad_placements')
+      .update({ status: 'ended' })
+      .eq('campaign_id', id)
+      .in('tv_id', removedTvIds)
+  }
+
+  // Lower the Stripe subscription amount, prorated (a credit on the next invoice).
+  const subId = await stripeSubId(admin, id)
+  if (subId && process.env.STRIPE_SECRET_KEY) {
+    try {
+      const sub = await stripe().subscriptions.retrieve(subId)
+      const recurring = sub.items.data.filter((i) => i.price.recurring)
+      const item =
+        recurring.length <= 1
+          ? recurring[0] ?? sub.items.data[0]
+          : recurring.find((i) => i.price.unit_amount !== CREATIVE_REFRESH_CENTS) ?? recurring[0]
+      if (item) {
+        const product =
+          typeof item.price.product === 'string' ? item.price.product : item.price.product.id
+        await stripe().subscriptions.update(subId, {
+          items: [
+            {
+              id: item.id,
+              price_data: {
+                currency: 'usd',
+                product,
+                unit_amount: totalCents,
+                recurring: { interval: 'month' },
+              },
+            },
+          ],
+          proration_behavior: 'create_prorations',
+        })
+      }
+    } catch {
+      /* best effort — targets + total are saved; an admin can reconcile in Stripe */
+    }
+  }
+
+  await admin.from('campaigns').update({ monthly_total_cents: totalCents }).eq('id', id)
+  revalidate(id)
+  return { removed: toRemove.length, newMonthlyCents: totalCents }
 }
 
 // Bring a campaign back from Trash. It returns to the list as canceled (billing

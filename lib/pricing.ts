@@ -3,7 +3,7 @@
 // Per-TV à la carte: every venue has a price TIER; the advertiser taps venues
 // into a cart and the monthly bill is the sum of the picked venues' tier prices,
 // less a volume discount (more screens → lower rate), less host / loyalty
-// discounts, floored at the $50/mo account minimum (one screen). Free-screen credits earned
+// discounts, floored at the $200/mo account minimum. Free-screen credits earned
 // from loyalty milestones comp the advertiser's cheapest screens.
 //
 // Everything in this file is PURE and client-safe (no server imports) so the
@@ -21,21 +21,26 @@ export interface PricingConfig {
   hostDiscount: number // host advertising elsewhere -> fraction off (0.2 = 20%)
   loyalty12moDiscount: number // 12 months active -> extra fraction off
   maxDiscount: number // safety cap on combined discounts
+  exclusivityPriceCents: number // default monthly upcharge to own a category at a venue
 }
 
-// Flat $50/TV: every screen is $50/mo regardless of tier. Edit live at
-// /admin/pricing once the pricing_config row exists (otherwise this is the rate).
+// Fallback pricing used ONLY when the pricing_config DB row can't be read. These
+// MUST mirror the migration 0023 seed (the $75-floor ladder / $200 minimum) so a
+// missing or unreadable row can never silently bill a different, cheaper rate —
+// the bug this replaces was a flat-$50 fallback diverging from the $200 DB seed.
+// Admins tune the live values at /admin/pricing.
 export const DEFAULT_PRICING_CONFIG: PricingConfig = {
   tierPriceCents: {
-    premium: 5000,
-    high: 5000,
-    standard: 5000,
-    local: 5000,
+    premium: 12000,
+    high: 9500,
+    standard: 8500,
+    local: 7500,
   },
-  minMonthlyCents: 5000, // one screen = $50 (no multi-screen minimum)
+  minMonthlyCents: 20000, // $200/mo account minimum
   hostDiscount: 0.2,
   loyalty12moDiscount: 0.05,
   maxDiscount: 0.35,
+  exclusivityPriceCents: 15000, // $150/mo to own a category at a venue (admin-tunable)
 }
 
 export const TIER_LABEL: Record<PriceTier, string> = {
@@ -69,6 +74,16 @@ export function venuePriceCents(
   config: PricingConfig = DEFAULT_PRICING_CONFIG
 ): number {
   return priceCentsOverride ?? config.tierPriceCents[tier]
+}
+
+// A venue's effective monthly exclusivity upcharge. A per-venue override (cents)
+// wins; otherwise the network default from config. One place so the cart preview,
+// the review toggle, and billing all resolve the same number.
+export function venueExclusivityCents(
+  exclusivityOverride: number | null | undefined,
+  config: PricingConfig = DEFAULT_PRICING_CONFIG
+): number {
+  return exclusivityOverride ?? config.exclusivityPriceCents
 }
 
 // Starting tier suggestion from a foot-traffic estimate (~monthly visitors).

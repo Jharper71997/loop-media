@@ -45,7 +45,7 @@ export default async function ResultsPage() {
           .eq('status', 'active')
       : Promise.resolve({ data: [] as unknown[] }),
     adIds.length
-      ? supabase.from('qr_scans').select('tv_id, scanned_at').in('ad_id', adIds).gte('scanned_at', cutoff)
+      ? supabase.from('qr_scans').select('tv_id, scanned_at').in('ad_id', adIds).eq('is_bot', false).gte('scanned_at', cutoff)
       : Promise.resolve({ data: [] as unknown[] }),
   ])
 

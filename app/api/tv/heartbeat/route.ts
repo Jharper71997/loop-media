@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { deviceSecretOk } from '@/lib/tv'
+import { rateLimit } from '@/lib/rateLimit'
 
 // Lightweight ping so admins see the screen as online + a fresh "last seen".
 export async function POST(req: Request) {
@@ -8,13 +10,21 @@ export async function POST(req: Request) {
   if (!device) {
     return NextResponse.json({ error: 'Missing device_id.' }, { status: 400 })
   }
+  // Lenient per-device cap (normal cadence is ~2/min). Fails open on limiter error.
+  if (!(await rateLimit('tv_heartbeat', device, 10, 60))) {
+    return NextResponse.json({ ok: true, skipped: true })
+  }
   const supabase = createAdminClient()
   const { data: tv } = await supabase
     .from('tvs')
-    .select('id, last_heartbeat_at')
+    .select('id, last_heartbeat_at, device_secret')
     .eq('device_id', device)
     .maybeSingle()
   if (!tv) return NextResponse.json({ ok: true })
+  // A device WITH a secret must present it; a mismatched secret is a spoof.
+  if (!deviceSecretOk(tv.device_secret, req)) {
+    return NextResponse.json({ error: 'Device secret mismatch.' }, { status: 403 })
+  }
 
   const now = Date.now()
   const last = tv.last_heartbeat_at ? new Date(tv.last_heartbeat_at).getTime() : 0

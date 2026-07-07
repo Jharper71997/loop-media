@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 
 const DEVICE_KEY = 'lm_device'
+const DEVICE_SECRET_KEY = 'lm_device_secret'
 
 const cacheKey = (d: string) => `lm_loop_${d}`
 
@@ -110,6 +111,7 @@ function fillerLabel(type: FillerCard['type']): string {
 
 export function TvPlayer() {
   const [deviceId, setDeviceId] = useState<string | null>(null)
+  const [deviceSecret, setDeviceSecret] = useState<string | null>(null)
   const [ready, setReady] = useState(false)
   // Admin "Watch screen" preview (/tv?device=<id>&preview=1): render the exact
   // live loop but stay non-intrusive — don't claim this browser as the device
@@ -127,12 +129,18 @@ export function TvPlayer() {
     const isPreview = params.get('preview') === '1'
     setPreview(isPreview)
     const urlDevice = params.get('device')?.trim()
+    const urlSecret = params.get('secret')?.trim()
     // In preview never read/persist the stored device — keep the admin's browser
     // from inheriting (or becoming) a real screen.
     const id = urlDevice || (isPreview ? null : localStorage.getItem(DEVICE_KEY))
+    const secret = urlSecret || (isPreview ? null : localStorage.getItem(DEVICE_SECRET_KEY))
     if (id) {
-      if (!isPreview) localStorage.setItem(DEVICE_KEY, id)
+      if (!isPreview) {
+        localStorage.setItem(DEVICE_KEY, id)
+        if (secret) localStorage.setItem(DEVICE_SECRET_KEY, secret)
+      }
       setDeviceId(id)
+      if (secret) setDeviceSecret(secret)
     }
     setReady(true)
     // Cache creative media for offline playback (skip in preview).
@@ -145,19 +153,24 @@ export function TvPlayer() {
   if (!deviceId)
     return (
       <Pairing
-        onPaired={(id) => {
+        onPaired={(id, secret) => {
           localStorage.setItem(DEVICE_KEY, id)
+          if (secret) localStorage.setItem(DEVICE_SECRET_KEY, secret)
           setDeviceId(id)
+          setDeviceSecret(secret)
         }}
       />
     )
   return (
     <Player
       deviceId={deviceId}
+      deviceSecret={deviceSecret}
       preview={preview}
       onUnpair={() => {
         localStorage.removeItem(DEVICE_KEY)
+        localStorage.removeItem(DEVICE_SECRET_KEY)
         setDeviceId(null)
+        setDeviceSecret(null)
       }}
     />
   )
@@ -165,7 +178,11 @@ export function TvPlayer() {
 
 /* ---------------- Pairing ---------------- */
 
-function Pairing({ onPaired }: { onPaired: (deviceId: string) => void }) {
+function Pairing({
+  onPaired,
+}: {
+  onPaired: (deviceId: string, deviceSecret: string | null) => void
+}) {
   // A screen can carry its pairing code in the kiosk URL (/tv?code=XXXX) so it
   // pairs itself on first boot with no human input. Read it synchronously so we
   // show a quiet "pairing…" state — not the manual form — while the auto-pair
@@ -194,7 +211,7 @@ function Pairing({ onPaired }: { onPaired: (deviceId: string) => void }) {
         })
         const data = await res.json()
         if (!res.ok) throw new Error(data.error || 'Pairing failed')
-        onPaired(data.device_id)
+        onPaired(data.device_id, data.device_secret ?? null)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Pairing failed')
         setBusy(false)
@@ -251,8 +268,8 @@ function Pairing({ onPaired }: { onPaired: (deviceId: string) => void }) {
           autoFocus
           value={code}
           onChange={(e) => setCode(e.target.value.toUpperCase())}
-          placeholder="XXXX"
-          maxLength={4}
+          placeholder="XXXXXXXX"
+          maxLength={8}
           className="w-80 rounded-xl border border-white/15 bg-white/5 px-6 py-5 text-center text-3xl tracking-widest uppercase outline-none focus:border-primary"
         />
         <button
@@ -276,10 +293,12 @@ function Pairing({ onPaired }: { onPaired: (deviceId: string) => void }) {
 
 function Player({
   deviceId,
+  deviceSecret,
   preview = false,
   onUnpair,
 }: {
   deviceId: string
+  deviceSecret: string | null
   preview?: boolean
   onUnpair: () => void
 }) {
@@ -331,8 +350,11 @@ function Player({
     try {
       const res = await fetch(`/api/tv/loop?device=${encodeURIComponent(deviceId)}`, {
         cache: 'no-store',
+        headers: deviceSecret ? { 'x-device-secret': deviceSecret } : undefined,
       })
-      if (res.status === 404) {
+      if (res.status === 404 || res.status === 403) {
+        // 404 = unpaired/unknown device; 403 = device secret rejected (e.g. the
+        // code was regenerated to move the screen). Either way, drop to pairing.
         onUnpair()
         return
       }
@@ -362,7 +384,7 @@ function Player({
         setFatal('No connection and nothing cached yet.')
       }
     }
-  }, [deviceId, onUnpair, preview])
+  }, [deviceId, deviceSecret, onUnpair, preview])
 
   // Initial load + periodic resync (30s) so a newly approved ad shows up on the
   // screen within ~30s without anyone touching the TV. Also re-sync whenever
@@ -465,7 +487,10 @@ function Player({
     const send = () => {
       fetch('/api/tv/heartbeat', {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: {
+          'content-type': 'application/json',
+          ...(deviceSecret ? { 'x-device-secret': deviceSecret } : {}),
+        },
         body: JSON.stringify({ device_id: deviceId }),
         keepalive: true,
       }).catch(() => {})
@@ -492,7 +517,7 @@ function Player({
       clearInterval(id)
       document.removeEventListener('visibilitychange', onVisible)
     }
-  }, [deviceId, preview])
+  }, [deviceId, deviceSecret, preview])
 
   // Clock tick.
   useEffect(() => {
@@ -555,7 +580,10 @@ function Player({
     if (!slide || slide.kind !== 'ad') return
     fetch('/api/tv/play', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: {
+        'content-type': 'application/json',
+        ...(deviceSecret ? { 'x-device-secret': deviceSecret } : {}),
+      },
       body: JSON.stringify({ device_id: deviceId, ad_id: slide.id }),
       keepalive: true,
     }).catch(() => {})
@@ -578,12 +606,24 @@ function Player({
         revealControls()
       }}
     >
+      {/* Motion: a soft fade on every slide, plus a slow Ken-Burns push on image
+          ads, so the loop reads as broadcast signage instead of a hard-cut
+          slideshow. Videos keep object-contain (never crop footage); image ads use
+          object-cover (creatives are exported 16:9 to match the screen, so cover
+          doesn't crop) so the zoom has no black bars. */}
+      <style>{`
+        @keyframes lm-fade { from { opacity: 0 } to { opacity: 1 } }
+        @keyframes lm-kenburns { from { transform: scale(1.06) } to { transform: scale(1.0) } }
+        .lm-fade { animation: lm-fade 600ms ease-out both }
+        .lm-ken { animation: lm-kenburns 9s ease-out both }
+        @media (prefers-reduced-motion: reduce) { .lm-ken { animation: none } }
+      `}</style>
       {slide.kind === 'ad' ? (
         slide.creative_type === 'video' ? (
           <video
             key={slide.id + index}
             src={slide.creative_url}
-            className="h-full w-full object-contain"
+            className="lm-fade h-full w-full object-contain"
             autoPlay
             muted
             playsInline
@@ -592,7 +632,12 @@ function Player({
           />
         ) : (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={slide.creative_url} alt={slide.title} className="h-full w-full object-contain" />
+          <img
+            key={slide.id + index}
+            src={slide.creative_url}
+            alt={slide.title}
+            className="lm-fade lm-ken h-full w-full object-cover"
+          />
         )
       ) : slide.kind === 'weather' ? (
         <FillerFrame title="Loop Network">

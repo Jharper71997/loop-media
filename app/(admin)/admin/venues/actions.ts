@@ -21,6 +21,8 @@ export interface VenueInput {
   price_tier: PriceTier | null
   // Optional per-venue monthly price in cents. null = use the tier price.
   price_cents_override: number | null
+  // Optional per-venue exclusivity upcharge in cents. null = use the network default.
+  exclusivity_price_cents: number | null
   category_slots: number
   contact_name: string
   contact_email: string

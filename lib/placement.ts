@@ -111,6 +111,23 @@ export async function placeCampaign(
   if (!targetIds.size) return empty('No screens selected', goal)
   const scopedVenues = venues.filter((v) => targetIds.has(v.id))
 
+  // Paid exclusivity: if a DIFFERENT advertiser owns this category exclusively at a
+  // venue, this ad can't run there (the exclusive owner's own ad still can). Looked
+  // up once for the ad's category across the scoped venues. Non-category ads and
+  // ads whose category matches an exclusive THEY own are unaffected.
+  const exclusiveByVenue = new Map<string, string>()
+  if (ad.category_id) {
+    const { data: exRows } = await admin
+      .from('exclusive_slots')
+      .select('venue_id, advertiser_id')
+      .eq('category_id', ad.category_id)
+      .eq('status', 'active')
+      .in('venue_id', scopedVenues.map((v) => v.id))
+    for (const r of (exRows ?? []) as { venue_id: string; advertiser_id: string | null }[]) {
+      if (r.advertiser_id) exclusiveByVenue.set(r.venue_id, r.advertiser_id)
+    }
+  }
+
   // Admin overrides: screens an admin pulled this campaign off of. The engine
   // must not re-add them (that's the point of the manual override).
   const { data: exclRows } = await admin
@@ -148,6 +165,9 @@ export async function placeCampaign(
       ad.owner_user_id !== v.host_user_id
     )
       continue
+    // Paid exclusivity held by a competitor blocks this venue entirely.
+    const exclOwner = exclusiveByVenue.get(v.id)
+    if (exclOwner && exclOwner !== camp.advertiser_id) continue
     for (const t of v.tvs ?? []) {
       if (myTvs.has(t.id)) continue // already running here
       if (excludedTvs.has(t.id)) continue // admin pulled this campaign off this screen

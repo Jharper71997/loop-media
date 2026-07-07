@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { requireProfile } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { geocodeAddress } from '@/lib/geocode'
-import { genPairingCode, DEFAULT_LOOP_SECONDS, DEFAULT_SLOT_SECONDS } from '@/lib/tv'
+import { genPairingCode, TV_PAIRING_CODE_LEN, DEFAULT_LOOP_SECONDS, DEFAULT_SLOT_SECONDS } from '@/lib/tv'
 
 export interface RegisterVenueInput {
   name: string
@@ -143,7 +143,7 @@ export async function requestVenue(input: RegisterVenueInput) {
   for (let attempt = 0; attempt < 5; attempt++) {
     const { error: tvErr } = await admin.from('tvs').insert({
       venue_id: venue.id,
-      pairing_code: genPairingCode(),
+      pairing_code: genPairingCode(TV_PAIRING_CODE_LEN),
       status: 'unpaired',
       loop_length_seconds: DEFAULT_LOOP_SECONDS,
       slot_seconds: DEFAULT_SLOT_SECONDS,

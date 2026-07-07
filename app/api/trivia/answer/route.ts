@@ -1,17 +1,30 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { roundNumber, roundPhase } from '@/lib/trivia'
+import { verifyPlayerToken } from '@/lib/triviaToken'
+import { rateLimit, clientIp } from '@/lib/rateLimit'
 
 // Record a player's answer for the CURRENT round (server-authoritative round +
-// correctness; the body's round is ignored). One answer per player per round is
-// enforced by a DB unique constraint.
+// correctness + venue; the body's round/venue are ignored). One answer per player
+// per round is enforced by a DB unique constraint. The player_id must be bound to
+// the phone that joined (token from /api/trivia/join) — otherwise anyone could POST
+// answers as any player.
 export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}))
   const playerId = String(body.player_id ?? '')
-  const venueId = String(body.venue_id ?? '')
+  const token = typeof body.token === 'string' ? body.token : undefined
   const choiceIdx = Number(body.choice_idx)
-  if (!playerId || !venueId || !Number.isInteger(choiceIdx)) {
+  if (!playerId || !Number.isInteger(choiceIdx)) {
     return NextResponse.json({ error: 'Bad request.' }, { status: 400 })
+  }
+
+  // Throttle by IP so a script can't hammer answers across many players.
+  if (!(await rateLimit('trivia_answer', clientIp(req), 30, 60))) {
+    return NextResponse.json({ error: 'Too many requests.' }, { status: 429 })
+  }
+
+  if (!verifyPlayerToken(playerId, token)) {
+    return NextResponse.json({ error: 'Rejoin the game to continue.' }, { status: 403 })
   }
 
   const now = Date.now()
@@ -22,6 +35,18 @@ export async function POST(req: Request) {
   }
 
   const supabase = createAdminClient()
+
+  // Server-authoritative venue: the answer counts for the player's OWN venue, not
+  // whatever the body claims (kills cross-venue spoofing).
+  const { data: player } = await supabase
+    .from('trivia_players')
+    .select('id, venue_id')
+    .eq('id', playerId)
+    .maybeSingle()
+  if (!player) {
+    return NextResponse.json({ error: 'Rejoin the game to continue.' }, { status: 404 })
+  }
+
   const { data: qs } = await supabase
     .from('trivia_questions')
     .select('correct_idx')
@@ -37,7 +62,7 @@ export async function POST(req: Request) {
 
   const { error } = await supabase.from('trivia_answers').insert({
     player_id: playerId,
-    venue_id: venueId,
+    venue_id: player.venue_id,
     round,
     choice_idx: choiceIdx,
     is_correct: correct,
