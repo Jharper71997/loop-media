@@ -57,7 +57,7 @@ const STEPS: Record<'advertiser' | 'host', { steps: Step[]; cta: string; href: s
       {
         icon: TvIcon,
         title: 'Welcome to Loop Network',
-        body: 'Turn the TV you already own into an earning screen. Here&apos;s the gist.',
+        body: 'Turn the TV you already own into a draw for customers — trivia, a leaderboard, and clean local ads. Here&apos;s the gist.',
       },
       {
         icon: PlugZap,
