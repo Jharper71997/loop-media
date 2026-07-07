@@ -19,11 +19,11 @@ export function LiveStatus({
     return (
       <span
         className={cn(
-          'inline-flex items-center gap-1.5 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground',
+          'inline-flex items-center gap-1.5 rounded-full bg-warning/15 px-2 py-0.5 text-xs font-medium text-warning',
           className
         )}
       >
-        <span className="size-2 rounded-full bg-amber-500" /> Not paired
+        <span className="size-2 rounded-full bg-warning" /> Not paired
       </span>
     )
   }
@@ -32,17 +32,17 @@ export function LiveStatus({
     return (
       <span
         className={cn(
-          'inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-400',
+          'inline-flex items-center gap-1.5 rounded-full bg-success/15 px-2 py-0.5 text-xs font-medium text-success',
           className
         )}
       >
         <span className="relative flex size-2">
-          <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-          <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
+          <span className="absolute inline-flex size-full animate-ping rounded-full bg-success opacity-75" />
+          <span className="relative inline-flex size-2 rounded-full bg-success" />
         </span>
         Live
         {typeof adsRunning === 'number' && (
-          <span className="text-emerald-300/80">
+          <span className="text-success/80">
             · {adsRunning} ad{adsRunning === 1 ? '' : 's'}
           </span>
         )}
@@ -56,7 +56,7 @@ export function LiveStatus({
         className
       )}
     >
-      <span className="size-2 rounded-full bg-zinc-500" /> Offline
+      <span className="size-2 rounded-full bg-muted-foreground" /> Offline
     </span>
   )
 }

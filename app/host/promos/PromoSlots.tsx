@@ -37,15 +37,18 @@ type Promo = {
   target_venue_name: string | null
 }
 
-function statusBadge(status: string) {
+function statusBadge(status: string): {
+  label: string
+  variant: 'success' | 'secondary' | 'warning'
+} {
   switch (status) {
     case 'approved':
     case 'active':
-      return { label: 'Live', cls: 'bg-emerald-600' }
+      return { label: 'Live', variant: 'success' }
     case 'paused':
-      return { label: 'Paused', cls: 'bg-zinc-600' }
+      return { label: 'Paused', variant: 'secondary' }
     default:
-      return { label: 'In review', cls: 'bg-amber-600' }
+      return { label: 'In review', variant: 'warning' }
   }
 }
 
@@ -87,7 +90,7 @@ export function PromoSlots({
             <CardContent className="space-y-2 p-4">
               <div className="flex items-start justify-between gap-2">
                 <p className="text-sm font-medium">{p.title}</p>
-                <Badge className={b.cls}>{b.label}</Badge>
+                <Badge variant={b.variant}>{b.label}</Badge>
               </div>
               {p.target_venue_name && (
                 <p className="text-xs text-muted-foreground">Running on {p.target_venue_name}</p>

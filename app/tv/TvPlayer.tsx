@@ -592,7 +592,7 @@ function Player({
 
   const advance = () => setIndex((i) => (i + 1) % Math.max(playlist.length, 1))
 
-  if (fatal) return <Splash>{fatal}</Splash>
+  if (fatal) return <Splash retry>{fatal}</Splash>
   if (!manifest || !slide) return <Splash>Loading loop…</Splash>
 
   const venueName = manifest.venue?.name ?? ''
@@ -877,10 +877,22 @@ function FillerFrame({ title, children }: { title: string; children: React.React
   )
 }
 
-function Splash({ children }: { children: React.ReactNode }) {
+function Splash({ children, retry }: { children: React.ReactNode; retry?: boolean }) {
   return (
-    <div className="flex h-screen w-screen items-center justify-center bg-black text-white/60">
-      {children}
+    <div className="flex h-screen w-screen flex-col items-center justify-center gap-5 bg-black text-white/60">
+      {/* Branded splash to match the 404 / error pages instead of a bare screen. */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/loop-network-emblem.png" alt="Loop Network" className="h-16 w-auto opacity-90" />
+      <div className="text-center text-sm">{children}</div>
+      {retry && (
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          className="rounded-full border border-white/20 px-4 py-1.5 text-xs font-medium text-white/80 transition hover:bg-white/10"
+        >
+          Retry
+        </button>
+      )}
     </div>
   )
 }

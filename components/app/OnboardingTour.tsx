@@ -31,7 +31,7 @@ const STEPS: Record<'advertiser' | 'host', { steps: Step[]; cta: string; href: s
       {
         icon: Sparkles,
         title: 'Welcome to Loop Network',
-        body: 'Your 15-second ad on the TVs in the busiest bars, gyms, and shops around town. Here&apos;s how it works.',
+        body: 'Your 15-second ad on the TVs in the busiest bars, gyms, and shops around town. Here\'s how it works.',
       },
       {
         icon: MapPin,
@@ -46,7 +46,7 @@ const STEPS: Record<'advertiser' | 'host', { steps: Step[]; cta: string; href: s
       {
         icon: Upload,
         title: 'Add your ad and go live',
-        body: 'Upload a 15-second ad — or have us make one — and it runs as soon as it&apos;s approved.',
+        body: 'Upload a 15-second ad — or have us make one — and it runs as soon as it\'s approved.',
       },
     ],
     cta: 'Build my first campaign',
@@ -57,12 +57,12 @@ const STEPS: Record<'advertiser' | 'host', { steps: Step[]; cta: string; href: s
       {
         icon: TvIcon,
         title: 'Welcome to Loop Network',
-        body: 'Turn the TV you already own into a draw for customers — trivia, a leaderboard, and clean local ads. Here&apos;s the gist.',
+        body: 'Turn the TV you already own into a draw for customers — trivia, a leaderboard, and clean local ads. Here\'s the gist.',
       },
       {
         icon: PlugZap,
         title: 'Pair your screen',
-        body: 'Setup takes about two minutes — scan a code, like setting up a Ring doorbell, and you&apos;re live.',
+        body: 'Setup takes about two minutes — scan a code, like setting up a Ring doorbell, and you\'re live.',
       },
       {
         icon: Megaphone,
@@ -141,11 +141,7 @@ export function OnboardingTour({ role }: { role: 'advertiser' | 'host' }) {
           <Icon className="size-9" />
         </span>
         <h1 className="mt-8 font-heading text-3xl font-bold tracking-tight">{step.title}</h1>
-        <p
-          className="mt-3 text-pretty text-base text-muted-foreground"
-          // copy contains escaped apostrophes
-          dangerouslySetInnerHTML={{ __html: step.body }}
-        />
+        <p className="mt-3 text-pretty text-base text-muted-foreground">{step.body}</p>
       </div>
 
       <div className="mx-auto w-full max-w-md px-6 pb-8">
