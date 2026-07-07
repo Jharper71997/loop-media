@@ -211,14 +211,18 @@ export function BrowseClient({
 
         {(() => {
           const q = catQuery.trim().toLowerCase()
-          // Show the catalog as a filterable chip cloud so the screen reads as a
-          // real picker, not an empty search box. Typing narrows it live.
-          const matches = q
-            ? categories.filter((c) => c.name.toLowerCase().includes(q))
-            : categories
+          // Search-first: the full catalog is ~160 categories, so a chip wall reads
+          // as overwhelming. Show nothing until they type, then narrow live.
+          const matches = q ? categories.filter((c) => c.name.toLowerCase().includes(q)) : []
           const exact = categories.some((c) => c.name.toLowerCase() === q)
           return (
             <>
+              {!q && (
+                <p className="text-sm text-muted-foreground">
+                  Start typing to find your line of business — bar, gym, salon, auto repair,
+                  restaurant…
+                </p>
+              )}
               {matches.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {matches.map((c) => (

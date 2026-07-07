@@ -26,6 +26,8 @@ export default async function HostAccountPage() {
         hasCustomer,
         pastDue,
         isMember,
+        // Pure hosts (not advertising) have no ads to change — hide the upsell.
+        showMembership: hasCustomer || isMember,
       }}
     />
   )

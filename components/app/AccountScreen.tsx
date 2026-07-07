@@ -25,6 +25,7 @@ export function AccountScreen({
     hasCustomer: boolean
     pastDue: boolean
     isMember: boolean
+    showMembership?: boolean
   }
 }) {
   const roleLabel = role === 'host' ? 'Venue host' : role === 'admin' ? 'Admin' : 'Advertiser'
@@ -55,6 +56,7 @@ export function AccountScreen({
           hasCustomer={billing.hasCustomer}
           pastDue={billing.pastDue}
           isMember={billing.isMember}
+          showMembership={billing.showMembership}
         />
       )}
 

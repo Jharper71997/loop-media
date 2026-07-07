@@ -19,6 +19,7 @@ export function AccountBilling({
   hasCustomer,
   pastDue,
   isMember,
+  showMembership = true,
 }: {
   returnPath: string
   // Passed through to startMembershipCheckout so post-checkout returns to the
@@ -27,6 +28,9 @@ export function AccountBilling({
   hasCustomer: boolean
   pastDue: boolean
   isMember: boolean
+  // Hosts who aren't advertising have no ads to "change" — hide the membership
+  // upsell for them. Defaults on, so advertisers are unaffected.
+  showMembership?: boolean
 }) {
   const [billingPending, startBilling] = useTransition()
   const [memberPending, startMember] = useTransition()
@@ -87,7 +91,7 @@ export function AccountBilling({
           </p>
         )}
 
-        {isMember ? (
+        {showMembership && (isMember ? (
           <div className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
             <InfinityIcon className="size-4 shrink-0 text-primary" />
             <span className="font-medium">Unlimited ad changes active</span>
@@ -105,7 +109,7 @@ export function AccountBilling({
               ? 'Working…'
               : `Get unlimited changes · ${formatCents(UNLIMITED_CHANGES_CENTS)}/mo`}
           </Button>
-        )}
+        ))}
       </CardContent>
     </Card>
   )
