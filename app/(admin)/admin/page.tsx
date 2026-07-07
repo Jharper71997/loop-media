@@ -43,14 +43,21 @@ export default async function AdminOverview() {
   const tvIds = tvs.map((r) => r.id)
 
   // Ads playing right now (active placements on in-scope screens) + a sample.
-  let playing: { ad: { title: string } | null; tv: { venue: { name: string } | null } | null }[] = []
+  let playing: {
+    ad: { title: string } | null
+    tv: { last_heartbeat_at: string | null; venue: { name: string } | null } | null
+  }[] = []
   if (tvIds.length) {
     const { data } = await supabase
       .from('ad_placements')
-      .select('ad:ads(title), tv:tvs(venue:venues(name))')
+      .select('ad:ads(title), tv:tvs(last_heartbeat_at, venue:venues(name))')
       .eq('status', 'active')
       .in('tv_id', tvIds)
-    playing = (data ?? []) as unknown as typeof playing
+    // Only count/show ads on screens that are actually live — an offline screen
+    // isn't "playing" anything, even if a placement is still assigned to it.
+    playing = ((data ?? []) as unknown as typeof playing).filter((p) =>
+      isTvLive(p.tv?.last_heartbeat_at ?? null)
+    )
   }
   const adsPlaying = playing.length
 
