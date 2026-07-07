@@ -3,6 +3,7 @@ import { LogOut, ArrowLeft, Mail } from 'lucide-react'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { AccountSecurity } from '@/components/app/AccountSecurity'
+import { AccountBilling } from '@/components/app/AccountBilling'
 import { cn } from '@/lib/utils'
 
 // Shared Account tab for the advertiser + host apps.
@@ -10,10 +11,20 @@ export function AccountScreen({
   email,
   role,
   links,
+  billing,
 }: {
   email: string
   role: 'advertiser' | 'host' | 'admin'
   links?: { href: string; label: string }[]
+  // When present, renders the billing card (manage payment + membership). Omitted
+  // for surfaces with no billing (e.g. admin).
+  billing?: {
+    returnPath: string
+    membershipBasePath: '/advertiser' | '/host/advertise'
+    hasCustomer: boolean
+    pastDue: boolean
+    isMember: boolean
+  }
 }) {
   const roleLabel = role === 'host' ? 'Venue host' : role === 'admin' ? 'Admin' : 'Advertiser'
   return (
@@ -35,6 +46,16 @@ export function AccountScreen({
       </Card>
 
       <AccountSecurity email={email} />
+
+      {billing && (
+        <AccountBilling
+          returnPath={billing.returnPath}
+          membershipBasePath={billing.membershipBasePath}
+          hasCustomer={billing.hasCustomer}
+          pastDue={billing.pastDue}
+          isMember={billing.isMember}
+        />
+      )}
 
       {links?.map((l) => (
         <Link

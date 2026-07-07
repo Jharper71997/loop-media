@@ -2,6 +2,8 @@ import { notFound } from 'next/navigation'
 import { ImageOff, MapPin } from 'lucide-react'
 import { requireProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { hasUnlimitedChanges } from '@/lib/membership'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { formatNumber, formatCents } from '@/lib/format'
@@ -26,6 +28,7 @@ import { isWithinOpenHours } from '@/lib/openHours'
 import { CampaignControls } from './CampaignControls'
 import { BackLink } from './BackLink'
 import { ReplaceCreative } from './ReplaceCreative'
+import { MembershipUpsell } from './MembershipUpsell'
 import CampaignMap from './CampaignMap'
 import type { CampaignMapVenue } from './CampaignMapView'
 
@@ -53,6 +56,14 @@ export default async function CampaignDetail({
     .maybeSingle()
   if (!data) notFound()
   const c = data as unknown as CampaignFull
+
+  // Non-members see the unlimited-changes upsell next to the creative swap; the
+  // host shell stays $-free, so the upsell is advertiser-only.
+  const showUpsell =
+    !!c.ad_id &&
+    c.status !== 'canceled' &&
+    profile.role !== 'host' &&
+    !(await hasUnlimitedChanges(createAdminClient(), profile.id))
 
   const { data: placementsData } = await supabase
     .from('ad_placements')
@@ -294,6 +305,7 @@ export default async function CampaignDetail({
             {c.ad_id && c.status !== 'canceled' && (
               <ReplaceCreative campaignId={c.id} userId={profile.id} />
             )}
+            {showUpsell && <MembershipUpsell />}
           </CardContent>
         </Card>
 

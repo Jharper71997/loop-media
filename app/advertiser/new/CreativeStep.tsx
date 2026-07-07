@@ -111,6 +111,10 @@ export function CreativeStep({
   const categoryName = categoryId ? categories.find((c) => c.id === categoryId)?.name : null
   const [title, setTitle] = useState('')
   const [qrUrl, setQrUrl] = useState('')
+  // No-website fallback: when 'phone', scanners are sent to a tel: link built from
+  // the number below, so a business with no site never dead-ends at checkout.
+  const [linkMode, setLinkMode] = useState<'url' | 'phone'>('url')
+  const [phone, setPhone] = useState('')
   const [mode, setMode] = useState<'upload' | 'help'>('upload')
   const [file, setFile] = useState<File | null>(null)
   const [fileUrl, setFileUrl] = useState<string | null>(null)
@@ -138,6 +142,17 @@ export function CreativeStep({
 
   const isVideo = !!file && file.type.startsWith('video')
   const filterStr = buildFilter(preset, brightness, contrast)
+
+  // The scan destination: either the typed URL or a tel: link from the phone
+  // fallback. Normalizes to E.164-ish (assumes US when 10 digits).
+  const phoneDigits = phone.replace(/\D/g, '')
+  const qrTarget = useMemo(() => {
+    if (linkMode === 'phone') {
+      if (phoneDigits.length < 10) return ''
+      return `tel:+${phoneDigits.length === 10 ? `1${phoneDigits}` : phoneDigits}`
+    }
+    return qrUrl.trim()
+  }, [linkMode, phoneDigits, qrUrl])
 
   useEffect(() => {
     try {
@@ -169,7 +184,7 @@ export function CreativeStep({
   // Render the actual scan-link QR client-side so the preview matches the TV.
   // Lazy-import keeps the qrcode lib out of the main bundle.
   useEffect(() => {
-    const url = qrUrl.trim()
+    const url = qrTarget
     if (!url) {
       setQrPreview(null)
       return
@@ -188,7 +203,7 @@ export function CreativeStep({
     return () => {
       alive = false
     }
-  }, [qrUrl])
+  }, [qrTarget])
 
   const cart = useMemo(
     () => cartIds.map((id) => byId.get(id)).filter(Boolean) as CartVenue[],
@@ -309,7 +324,12 @@ export function CreativeStep({
   function onSubmit() {
     if (cart.length === 0) return toast.error('Your cart is empty. Pick screens first.')
     if (!title.trim()) return toast.error('Give your ad a title.')
-    if (!qrUrl.trim()) return toast.error('Add the link people go to when they scan your ad.')
+    if (!qrTarget)
+      return toast.error(
+        linkMode === 'phone'
+          ? 'Enter a phone number so scanners can reach you.'
+          : 'Add the link people go to when they scan your ad.'
+      )
     if (mode === 'upload' && !file)
       return toast.error('Upload your ad image or switch to "Request creative help".')
     if (mode === 'help' && !brief.trim()) return toast.error('Tell our team what you need designed.')
@@ -353,7 +373,7 @@ export function CreativeStep({
         exclusive_venue_ids: [...exclSet],
         category_id: categoryId,
         title,
-        qr_target_url: qrUrl.trim(),
+        qr_target_url: qrTarget,
         qr_x: qrX,
         qr_y: qrY,
         creative_type,
@@ -413,18 +433,46 @@ export function CreativeStep({
       )}
 
       <div className="space-y-1.5">
-        <Label>Link when scanned</Label>
-        <Input
-          type="url"
-          className="h-11"
-          placeholder="https://your-site.com/offer"
-          value={qrUrl}
-          onChange={(e) => setQrUrl(e.target.value)}
-          required
-        />
-        <p className="text-xs text-muted-foreground">
-          A QR code on your ad sends scanners here. This is how you track results.
-        </p>
+        <div className="flex items-center justify-between">
+          <Label>{linkMode === 'phone' ? 'Phone number when scanned' : 'Link when scanned'}</Label>
+          <button
+            type="button"
+            className="text-xs font-medium text-primary hover:underline"
+            onClick={() => setLinkMode((m) => (m === 'url' ? 'phone' : 'url'))}
+          >
+            {linkMode === 'url' ? "I don't have a website" : 'Use a website link instead'}
+          </button>
+        </div>
+        {linkMode === 'phone' ? (
+          <>
+            <Input
+              type="tel"
+              inputMode="tel"
+              className="h-11"
+              placeholder="(555) 123-4567"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              required
+            />
+            <p className="text-xs text-muted-foreground">
+              No website? Scanning your ad opens their phone to call you — the scan is still tracked.
+            </p>
+          </>
+        ) : (
+          <>
+            <Input
+              type="url"
+              className="h-11"
+              placeholder="https://your-site.com/offer"
+              value={qrUrl}
+              onChange={(e) => setQrUrl(e.target.value)}
+              required
+            />
+            <p className="text-xs text-muted-foreground">
+              A QR code on your ad sends scanners here. This is how you track results.
+            </p>
+          </>
+        )}
       </div>
 
       <div className="space-y-3">
@@ -516,7 +564,7 @@ export function CreativeStep({
                       style={imgStyle}
                     />
                   )}
-                  {qrUrl.trim() && (
+                  {qrTarget && (
                     <div
                       ref={qrChipRef}
                       onPointerDown={onQrDown}

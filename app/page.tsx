@@ -409,7 +409,7 @@ export default async function Home() {
               ))}
             </ul>
             <Link
-              href="/host/register"
+              href="/signup/host"
               className={cn(buttonVariants({ variant: 'outline', size: 'lg' }), 'mt-auto w-full')}
             >
               Host a screen

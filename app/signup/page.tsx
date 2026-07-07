@@ -13,10 +13,10 @@ export default async function SignupPage({
   const profile = await getProfile()
   if (profile) redirect(homeForRole(profile.role))
 
-  // Signup is advertiser-only now. Hosts register their venue at /host/register,
-  // so bounce any legacy ?role=host link straight there.
+  // This page is the advertiser sign-up. Hosts have their own public sign-up at
+  // /signup/host, so bounce any legacy ?role=host link there.
   const { role } = await searchParams
-  if (role === 'host') redirect('/host/register')
+  if (role === 'host') redirect('/signup/host')
 
   // Advertisers pick their category here at signup (it's saved to their account),
   // so the buy flow never asks again. The categories table's RLS only grants SELECT
