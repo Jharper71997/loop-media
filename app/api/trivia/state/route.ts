@@ -119,7 +119,7 @@ export async function GET(req: Request) {
       tvId: null,
       name: 'Jville Brew Loop',
       what: 'Shared shuttle around town · $5 off',
-      url: process.env.NEXT_PUBLIC_BREWLOOP_OFFER_URL || 'https://the-loop-eight.vercel.app/events',
+      url: process.env.NEXT_PUBLIC_BREWLOOP_OFFER_URL || 'https://jvillebrewloop.com',
     }
     const loopNetwork: Sponsor = {
       adId: null,

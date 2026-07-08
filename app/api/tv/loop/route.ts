@@ -15,11 +15,11 @@ function baseUrl(req: Request): string {
 }
 
 // The Jville Brew Loop house-ad destination shown on every screen: the QR opens
-// the Brew Loop booking/discovery page. The $5 off is the Stripe promotion code
-// LOOP5 (live in the Brew Loop Stripe account), entered at checkout — the booking
-// Checkout session already sets allow_promotion_codes. Override via env if needed.
+// the Brew Loop site (jvillebrewloop.com), where a rider books. The $5 off is the
+// Stripe promotion code LOOP5 (live in the Brew Loop Stripe account), entered at
+// checkout. Override via env if the destination changes.
 const BREWLOOP_OFFER_URL =
-  process.env.NEXT_PUBLIC_BREWLOOP_OFFER_URL || 'https://the-loop-eight.vercel.app/events'
+  process.env.NEXT_PUBLIC_BREWLOOP_OFFER_URL || 'https://jvillebrewloop.com'
 
 // The Loop Network "advertise on this screen" house-slide QR points at the
 // marketing site (not the in-app signup flow) — a business owner scans it to
