@@ -195,7 +195,7 @@ export function PlayClient({ code }: { code: string }) {
             height={22}
             className="h-4 w-auto"
           />
-          <span className="font-heading font-bold text-primary">Loop Trivia</span>
+          <span className="font-heading font-bold text-primary">Loop Network</span>
         </span>
         <span className="font-mono text-primary">
           {(state?.you?.score ?? 0) > 0 ? `🔥 ${state?.you?.score} in a row` : '0 in a row'}

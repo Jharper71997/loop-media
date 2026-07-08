@@ -1,13 +1,17 @@
 import Link from 'next/link'
+import { headers } from 'next/headers'
 import { notFound } from 'next/navigation'
 import { ArrowLeft, ChevronRight, Mail, Phone, User, MapPin } from 'lucide-react'
 import { requireAdmin } from '@/lib/auth'
 import { getTerritoryContext } from '@/lib/territory'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { kioskUrl, pairingUrl } from '@/lib/tv'
 import { PageHeader } from '@/components/admin/PageHeader'
 import { DeleteButton } from '@/components/admin/DeleteButton'
 import { Card, CardContent } from '@/components/ui/card'
 import { LiveStatus } from '@/components/app/LiveStatus'
+import { CopyField } from '@/components/app/CopyField'
 import { AutoRefresh } from '@/components/app/AutoRefresh'
 import { formatNumber, formatCents, timeAgo, isTvLive } from '@/lib/format'
 import { suggestTier, venuePriceCents, TIER_LABEL } from '@/lib/pricing'
@@ -22,6 +26,15 @@ import { deleteVenue } from '../actions'
 type VenueFull = Venue & {
   category: { name: string } | null
   territory: { name: string } | null
+}
+
+// WiFi/network details live in a service-role-only table (the password is a
+// secret); this page is requireAdmin-gated so it reads them with the admin client.
+type ProvisioningInfo = {
+  wifi_ssid: string | null
+  wifi_password: string | null
+  network_type: string | null
+  network_note: string | null
 }
 
 const venueTier = (v: { price_tier: PriceTier | null; foot_traffic_estimate: number }): PriceTier =>
@@ -60,6 +73,22 @@ export default async function VenueDetail({ params }: { params: Promise<{ id: st
     for (const p of pl ?? []) adsByTv.set(p.tv_id, (adsByTv.get(p.tv_id) ?? 0) + 1)
   }
   const liveCount = tvs.filter((t) => !!t.device_id && isTvLive(t.last_heartbeat_at)).length
+
+  // Kiosk-URL origin from the live request + this venue's WiFi/network details, so
+  // each screen's Setup block below matches the screen detail page (pairing code /
+  // kiosk link + WiFi to program). Provisioning is per-venue, shared by its screens.
+  const h = await headers()
+  const reqHost = h.get('host')
+  const proto = h.get('x-forwarded-proto') ?? 'https'
+  const origin = reqHost ? `${proto}://${reqHost}` : (process.env.NEXT_PUBLIC_APP_URL ?? '')
+
+  let provisioning: ProvisioningInfo | null = null
+  const { data: prov } = await createAdminClient()
+    .from('venue_provisioning')
+    .select('wifi_ssid, wifi_password, network_type, network_note')
+    .eq('venue_id', venue.id)
+    .maybeSingle()
+  provisioning = (prov as ProvisioningInfo | null) ?? null
 
   // For the edit dialog.
   const [{ data: cats }, { data: hostProfiles }] = await Promise.all([
@@ -220,33 +249,107 @@ export default async function VenueDetail({ params }: { params: Promise<{ id: st
                 </p>
               </div>
             ) : (
-              <div className="divide-y divide-border">
+              <div className="space-y-3">
                 {tvs.map((tv) => (
-                  <Link
-                    key={tv.id}
-                    href={`/admin/tvs/${tv.id}`}
-                    className="-mx-2 flex items-center gap-3 rounded-lg px-2 py-3 transition-colors first:pt-0 last:pb-0 hover:bg-muted/50"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <code className="rounded bg-muted px-2 py-0.5 font-mono text-xs">
-                          {tv.pairing_code ?? '—'}
-                        </code>
-                        <span className="text-xs text-muted-foreground">
-                          {Math.round(tv.loop_length_seconds / 60)}m / {tv.slot_seconds}s loop
-                        </span>
+                  <div key={tv.id} className="rounded-lg border border-border p-4">
+                    {/* Header: code + loop + live status, with a link into the screen */}
+                    <div className="flex items-center gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <code className="rounded bg-muted px-2 py-0.5 font-mono text-xs">
+                            {tv.pairing_code ?? '—'}
+                          </code>
+                          <span className="text-xs text-muted-foreground">
+                            {Math.round(tv.loop_length_seconds / 60)}m / {tv.slot_seconds}s loop
+                          </span>
+                        </div>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Last seen {timeAgo(tv.last_heartbeat_at)}
+                        </p>
                       </div>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Last seen {timeAgo(tv.last_heartbeat_at)}
-                      </p>
+                      <LiveStatus
+                        lastHeartbeat={tv.last_heartbeat_at}
+                        paired={!!tv.device_id}
+                        adsRunning={adsByTv.get(tv.id) ?? 0}
+                      />
+                      <Link
+                        href={`/admin/tvs/${tv.id}`}
+                        className="inline-flex shrink-0 items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        Open <ChevronRight className="size-4" />
+                      </Link>
                     </div>
-                    <LiveStatus
-                      lastHeartbeat={tv.last_heartbeat_at}
-                      paired={!!tv.device_id}
-                      adsRunning={adsByTv.get(tv.id) ?? 0}
-                    />
-                    <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
-                  </Link>
+
+                    {/* Setup — pairing code / kiosk link + WiFi, same as the screen page */}
+                    <div className="mt-3 space-y-2 rounded-md border border-border/60 bg-muted/30 p-3">
+                      <p className="text-xs font-medium">Setup</p>
+                      {tv.device_id ? (
+                        <>
+                          <p className="text-xs text-muted-foreground">
+                            This screen is paired. To re-image a replacement Pi for the same screen,
+                            program this kiosk link onto it — no re-pairing needed.
+                          </p>
+                          <CopyField
+                            value={kioskUrl(origin, tv.device_id)}
+                            label="Copy screen link"
+                          />
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-xs text-muted-foreground">
+                            Give the technician this pairing code, or set the kiosk URL to the setup
+                            link below to pair automatically.
+                          </p>
+                          <div className="rounded-lg border border-border bg-background px-4 py-3 text-center">
+                            <p className="font-heading text-2xl font-bold tracking-[0.25em] tabular-nums">
+                              {tv.pairing_code ?? '—'}
+                            </p>
+                          </div>
+                          {tv.pairing_code && (
+                            <CopyField
+                              value={pairingUrl(origin, tv.pairing_code)}
+                              label="Copy setup link"
+                            />
+                          )}
+                        </>
+                      )}
+
+                      {provisioning &&
+                        (provisioning.network_type === 'ethernet' ? (
+                          <p className="pt-1 text-xs text-muted-foreground">
+                            Network: Wired (Ethernet)
+                            {provisioning.network_note ? ` · ${provisioning.network_note}` : ''}
+                          </p>
+                        ) : (
+                          (provisioning.wifi_ssid || provisioning.wifi_password) && (
+                            <div className="space-y-1.5 pt-1">
+                              <p className="text-xs font-medium text-muted-foreground">
+                                WiFi to program
+                              </p>
+                              {provisioning.wifi_ssid && (
+                                <CopyField
+                                  value={provisioning.wifi_ssid}
+                                  display={`SSID: ${provisioning.wifi_ssid}`}
+                                  label="Copy SSID"
+                                />
+                              )}
+                              {provisioning.wifi_password && (
+                                <CopyField
+                                  value={provisioning.wifi_password}
+                                  display="Password: ••••••••"
+                                  label="Copy password"
+                                />
+                              )}
+                              {provisioning.network_note && (
+                                <p className="text-xs text-muted-foreground">
+                                  {provisioning.network_note}
+                                </p>
+                              )}
+                            </div>
+                          )
+                        ))}
+                    </div>
+                  </div>
                 ))}
               </div>
             )}
