@@ -133,7 +133,9 @@ export function BrowseClient({
     const v = byId.get(id)
     if (!v) return
     if (inCart(id)) setCart((c) => c.filter((x) => x !== id))
-    else if (!v.categoryFull && v.open > 0 && !v.comingSoon) setCart((c) => [...c, id])
+    // Offline ("coming soon") screens are still buyable — the ad just starts running
+    // once the screen is back online. Only own-category and full screens are blocked.
+    else if (!v.categoryFull && v.open > 0) setCart((c) => [...c, id])
   }
 
   function notify(v: BrowseVenue) {

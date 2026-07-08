@@ -57,7 +57,7 @@ export default function MapView({
   const legend: { color: string; label: string }[] = [
     { color: MARKER.open, label: 'Open' },
     { color: MARKER.cart, label: 'In cart' },
-    { color: MARKER.comingSoon, label: 'Coming soon' },
+    { color: MARKER.comingSoon, label: 'Offline (still buyable)' },
     { color: MARKER.categoryFull, label: 'Category taken' },
     { color: MARKER.full, label: 'Full' },
     ...(userLoc ? [{ color: MARKER.you, label: 'You' }] : []),
@@ -133,32 +133,38 @@ export default function MapView({
                     <p className="text-xs font-medium text-muted-foreground">
                       Same business — not available
                     </p>
-                  ) : v.comingSoon ? (
+                  ) : v.open === 0 ? (
+                    // Screen is sold out — offer the waitlist so they hear when a slot frees.
                     <div className="space-y-2">
-                      <Badge variant="warning">Coming soon</Badge>
+                      <p className="text-xs font-semibold text-destructive">Screen full</p>
                       <Button
                         size="sm"
                         variant={waitlisted.has(v.id) ? 'secondary' : 'outline'}
                         className="w-full"
                         onClick={() => onNotify(v)}
                       >
-                        {waitlisted.has(v.id) ? 'Notify on' : 'Notify me'}
+                        {waitlisted.has(v.id) ? 'On waitlist' : 'Notify when a spot opens'}
                       </Button>
-                      <p className="text-xs text-muted-foreground">
-                        We&apos;ll email you the day it goes live.
-                      </p>
                     </div>
-                  ) : v.open === 0 ? (
-                    <p className="text-xs font-semibold text-destructive">Screen full</p>
                   ) : (
-                    <Button
-                      size="sm"
-                      variant={inCart ? 'secondary' : 'default'}
-                      className="w-full"
-                      onClick={() => onToggle(v.id)}
-                    >
-                      {inCart ? 'Added — remove' : 'Add to cart'}
-                    </Button>
+                    // Buyable — including offline ("coming soon") screens; the ad just
+                    // starts once the screen is back online.
+                    <div className="space-y-1.5">
+                      {v.comingSoon && <Badge variant="warning">Currently offline</Badge>}
+                      <Button
+                        size="sm"
+                        variant={inCart ? 'secondary' : 'default'}
+                        className="w-full"
+                        onClick={() => onToggle(v.id)}
+                      >
+                        {inCart ? 'Added — remove' : 'Add to cart'}
+                      </Button>
+                      {v.comingSoon && (
+                        <p className="text-xs text-muted-foreground">
+                          Offline right now — your ad runs automatically once it&apos;s back on.
+                        </p>
+                      )}
+                    </div>
                   )}
                 </div>
               </Popup>
