@@ -24,17 +24,16 @@ export interface PricingConfig {
   exclusivityPriceCents: number // default monthly upcharge to own a category at a venue
 }
 
-// Fallback pricing used ONLY when the pricing_config DB row can't be read. These
-// MUST mirror the migration 0023 seed (the $75-floor ladder / $200 minimum) so a
-// missing or unreadable row can never silently bill a different, cheaper rate —
-// the bug this replaces was a flat-$50 fallback diverging from the $200 DB seed.
-// Admins tune the live values at /admin/pricing.
+// Fallback pricing used ONLY when the pricing_config DB row can't be read. Keep
+// this in sync with the live pricing_config row (currently a $50 screen floor /
+// $200 minimum) so a missing or unreadable row can't silently bill a different
+// rate. Admins tune the live values at /admin/pricing.
 export const DEFAULT_PRICING_CONFIG: PricingConfig = {
   tierPriceCents: {
     premium: 12000,
     high: 9500,
     standard: 8500,
-    local: 7500,
+    local: 5000,
   },
   minMonthlyCents: 20000, // $200/mo account minimum
   hostDiscount: 0.2,
