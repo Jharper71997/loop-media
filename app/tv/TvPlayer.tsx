@@ -376,10 +376,10 @@ function Player({
       }
       if (!res.ok) throw new Error('fetch failed')
       const data: Manifest = await res.json()
-      // Self-update: reload once when the deployed build changes (skip in the
-      // admin preview, which isn't a real screen). First successful load just
-      // records the build.
-      if (!preview && data.build) {
+      // Self-update: reload once when the deployed build changes — for real
+      // screens AND the admin preview, so a peek always reflects the latest
+      // deploy instead of the build it happened to open on. First load records it.
+      if (data.build) {
         if (bootBuild.current === null) {
           bootBuild.current = data.build
         } else if (bootBuild.current !== data.build) {
@@ -676,7 +676,6 @@ function Player({
       ) : slide.kind === 'trivia' ? (
         <TriviaSlide
           venueId={manifest.venue?.id ?? ''}
-          code={manifest.trivia?.code ?? ''}
           qrImage={manifest.trivia?.qr_image ?? ''}
         />
       ) : slide.kind === 'clock' ? (
@@ -711,10 +710,15 @@ function Player({
         </FillerFrame>
       ) : slide.kind === 'brewloop' ? (
         <FillerFrame title="">
-          <div className="text-sm font-semibold uppercase tracking-[0.25em] text-primary/80">
-            Jville Brew Loop
-          </div>
-          <div className="mt-4 max-w-4xl px-8 font-heading text-7xl font-extrabold leading-tight text-white">
+          <Image
+            src="/brewloop-wordmark.png"
+            alt="Jville Brew Loop"
+            width={1536}
+            height={1024}
+            priority
+            className="h-auto w-[34rem] max-w-[82%]"
+          />
+          <div className="mt-2 max-w-4xl px-8 font-heading text-6xl font-extrabold leading-tight text-white">
             One ticket. All night.
           </div>
           <div className="mt-5 max-w-3xl px-8 text-3xl text-white/70">
@@ -744,31 +748,38 @@ function Player({
           )}
         </FillerFrame>
       ) : (
-        <FillerFrame title="Loop Network">
+        <FillerFrame title="">
           <Image
             src="/loop-network-logo.png"
             alt="Loop Network"
             width={260}
             height={260}
-            className="h-48 w-auto"
+            priority
+            className="h-16 w-auto"
           />
-          <div className="mt-6 text-4xl font-semibold text-white">Advertise on this screen</div>
-          <div className="mt-3 text-2xl text-white/70">
-            Reach everyone who walks through the door.
+          <div className="mt-6 max-w-4xl px-8 font-heading text-7xl font-extrabold leading-tight text-white">
+            Your business, on this screen.
+          </div>
+          <div className="mt-5 max-w-3xl px-8 text-3xl text-white/70">
+            Local ads people actually see — with a QR on every ad, so you know exactly what it
+            drives.
           </div>
           {manifest.advertise?.qr_image ? (
-            <>
+            <div className="mt-9 flex items-center gap-7">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={manifest.advertise.qr_image}
                 alt="Scan to advertise"
-                className="mt-7 size-44 rounded-2xl bg-white p-3"
+                className="size-40 rounded-2xl bg-white p-3 ring-2 ring-primary"
               />
-              <div className="mt-3 text-2xl text-white/70">Scan to get your business on Loop Network</div>
-            </>
+              <div className="text-left">
+                <div className="font-heading text-5xl font-extrabold text-primary">Advertise here</div>
+                <div className="mt-1 text-2xl text-white/70">Scan to get started</div>
+              </div>
+            </div>
           ) : (
-            <div className="mt-7 rounded-full bg-primary px-6 py-2 text-2xl font-semibold text-primary-foreground">
-              Get your business on Loop Network
+            <div className="mt-9 rounded-full bg-primary px-7 py-2.5 text-2xl font-semibold text-primary-foreground">
+              Scan to advertise on Loop Network
             </div>
           )}
         </FillerFrame>
@@ -847,7 +858,7 @@ function Player({
 
 // Live "play trivia" teaser shown on the TV: scannable join QR + game code and a
 // live leaderboard. Polls the public state endpoint while it's on screen.
-function TriviaSlide({ venueId, code, qrImage }: { venueId: string; code: string; qrImage: string }) {
+function TriviaSlide({ venueId, qrImage }: { venueId: string; qrImage: string }) {
   const [lb, setLb] = useState<{ name: string; score: number }[]>([])
   const [prompt, setPrompt] = useState<string | null>(null)
 
@@ -891,11 +902,6 @@ function TriviaSlide({ venueId, code, qrImage }: { venueId: string; code: string
           <img src={qrImage} alt="Scan to play" className="mt-6 size-60 rounded-2xl bg-white p-3" />
         )}
         <div className="mt-5 text-2xl text-white/70">Scan to play on your phone</div>
-        {code && (
-          <div className="mt-1 font-mono text-4xl tracking-widest text-primary">
-            {code}
-          </div>
-        )}
       </div>
       <div className="max-w-xl">
         {prompt && <div className="mb-8 text-4xl font-semibold leading-snug">{prompt}</div>}
