@@ -31,6 +31,11 @@ const TYPE_LABELS: Record<FillerType, string> = {
   promo: 'Featured promo',
 }
 
+// Types an admin can author. 'trivia' is intentionally excluded — the live
+// (QR) trivia game is the only trivia now; static QR-less trivia cards were
+// removed. The label above stays so any legacy row still renders a name.
+const AUTHORABLE_TYPES: FillerType[] = ['event', 'sports', 'promo']
+
 type Existing = {
   id: string
   type: FillerType
@@ -49,7 +54,7 @@ export function FillerDialog({
 }) {
   const [open, setOpen] = useState(false)
   const [pending, start] = useTransition()
-  const [type, setType] = useState<FillerType>(existing?.type ?? 'trivia')
+  const [type, setType] = useState<FillerType>(existing?.type ?? 'promo')
   const [headline, setHeadline] = useState(existing?.headline ?? '')
   const [sub, setSub] = useState(existing?.sub ?? '')
   const [foot, setFoot] = useState(existing?.foot ?? '')
@@ -114,14 +119,14 @@ export function FillerDialog({
         <form onSubmit={submit} className="space-y-4">
           <div className="space-y-1.5">
             <Label className="text-xs text-muted-foreground">Type</Label>
-            <Select value={type} onValueChange={(v) => setType((v as FillerType) ?? 'trivia')}>
+            <Select value={type} onValueChange={(v) => setType((v as FillerType) ?? 'promo')}>
               <SelectTrigger className="w-full">
                 <SelectValue>
-                  {(v: string | null) => TYPE_LABELS[(v as FillerType) ?? 'trivia']}
+                  {(v: string | null) => TYPE_LABELS[(v as FillerType) ?? 'promo']}
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                {(Object.keys(TYPE_LABELS) as FillerType[]).map((k) => (
+                {AUTHORABLE_TYPES.map((k) => (
                   <SelectItem key={k} value={k}>
                     {TYPE_LABELS[k]}
                   </SelectItem>

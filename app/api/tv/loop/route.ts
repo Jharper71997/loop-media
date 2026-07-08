@@ -13,6 +13,12 @@ function baseUrl(req: Request): string {
   return host ? `${proto}://${host}` : new URL(req.url).origin
 }
 
+// The Jville Brew Loop house-ad destination shown on every screen: the QR opens
+// the Brew Loop booking page with the $5-off promo applied. Set the real URL +
+// promo code via NEXT_PUBLIC_BREWLOOP_OFFER_URL in the environment.
+const BREWLOOP_OFFER_URL =
+  process.env.NEXT_PUBLIC_BREWLOOP_OFFER_URL || 'https://app.jvillebrewloop.com/book?promo=LOOP5'
+
 // Returns the ordered ad loop for a paired device, plus venue info the display
 // uses for filler (weather etc). Only approved/active ads with a creative play.
 export async function GET(req: Request) {
@@ -181,6 +187,16 @@ export async function GET(req: Request) {
     }),
   }
 
+  // Jville Brew Loop house ad ($5 off, scan to book) — plays on every screen.
+  const brewloop = {
+    url: BREWLOOP_OFFER_URL,
+    qr_image: await QRCode.toDataURL(BREWLOOP_OFFER_URL, {
+      margin: 1,
+      width: 240,
+      color: { dark: '#000000', light: '#ffffff' },
+    }),
+  }
+
   return NextResponse.json({
     tv: { loop_length_seconds: tv.loop_length_seconds, slot_seconds: tv.slot_seconds },
     venue: tv.venue,
@@ -188,6 +204,7 @@ export async function GET(req: Request) {
     filler,
     trivia,
     advertise,
+    brewloop,
     generated_at: now,
     // Deployment id so the long-running TV page can detect a new release and
     // reload itself (a screen otherwise runs the JS it booted with forever).

@@ -5,8 +5,12 @@
 // questions[round % count]. The first part of each round accepts answers, the
 // rest shows results + the leaderboard.
 
-export const ROUND_SECONDS = 30
-export const ANSWER_SECONDS = 22
+// Longer rounds so a question stays put long enough to read + answer on a bar TV
+// and doesn't churn between trivia-slide appearances (60s: 45s to answer, 15s
+// results). Both the phones and the TV derive rounds from these, so they stay in
+// sync automatically.
+export const ROUND_SECONDS = 60
+export const ANSWER_SECONDS = 45
 export const CORRECT_POINTS = 100
 
 export type Phase = 'question' | 'results'

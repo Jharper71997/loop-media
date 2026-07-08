@@ -46,6 +46,7 @@ type Manifest = {
   filler?: FillerCard[]
   trivia?: { code: string; url: string; qr_image: string } | null
   advertise?: { url: string; qr_image: string } | null
+  brewloop?: { url: string; qr_image: string } | null
   generated_at: string
   build?: string
 }
@@ -56,9 +57,13 @@ type Slide =
   | { kind: 'clock' }
   | { kind: 'trivia' }
   | { kind: 'promo' }
+  | { kind: 'brewloop' }
   | { kind: 'filler'; card: FillerCard }
 
 const FILLER_SECONDS = 10
+// The trivia join slide holds longer than a plain filler card so a patron can
+// read the question and scan without it churning to the next one.
+const TRIVIA_SLIDE_SECONDS = 22
 
 // WMO weather code -> label + icon (Open-Meteo).
 function weatherInfo(code: number): { label: string; Icon: LucideIcon } {
@@ -73,7 +78,10 @@ function weatherInfo(code: number): { label: string; Icon: LucideIcon } {
 
 function buildPlaylist(m: Manifest): Slide[] {
   const slot = m.tv.slot_seconds || 15
-  const cards = m.filler ?? []
+  // Static QR-less trivia cards were retired — the live (QR) trivia game is the
+  // only trivia now. Belt-and-suspenders: never render a trivia filler card even
+  // if one lingers in the data.
+  const cards = (m.filler ?? []).filter((c) => c.type !== 'trivia')
   // Filler pool rotated between ads (and used to fill empty screens): the live
   // trivia teaser, weather, then any authored cards.
   const fillerPool: Slide[] = []
@@ -83,12 +91,17 @@ function buildPlaylist(m: Manifest): Slide[] {
   let fi = 0
   const nextFiller = (): Slide => fillerPool[fi++ % fillerPool.length]
 
+  // The Jville Brew Loop house ad plays on EVERY screen (only when the manifest
+  // carries it). It leads the loop so a screen opens with real content.
+  const brewloop: Slide[] = m.brewloop ? [{ kind: 'brewloop' }] : []
+
   if (!m.items.length) {
-    // No ads sold yet: lead with the Loop Network house ad, then rotate the
-    // filler pool (trivia, weather, authored cards). No bare clock/date screen.
-    return [{ kind: 'promo' }, ...fillerPool]
+    // No ads sold yet: lead with the Brew Loop ad, rotate the filler pool
+    // (trivia, weather, authored cards), then the "advertise on this screen"
+    // house slide LAST — a new screen shouldn't open by begging for advertisers.
+    return [...brewloop, ...fillerPool, { kind: 'promo' }]
   }
-  const out: Slide[] = []
+  const out: Slide[] = [...brewloop]
   m.items.forEach((it) => {
     out.push({ ...it, kind: 'ad', duration: it.duration || slot })
     // Drop a filler card after EVERY ad (cycling trivia → weather → authored
@@ -556,7 +569,13 @@ function Player({
   // How long this slide holds. Videos run to their own `ended` event; everything
   // else (images, filler, promo) uses the admin-set seconds.
   const isVideoAd = slide?.kind === 'ad' && slide.creative_type === 'video'
-  const slideSeconds = slide ? (slide.kind === 'ad' ? slide.duration : FILLER_SECONDS) : 0
+  const slideSeconds = slide
+    ? slide.kind === 'ad'
+      ? slide.duration
+      : slide.kind === 'trivia'
+        ? TRIVIA_SLIDE_SECONDS
+        : FILLER_SECONDS
+    : 0
 
   // Advance the loop on a timer keyed to PRIMITIVES (index, length, this slide's
   // duration/kind) — never the rebuilt `slide` object — so unrelated re-renders
@@ -685,6 +704,37 @@ function Player({
           )}
           {slide.card.payload.foot && (
             <div className="mt-4 text-2xl text-white/40">{slide.card.payload.foot}</div>
+          )}
+        </FillerFrame>
+      ) : slide.kind === 'brewloop' ? (
+        <FillerFrame title="">
+          <div className="text-sm font-semibold uppercase tracking-[0.25em] text-primary/80">
+            Jville Brew Loop
+          </div>
+          <div className="mt-4 max-w-4xl px-8 font-heading text-7xl font-extrabold leading-tight text-white">
+            One ticket. All night.
+          </div>
+          <div className="mt-5 max-w-3xl px-8 text-3xl text-white/70">
+            Ride the shared shuttle that loops between town&apos;s best local spots — hop on and off
+            as much as you want.
+          </div>
+          {manifest.brewloop?.qr_image ? (
+            <div className="mt-9 flex items-center gap-7">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={manifest.brewloop.qr_image}
+                alt="Scan to book"
+                className="size-40 rounded-2xl bg-white p-3 ring-2 ring-primary"
+              />
+              <div className="text-left">
+                <div className="font-heading text-6xl font-extrabold text-primary">$5 off</div>
+                <div className="mt-1 text-2xl text-white/70">Scan to book your ride</div>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-9 rounded-full bg-primary px-7 py-2.5 text-2xl font-semibold text-primary-foreground">
+              $5 off your ride — book at jvillebrewloop.com
+            </div>
           )}
         </FillerFrame>
       ) : (
