@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { roundNumber, roundPhase } from '@/lib/trivia'
+import { roundPhase } from '@/lib/trivia'
+import { resolveVenueQuestion } from '@/lib/triviaQuestions'
 import { verifyPlayerToken } from '@/lib/triviaToken'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
 
@@ -28,11 +29,14 @@ export async function POST(req: Request) {
   }
 
   const now = Date.now()
-  const round = roundNumber(now)
   const { phase } = roundPhase(now)
   if (phase !== 'question') {
     return NextResponse.json({ error: 'Too late — wait for the next question.' }, { status: 409 })
   }
+  // The round the player was looking at when they locked in. If the round has
+  // since rolled, grade NOTHING rather than grade a question they never saw —
+  // they'll answer the next one. (Optional for older clients that don't send it.)
+  const clientRound = Number.isInteger(Number(body.round)) ? Number(body.round) : null
 
   const supabase = createAdminClient()
 
@@ -47,18 +51,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Rejoin the game to continue.' }, { status: 404 })
   }
 
-  const { data: qs } = await supabase
-    .from('trivia_questions')
-    .select('correct_idx')
-    .eq('active', true)
-    // Must match the exact ordering in /api/trivia/state so grading lines up
-    // with the question the player saw. created_at ties need the id tiebreaker.
-    .order('created_at', { ascending: true })
-    .order('id', { ascending: true })
-  const questions = (qs ?? []) as { correct_idx: number }[]
-  if (!questions.length) return NextResponse.json({ error: 'No questions.' }, { status: 503 })
-  const correctIdx = questions[round % questions.length].correct_idx
-  const correct = choiceIdx === correctIdx
+  // Grade against the SAME resolver the state endpoint uses, scoped to the
+  // player's venue — so the correct_idx here is for the exact question they saw.
+  const resolved = await resolveVenueQuestion(supabase, player.venue_id, now)
+  if (!resolved) return NextResponse.json({ error: 'No questions.' }, { status: 503 })
+  const { round, question } = resolved
+  if (clientRound != null && clientRound !== round) {
+    return NextResponse.json({ error: 'Too late — wait for the next question.' }, { status: 409 })
+  }
+  const correct = choiceIdx === question.correct_idx
 
   const { error } = await supabase.from('trivia_answers').insert({
     player_id: playerId,
@@ -74,5 +75,5 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Could not record answer.' }, { status: 500 })
   }
 
-  return NextResponse.json({ correct, correctIdx })
+  return NextResponse.json({ correct, correctIdx: question.correct_idx })
 }

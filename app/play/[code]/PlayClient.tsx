@@ -13,7 +13,13 @@ type TriviaState = {
   correctIdx: number | null
   leaderboard: { name: string; score: number }[]
   you: { answered: boolean; choiceIdx: number | null; score: number } | null
-  sponsors?: { adId: string; tvId: string; name: string; what: string | null; url: string }[]
+  sponsors?: {
+    adId: string | null
+    tvId: string | null
+    name: string
+    what: string | null
+    url: string
+  }[]
 }
 
 type Join = { player_id: string; venue_id: string; venue_name: string; token: string }
@@ -124,6 +130,9 @@ export function PlayClient({ code }: { code: string }) {
           player_id: join.player_id,
           token: join.token,
           choice_idx: picked,
+          // The round on screen when they locked in, so the server never grades
+          // against a question that rolled over between the poll and this submit.
+          round: state.round,
         }),
       })
     } catch {
@@ -262,8 +271,8 @@ export function PlayClient({ code }: { code: string }) {
               <div className="grid gap-2">
                 {state.sponsors.map((s) => (
                   <a
-                    key={s.adId}
-                    href={`/r/${s.adId}?t=${s.tvId}`}
+                    key={s.adId ?? s.name}
+                    href={s.adId && s.tvId ? `/r/${s.adId}?t=${s.tvId}` : s.url}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3 transition hover:border-primary"

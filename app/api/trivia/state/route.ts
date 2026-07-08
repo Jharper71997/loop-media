@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { roundNumber, roundPhase, dayNumber, shuffledOrder } from '@/lib/trivia'
+import { roundPhase } from '@/lib/trivia'
+import { resolveVenueQuestion } from '@/lib/triviaQuestions'
 
 // Live trivia state for a venue: the current question, phase/timer, today's
 // leaderboard, and (if a player id is passed) that player's answer + score.
@@ -13,47 +14,15 @@ export async function GET(req: Request) {
 
   const supabase = createAdminClient()
 
-  // The polling venue's market, so local (territory-scoped) questions can be mixed
-  // in with the global set for that venue.
-  const { data: venueRow } = await supabase
-    .from('venues')
-    .select('territory_id')
-    .eq('id', venueId)
-    .maybeSingle()
-  const venueTerritory = (venueRow?.territory_id as string | null) ?? null
-
-  const { data: qs } = await supabase
-    .from('trivia_questions')
-    .select('prompt, choices, correct_idx, territory_id, venue_id')
-    .eq('active', true)
-    // created_at alone is not unique (seed rows share a timestamp). The id
-    // tiebreaker makes the base order deterministic before the per-day shuffle.
-    .order('created_at', { ascending: true })
-    .order('id', { ascending: true })
-  const all = (qs ?? []) as {
-    prompt: string
-    choices: string[]
-    correct_idx: number
-    territory_id: string | null
-    venue_id: string | null
-  }[]
-  // Scope: global (both null) + this venue's territory + this exact venue.
-  const questions = all.filter(
-    (q) =>
-      (q.venue_id == null || q.venue_id === venueId) &&
-      (q.territory_id == null || q.territory_id === venueTerritory)
-  )
-  if (!questions.length) {
+  const now = Date.now()
+  // Resolve the live question via the SHARED resolver so grading (the answer
+  // endpoint) always evaluates the exact question the player is shown here.
+  const resolved = await resolveVenueQuestion(supabase, venueId, now)
+  if (!resolved) {
     return NextResponse.json({ error: 'No questions configured.' }, { status: 503 })
   }
-
-  const now = Date.now()
-  const round = roundNumber(now)
+  const { round, question: q } = resolved
   const { phase, endsInMs } = roundPhase(now)
-  // Per-day shuffled order walked by round: same question for every poll in a round,
-  // a fresh order each day, and all questions cycle before any repeats.
-  const order = shuffledOrder(questions.length, dayNumber(now))
-  const q = questions[order[round % questions.length]]
 
   // Score = the player's current STREAK of correct answers in a row. One wrong
   // answer resets them to zero — the whole game is how many you can get right in
@@ -129,14 +98,38 @@ export async function GET(req: Request) {
     you = { answered: !!thisRound, choiceIdx: thisRound?.choice_idx ?? null, score }
   }
 
-  // Businesses currently live on this venue's screens, so a player can browse them
-  // while they wait for the next question. Only computed for a joined player (the
-  // TV's own leaderboard poll skips this). Each links through /r/<ad>?t=<tv> so a
-  // tap is attributed like a scan. One card per advertiser; needs a website to
-  // visit + a live creative.
-  type Sponsor = { adId: string; tvId: string; name: string; what: string | null; url: string }
+  // What's on the screens here, for a player to browse while they wait. Always
+  // leads with the two house ads that play on every screen — Jville Brew Loop and
+  // Loop Network itself — then any live advertisers. Real advertiser cards link
+  // through /r/<ad>?t=<tv> so a tap is attributed like a scan; house cards link
+  // straight to their site (adId/tvId null). Only computed for a joined player
+  // (the TV's own leaderboard poll skips this).
+  type Sponsor = {
+    adId: string | null
+    tvId: string | null
+    name: string
+    what: string | null
+    url: string
+  }
   let sponsors: Sponsor[] = []
   if (playerId) {
+    // House ads (same destinations as the on-screen slides + QRs).
+    const brewloop: Sponsor = {
+      adId: null,
+      tvId: null,
+      name: 'Jville Brew Loop',
+      what: 'Shared shuttle around town · $5 off',
+      url: process.env.NEXT_PUBLIC_BREWLOOP_OFFER_URL || 'https://the-loop-eight.vercel.app/events',
+    }
+    const loopNetwork: Sponsor = {
+      adId: null,
+      tvId: null,
+      name: 'Loop Network',
+      what: 'Put your business on this screen',
+      url: process.env.NEXT_PUBLIC_LOOP_SITE_URL || 'https://loopnetwork.org',
+    }
+
+    const live: Sponsor[] = []
     const { data: venueTvs } = await supabase.from('tvs').select('id').eq('venue_id', venueId)
     const tvIds = ((venueTvs ?? []) as { id: string }[]).map((t) => t.id)
     if (tvIds.length) {
@@ -193,7 +186,7 @@ export async function GET(req: Request) {
         if (seen.has(ad.owner_user_id)) continue
         seen.add(ad.owner_user_id)
         const catId = ad.category_id ?? ownerCat.get(ad.owner_user_id) ?? null
-        sponsors.push({
+        live.push({
           adId: ad.id,
           tvId: p.tv_id,
           name: (ad.title || nameById.get(ad.owner_user_id) || 'Local business').trim(),
@@ -201,8 +194,11 @@ export async function GET(req: Request) {
           url: ad.qr_target_url as string,
         })
       }
-      sponsors = sponsors.slice(0, 8)
     }
+
+    // Brew Loop leads, live advertisers in the middle (cap so Loop Network always
+    // shows), Loop Network's "advertise here" pitch closes it out.
+    sponsors = [brewloop, ...live.slice(0, 6), loopNetwork]
   }
 
   return NextResponse.json({
