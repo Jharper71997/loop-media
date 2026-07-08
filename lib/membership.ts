@@ -28,3 +28,28 @@ export async function hasUnlimitedChanges(
   }
   return true
 }
+
+// True if the advertiser holds an active "insights" membership — the tier that
+// unlocks QR scan analytics. This tier is NOT on sale yet ("coming soon"), so
+// there is no checkout for it and this returns false for everyone until a
+// membership row of kind 'insights' is granted. `kind` is a plain text column,
+// so selecting an unused value is safe (it simply matches nothing today).
+export async function hasInsightsMembership(
+  admin: Admin,
+  advertiserId: string
+): Promise<boolean> {
+  const { data } = await admin
+    .from('memberships')
+    .select('status, current_period_end')
+    .eq('advertiser_id', advertiserId)
+    .eq('kind', 'insights')
+    .eq('status', 'active')
+    .order('current_period_end', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (!data) return false
+  if (data.current_period_end && new Date(data.current_period_end).getTime() < Date.now()) {
+    return false
+  }
+  return true
+}

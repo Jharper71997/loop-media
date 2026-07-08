@@ -9,8 +9,11 @@ import { formatCents, formatNumber, isTvLive } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { loyaltyCredits } from '@/lib/pricing'
 import { resolveAdvertiserContext } from '@/lib/pricing.server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { hasInsightsMembership } from '@/lib/membership'
 import { PERF_WINDOW_DAYS } from '@/lib/analytics'
 import { MoneyStat } from '@/components/app/MoneyStat'
+import { ScanLocked } from '@/components/app/ScanLocked'
 import { OnboardingTour } from '@/components/app/OnboardingTour'
 
 type CampaignRow = {
@@ -208,6 +211,8 @@ export default async function AdvertiserDashboard({
     nextMilestone = `${12 - ctx.monthsActive} month${12 - ctx.monthsActive === 1 ? '' : 's'} to your 5% loyalty discount`
 
   const hasCampaigns = campaigns.length > 0
+  // QR scan numbers are gated behind the Insights membership (coming soon).
+  const showScans = await hasInsightsMembership(createAdminClient(), profile.id)
 
   return (
     <div className="space-y-6">
@@ -261,7 +266,11 @@ export default async function AdvertiserDashboard({
           {/* Command-center roll-up: the paying customer's numbers at a glance. */}
           <div className="grid grid-cols-3 gap-3">
             <StatTile label="Locations" value={formatNumber(playingVenues.length)} />
-            <StatTile label={`Scans · ${PERF_WINDOW_DAYS}d`} value={formatNumber(scans30d)} />
+            {showScans ? (
+              <StatTile label={`Scans · ${PERF_WINDOW_DAYS}d`} value={formatNumber(scans30d)} />
+            ) : (
+              <ScanLocked variant="tile" label={`Scans · ${PERF_WINDOW_DAYS}d`} />
+            )}
             <StatTile label="Spend / mo" value={formatCents(monthlySpend)} />
           </div>
 

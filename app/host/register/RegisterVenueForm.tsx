@@ -8,6 +8,12 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Combobox, type ComboboxOption } from '@/components/ui/combobox'
 import { BusinessHoursPicker, type BusinessHoursValue } from '@/components/app/BusinessHoursPicker'
+import {
+  AGREEMENT_INTRO,
+  AGREEMENT_SECTIONS,
+  AGREEMENT_TITLE,
+  AGREEMENT_VERSION,
+} from '@/lib/agreement'
 import { requestVenue } from './actions'
 
 const NO_CATEGORY = 'none'
@@ -25,7 +31,10 @@ export function RegisterVenueForm({
   const [zip, setZip] = useState('')
   const [categoryId, setCategoryId] = useState<string | null>(null)
   const [venueType, setVenueType] = useState('')
+  const [dailyCustomers, setDailyCustomers] = useState('')
   const [phone, setPhone] = useState('')
+  const [signerName, setSignerName] = useState('')
+  const [agreed, setAgreed] = useState(false)
   const [networkType, setNetworkType] = useState<'wifi' | 'ethernet'>('wifi')
   const [ssid, setSsid] = useState('')
   const [wifiPassword, setWifiPassword] = useState('')
@@ -48,6 +57,8 @@ export function RegisterVenueForm({
     if (!address.trim()) return toast.error('Enter your street address.')
     if (!city.trim() || !stateVal.trim()) return toast.error('Enter your city and state.')
     if (!zip.trim()) return toast.error('Enter your ZIP code.')
+    if (!agreed) return toast.error('Please accept the Advertising Service Agreement.')
+    if (!signerName.trim()) return toast.error('Type your name to sign the agreement.')
     start(async () => {
       const res = await requestVenue({
         name,
@@ -58,7 +69,10 @@ export function RegisterVenueForm({
         category_id: categoryId,
         venue_type: venueType || null,
         foot_traffic_estimate: 0,
+        median_daily_customers: dailyCustomers ? Number(dailyCustomers) : null,
         contact_phone: phone || null,
+        agreement_signer_name: signerName,
+        agreement_version: AGREEMENT_VERSION,
         business_open: hours.open,
         business_close: hours.close,
         business_days: hours.days,
@@ -137,6 +151,21 @@ export function RegisterVenueForm({
       </div>
 
       <div className="space-y-1.5">
+        <Label>Typical customers per day (optional)</Label>
+        <Input
+          type="number"
+          inputMode="numeric"
+          min={0}
+          value={dailyCustomers}
+          onChange={(e) => setDailyCustomers(e.target.value)}
+          placeholder="e.g. 150"
+        />
+        <p className="text-xs text-muted-foreground">
+          Your usual foot traffic on an average day. We use this to estimate reach for advertisers.
+        </p>
+      </div>
+
+      <div className="space-y-1.5">
         <Label>Contact phone (optional)</Label>
         <Input
           type="tel"
@@ -207,7 +236,50 @@ export function RegisterVenueForm({
         for you to download, plug into a computer, or configure.
       </p>
 
-      <Button type="submit" size="lg" disabled={pending}>
+      <div className="space-y-3 rounded-lg border border-border p-4">
+        <div className="flex items-baseline justify-between gap-2">
+          <Label className="text-sm font-medium">{AGREEMENT_TITLE}</Label>
+          <span className="text-[0.65rem] uppercase tracking-wide text-muted-foreground">
+            v{AGREEMENT_VERSION}
+          </span>
+        </div>
+        <div className="max-h-56 space-y-3 overflow-y-auto rounded-md border border-border bg-muted/30 p-3 text-xs leading-relaxed text-muted-foreground">
+          <p>{AGREEMENT_INTRO}</p>
+          {AGREEMENT_SECTIONS.map((s) => (
+            <div key={s.n} className="space-y-1">
+              <p className="font-medium text-foreground">
+                {s.n}. {s.title}
+              </p>
+              {s.body.split('\n\n').map((para, i) => (
+                <p key={i}>{para}</p>
+              ))}
+            </div>
+          ))}
+        </div>
+        <div className="space-y-1.5">
+          <Label>Signature (type your full name)</Label>
+          <Input
+            value={signerName}
+            onChange={(e) => setSignerName(e.target.value)}
+            placeholder="Your full name"
+            autoComplete="name"
+          />
+        </div>
+        <label className="flex items-start gap-2 text-sm text-muted-foreground">
+          <input
+            type="checkbox"
+            checked={agreed}
+            onChange={(e) => setAgreed(e.target.checked)}
+            className="mt-0.5 size-4 shrink-0 rounded border-border accent-primary"
+          />
+          <span>
+            I have read and agree to the Loop Network Advertising Service Agreement on behalf of this
+            business, and I am authorized to accept it.
+          </span>
+        </label>
+      </div>
+
+      <Button type="submit" size="lg" disabled={pending || !agreed || !signerName.trim()}>
         {pending ? 'Submitting…' : 'Submit venue'}
       </Button>
     </form>

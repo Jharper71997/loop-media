@@ -27,34 +27,6 @@ function Wordmark({ className }: { className?: string }) {
   )
 }
 
-// A pure-CSS "wall TV" so the hero shows the actual product without a stock photo.
-function TvMockup() {
-  return (
-    <div className="relative mx-auto w-full max-w-md">
-      <div className="rounded-2xl border border-white/10 bg-black p-2 shadow-2xl shadow-black/60">
-        <div className="relative aspect-video overflow-hidden rounded-lg bg-gradient-to-br from-[#211d14] via-[#15130d] to-black">
-          <span className="absolute left-3 top-2.5 text-[0.6rem] font-semibold tracking-[0.2em] text-primary">
-            LOOP NETWORK
-          </span>
-          <span className="absolute right-3 top-2.5 flex items-center gap-1 rounded-full bg-black/50 px-2 py-0.5 text-[0.55rem] text-foreground">
-            <span className="size-1.5 rounded-full bg-success" /> Trivia live
-          </span>
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 px-4 text-center">
-            <span className="text-[0.6rem] uppercase tracking-[0.2em] text-primary/80">Now showing</span>
-            <p className="font-heading text-xl font-extrabold text-foreground">Coastal Coffee Co.</p>
-            <p className="text-xs text-muted-foreground">$2 off any latte this week</p>
-            <span className="mt-1.5 grid size-12 place-items-center rounded-md bg-foreground text-background">
-              <QrCode className="size-9" />
-            </span>
-            <span className="text-[0.6rem] text-muted-foreground">Scan to redeem</span>
-          </div>
-        </div>
-      </div>
-      <div className="mx-auto mt-1 h-3 w-16 rounded-b-md bg-white/5" />
-    </div>
-  )
-}
-
 // ---- StoryBrand content blocks ------------------------------------------------
 
 // The Stakes: the problem, on three levels (external / internal / philosophical),
@@ -165,8 +137,8 @@ export default async function Home() {
 
       {/* HEADER / HERO — grunt test: what you offer, how life improves, what to do.
           The customer (the local business owner) is the hero; Loop is the guide. */}
-      <section className="mx-auto grid w-full max-w-6xl items-center gap-10 px-6 py-12 lg:grid-cols-2 lg:gap-12 lg:py-20">
-        <div className="text-center lg:text-left">
+      <section className="mx-auto flex w-full max-w-3xl flex-col items-center px-6 py-12 lg:py-20">
+        <div className="text-center">
           <span className="inline-block rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">
             Indoor TV advertising you can actually measure
           </span>
@@ -174,12 +146,12 @@ export default async function Home() {
             Your business, on the screens your customers{' '}
             <span className="text-gold-metallic">already watch.</span>
           </h1>
-          <p className="mx-auto mt-4 max-w-md text-pretty text-base text-muted-foreground lg:mx-0">
+          <p className="mx-auto mt-4 max-w-md text-pretty text-base text-muted-foreground">
             Loop Network puts your ad on the TVs in the busiest local bars, gyms, and shops, with a
             QR code on every ad that tracks real scans. So you finally know which ads bring customers
             in, and which don&apos;t.
           </p>
-          <div className="mt-7 flex flex-col items-center gap-3 sm:flex-row lg:items-start">
+          <div className="mt-7 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
             <Link href="/signup" className={cn(buttonVariants({ size: 'lg' }), 'w-full sm:w-auto')}>
               Start advertising
             </Link>
@@ -193,7 +165,7 @@ export default async function Home() {
               See how it works
             </Link>
           </div>
-          <div className="mt-5 flex flex-wrap justify-center gap-x-5 gap-y-1.5 text-xs text-muted-foreground lg:justify-start">
+          <div className="mt-5 flex flex-wrap justify-center gap-x-5 gap-y-1.5 text-xs text-muted-foreground">
             {['$50 / TV / month', 'Month to month', "We'll design your ad"].map((t) => (
               <span key={t} className="flex items-center gap-1.5">
                 <Check className="size-3.5 text-primary" /> {t}
@@ -201,7 +173,6 @@ export default async function Home() {
             ))}
           </div>
         </div>
-        <TvMockup />
       </section>
 
       {/* THE STAKES — name the problem (and the villain) before the solution. */}

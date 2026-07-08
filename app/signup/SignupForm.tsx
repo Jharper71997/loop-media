@@ -162,7 +162,7 @@ export function SignupForm({
         <CardTitle>{isHost ? 'Host a screen' : 'Create your advertiser account'}</CardTitle>
         <CardDescription>
           {isHost
-            ? 'Run the loop on your own TV and unlock free promo slots.'
+            ? 'Run the loop on your own TV and advertise your business for free.'
             : 'Put your business on local screens.'}
         </CardDescription>
       </CardHeader>
@@ -173,7 +173,7 @@ export function SignupForm({
               ? [
                   'Trivia, a leaderboard, and clean local ads on your screen',
                   'Free to host — we handle content and support',
-                  '2 free promo slots on other Loop screens around town',
+                  'A code for 100% off advertising your business across the network',
                 ]
               : [
                   'Your ad on local TVs where your customers already go',

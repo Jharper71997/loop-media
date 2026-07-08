@@ -18,9 +18,11 @@ const View = dynamic(() => import('./CampaignMapView'), {
 export default function CampaignMap({
   venues,
   center,
+  showScans,
 }: {
   venues: CampaignMapVenue[]
   center: [number, number]
+  showScans?: boolean
 }) {
-  return <View venues={venues} center={center} />
+  return <View venues={venues} center={center} showScans={showScans} />
 }

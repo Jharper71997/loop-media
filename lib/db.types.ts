@@ -87,6 +87,11 @@ export interface Venue {
   business_close: string | null
   business_days: number[] | null
   trivia_enabled: boolean
+  median_daily_customers: number | null
+  comp_promo_code: string | null
+  agreement_signed_at: string | null
+  agreement_signer_name: string | null
+  agreement_version: string | null
   created_at: string
   updated_at: string
 }

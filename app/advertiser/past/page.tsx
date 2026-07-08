@@ -2,7 +2,10 @@ import Link from 'next/link'
 import { ArrowLeft, ImageOff, Archive } from 'lucide-react'
 import { requireProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { hasInsightsMembership } from '@/lib/membership'
 import { Card, CardContent } from '@/components/ui/card'
+import { ScanLocked } from '@/components/app/ScanLocked'
 import { formatNumber, formatCents } from '@/lib/format'
 import { type RunningVenue } from '@/lib/analytics'
 
@@ -40,13 +43,13 @@ export default async function PastCampaignsPage() {
 
     const { data: plData } = await supabase
       .from('ad_placements')
-      .select('campaign_id, tv:tvs(id, venue:venues(id, name, lat, lng, foot_traffic_estimate))')
+      .select('campaign_id, tv:tvs(id, venue:venues(id, name, lat, lng, foot_traffic_estimate, median_daily_customers))')
       .in('campaign_id', campIds)
     type PRow = {
       campaign_id: string | null
       tv: {
         id: string
-        venue: { id: string; name: string; lat: number | null; lng: number | null; foot_traffic_estimate: number } | null
+        venue: { id: string; name: string; lat: number | null; lng: number | null; foot_traffic_estimate: number; median_daily_customers: number | null } | null
       } | null
     }
     for (const p of (plData ?? []) as unknown as PRow[]) {
@@ -64,6 +67,7 @@ export default async function PastCampaignsPage() {
           lat: v.lat,
           lng: v.lng,
           footTraffic: v.foot_traffic_estimate ?? 0,
+          medianDailyCustomers: v.median_daily_customers ?? null,
           tvIds: [tvId],
         })
       }
@@ -85,6 +89,9 @@ export default async function PastCampaignsPage() {
 
   const fmtDate = (iso: string) =>
     new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+
+  // QR scan numbers are gated behind the Insights membership (coming soon).
+  const showScans = await hasInsightsMembership(createAdminClient(), profile.id)
 
   return (
     <div className="space-y-6">
@@ -143,7 +150,11 @@ export default async function PastCampaignsPage() {
 
                       <div className="mt-3 grid grid-cols-3 gap-3">
                         <Stat label="Screens" value={formatNumber(screens)} />
-                        <Stat label="QR scans (total)" value={formatNumber(scans)} />
+                        {showScans ? (
+                          <Stat label="QR scans (total)" value={formatNumber(scans)} />
+                        ) : (
+                          <ScanLocked variant="stat" label="QR scans (total)" />
+                        )}
                         <Stat
                           label="Monthly cost"
                           value={c.monthly_total_cents != null ? formatCents(c.monthly_total_cents) : '—'}

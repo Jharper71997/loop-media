@@ -3,9 +3,10 @@ import { ImageOff, MapPin } from 'lucide-react'
 import { requireProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { hasUnlimitedChanges } from '@/lib/membership'
+import { hasUnlimitedChanges, hasInsightsMembership } from '@/lib/membership'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
+import { ScanLocked } from '@/components/app/ScanLocked'
 import { formatNumber, formatCents } from '@/lib/format'
 import type { Ad, Campaign } from '@/lib/db.types'
 import {
@@ -18,12 +19,6 @@ import {
   type RunningVenue,
   type ScanRow,
 } from '@/lib/analytics'
-import {
-  summarizeUptime,
-  venueBusinessHours,
-  formatUptimePct,
-  UPTIME_WINDOW_DAYS,
-} from '@/lib/uptime'
 import { isWithinOpenHours } from '@/lib/openHours'
 import { CampaignControls } from './CampaignControls'
 import { BackLink } from './BackLink'
@@ -65,10 +60,13 @@ export default async function CampaignDetail({
     profile.role !== 'host' &&
     !(await hasUnlimitedChanges(createAdminClient(), profile.id))
 
+  // QR scan numbers are gated behind the Insights membership (coming soon).
+  const showScans = await hasInsightsMembership(createAdminClient(), profile.id)
+
   const { data: placementsData } = await supabase
     .from('ad_placements')
     .select(
-      'id, tv:tvs(id, venue:venues(id, name, lat, lng, foot_traffic_estimate, business_open, business_close, business_days))'
+      'id, tv:tvs(id, venue:venues(id, name, lat, lng, foot_traffic_estimate, median_daily_customers, business_open, business_close, business_days))'
     )
     .eq('campaign_id', id)
     .neq('status', 'ended')
@@ -82,6 +80,7 @@ export default async function CampaignDetail({
         lat: number | null
         lng: number | null
         foot_traffic_estimate: number
+        median_daily_customers: number | null
         business_open: string | null
         business_close: string | null
         business_days: number[] | null
@@ -92,7 +91,6 @@ export default async function CampaignDetail({
 
   // Distinct running venues + the screens at each (one venue can host several TVs).
   const venueMap = new Map<string, RunningVenue>()
-  const venueHours = new Map<string, ReturnType<typeof venueBusinessHours>>()
   const tvToVenueId = new Map<string, string>()
   // Per-tv open-hours (for filtering ad_plays exactly like the admin TV page).
   const tvOpenHours = new Map<
@@ -118,41 +116,14 @@ export default async function CampaignDetail({
         lat: v.lat,
         lng: v.lng,
         footTraffic: v.foot_traffic_estimate ?? 0,
+        medianDailyCustomers: v.median_daily_customers ?? null,
         tvIds: [tvId],
         plays: 0,
       })
-      venueHours.set(v.id, venueBusinessHours(v))
     }
   }
   const venues = [...venueMap.values()]
-
-  // Uptime over the last 30 days for the screens this ad runs on (RLS lets the
-  // advertiser read uptime for their own placements). Per venue: aggregate its
-  // screens' measured + expected seconds, then a venue is "below SLA" if short.
   const runningTvIds = venues.flatMap((v) => v.tvIds)
-  const uptimeByVenue = new Map<string, { pct: number; breach: boolean; hasData: boolean }>()
-  if (runningTvIds.length) {
-    const upSince = new Date()
-    upSince.setUTCDate(upSince.getUTCDate() - UPTIME_WINDOW_DAYS)
-    const { data: upData } = await supabase
-      .from('tv_uptime_days')
-      .select('tv_id, day, seconds')
-      .in('tv_id', runningTvIds)
-      .gte('day', upSince.toISOString().slice(0, 10))
-    const byTv = new Map<string, { day: string; seconds: number }[]>()
-    for (const r of (upData ?? []) as { tv_id: string; day: string; seconds: number }[]) {
-      const list = byTv.get(r.tv_id) ?? []
-      list.push({ day: r.day, seconds: r.seconds })
-      byTv.set(r.tv_id, list)
-    }
-    for (const v of venues) {
-      const bh = venueHours.get(v.venueId) ?? venueBusinessHours({})
-      const rows = v.tvIds.flatMap((id) => byTv.get(id) ?? [])
-      const s = summarizeUptime(rows, bh)
-      uptimeByVenue.set(v.venueId, { pct: s.pct, breach: s.breach, hasData: s.hasData })
-    }
-  }
-  const breachedVenues = venues.filter((v) => uptimeByVenue.get(v.venueId)?.breach).length
 
   // Measured QR scans over the reporting window (attributed to a screen + day).
   let scans: ScanRow[] = []
@@ -222,12 +193,6 @@ export default async function CampaignDetail({
 
   const firstVenueName = venues[0]?.name ?? null
   const isLive = c.status === 'active' && (adStatus === 'approved' || adStatus === 'active')
-  // Don't apologize for an SLA miss on a brand-new campaign — a screen can't miss
-  // a monthly uptime guarantee in its first few days of running.
-  const campaignAgeDays = c.created_at
-    ? Math.floor((Date.now() - new Date(c.created_at).getTime()) / 86400000)
-    : 0
-  const showBreach = breachedVenues > 0 && campaignAgeDays >= 3
 
   return (
     <div className="space-y-6">
@@ -251,12 +216,6 @@ export default async function CampaignDetail({
       {change === 'canceled' && (
         <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
           Change canceled. Your current creative keeps running and you were not charged.
-        </div>
-      )}
-      {showBreach && (
-        <div className="rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-warning">
-          {breachedVenues} of your screen{breachedVenues === 1 ? '' : 's'} ran below our 80%
-          uptime guarantee this month. We&apos;re on it, and we&apos;ll make it right.
         </div>
       )}
 
@@ -335,7 +294,11 @@ export default async function CampaignDetail({
                 value={totalPlays}
                 accent
               />
-              <Stat label="QR scans" sub={`measured · ${PERF_WINDOW_DAYS}d`} value={totalScans} accent />
+              {showScans ? (
+                <Stat label="QR scans" sub={`measured · ${PERF_WINDOW_DAYS}d`} value={totalScans} accent />
+              ) : (
+                <ScanLocked variant="stat" label="QR scans" />
+              )}
               <Stat label="Screens" sub="live" value={locations} />
               {estReach > 0 && (
                 <Stat label="Est. reach" sub="monthly · estimate" value={estReach} />
@@ -362,12 +325,12 @@ export default async function CampaignDetail({
                 <MapPin className="size-4 text-muted-foreground" />
                 <h2 className="text-lg font-medium">Where it&apos;s running</h2>
               </div>
-              <CampaignMap venues={mapVenues} center={venuesCenter(venues)} />
+              <CampaignMap venues={mapVenues} center={venuesCenter(venues)} showScans={showScans} />
             </div>
           )}
 
           {/* Daily QR scans — only once there's something to plot (no empty chart). */}
-          {totalScans > 0 && (
+          {showScans && totalScans > 0 && (
             <Card>
               <CardContent className="p-5">
                 <p className="text-sm font-medium">Daily QR scans</p>
@@ -395,41 +358,35 @@ export default async function CampaignDetail({
               <CardContent className="p-5">
                 <p className="mb-3 text-sm font-medium">By location</p>
                 <div className="space-y-2">
-                  {rows.map((r) => {
-                    const u = uptimeByVenue.get(r.venueId)
-                    return (
-                      <div
-                        key={r.venueId}
-                        className="flex flex-wrap items-center justify-between gap-x-5 gap-y-1 rounded-lg border border-border/60 px-3 py-2.5"
-                      >
-                        <span className="font-medium">{r.name}</span>
-                        <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground">
-                          <span>
-                            {formatNumber(r.plays)}{' '}
-                            <span className="text-muted-foreground/70">shown · 30d</span>
-                          </span>
+                  {rows.map((r) => (
+                    <div
+                      key={r.venueId}
+                      className="flex flex-wrap items-center justify-between gap-x-5 gap-y-1 rounded-lg border border-border/60 px-3 py-2.5"
+                    >
+                      <span className="font-medium">{r.name}</span>
+                      <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground">
+                        <span>
+                          {formatNumber(r.plays)}{' '}
+                          <span className="text-muted-foreground/70">shown · 30d</span>
+                        </span>
+                        {showScans && (
                           <span>
                             {formatNumber(r.scans)}{' '}
                             <span className="text-muted-foreground/70">scans · 30d</span>
                           </span>
-                          {u && u.hasData && (
-                            <span className={u.breach ? 'text-warning' : ''}>
-                              {formatUptimePct(u.pct)}{' '}
-                              <span className="text-muted-foreground/70">uptime · 30d</span>
-                            </span>
-                          )}
-                        </div>
+                        )}
                       </div>
-                    )
-                  })}
+                    </div>
+                  ))}
                 </div>
               </CardContent>
             </Card>
           )}
 
           <p className="text-xs text-muted-foreground">
-            Times shown and QR scans are both measured on the screens themselves, counted only during
-            each venue&apos;s open hours. Reach is an estimate from venue foot traffic.
+            {showScans
+              ? 'Times shown and QR scans are both measured on the screens themselves, counted only during each venue’s open hours. Reach is an estimate from venue foot traffic.'
+              : 'Times shown is measured on the screens themselves, counted only during each venue’s open hours. Reach is an estimate from venue foot traffic.'}
           </p>
         </div>
       )}

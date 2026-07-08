@@ -1,4 +1,9 @@
 import type { Metadata } from "next";
+import {
+  AGREEMENT_INTRO,
+  AGREEMENT_SECTIONS,
+  AGREEMENT_VERSION,
+} from "@/lib/agreement";
 
 export const metadata: Metadata = {
   title: "Terms of Service | Loop Network",
@@ -126,6 +131,23 @@ export default function TermsPage() {
           date above and, where appropriate, provide additional notice. Continued use of the
           service means you accept the updated Terms.
         </p>
+      </Section>
+
+      <Section title="Advertising Service Agreement">
+        <p className="text-xs uppercase tracking-wide text-muted-foreground">
+          Version {AGREEMENT_VERSION} — signed by hosts at venue registration.
+        </p>
+        <p>{AGREEMENT_INTRO}</p>
+        {AGREEMENT_SECTIONS.map((s) => (
+          <div key={s.n} className="space-y-1">
+            <p className="font-medium text-foreground">
+              {s.n}. {s.title}
+            </p>
+            {s.body.split("\n\n").map((para, i) => (
+              <p key={i}>{para}</p>
+            ))}
+          </div>
+        ))}
       </Section>
 
       <Section title="Contact us">

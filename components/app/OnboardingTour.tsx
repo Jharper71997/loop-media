@@ -11,7 +11,6 @@ import {
   Tv as TvIcon,
   PlugZap,
   Megaphone,
-  Percent,
   X,
   type LucideIcon,
 } from 'lucide-react'
@@ -66,13 +65,8 @@ const STEPS: Record<'advertiser' | 'host', { steps: Step[]; cta: string; href: s
       },
       {
         icon: Megaphone,
-        title: '2 free promo slots',
-        body: 'Run free promo slots for your business on other Loop screens around town.',
-      },
-      {
-        icon: Percent,
-        title: '20% off to advertise elsewhere',
-        body: 'Want to run ads in other venues too? Hosts get 20% off the whole network.',
+        title: 'Advertise for free',
+        body: 'Once your venue is live, you get a code for 100% off advertising your business across the network.',
       },
     ],
     cta: 'Set up my venue',

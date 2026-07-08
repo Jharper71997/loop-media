@@ -20,9 +20,11 @@ export type CampaignMapVenue = {
 export default function CampaignMapView({
   venues,
   center,
+  showScans,
 }: {
   venues: CampaignMapVenue[]
   center: [number, number]
+  showScans?: boolean
 }) {
   const points = venues
     .filter((v) => v.lat != null && v.lng != null)
@@ -50,8 +52,12 @@ export default function CampaignMapView({
           >
             <Popup>
               <strong>{v.name}</strong>
-              <br />
-              {formatNumber(v.scans)} QR scans (30d)
+              {showScans && (
+                <>
+                  <br />
+                  {formatNumber(v.scans)} QR scans (30d)
+                </>
+              )}
             </Popup>
           </CircleMarker>
         ))}

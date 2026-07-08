@@ -19,7 +19,8 @@ export type RunningVenue = {
   name: string
   lat: number | null
   lng: number | null
-  footTraffic: number // ~monthly visitors
+  footTraffic: number // ~monthly visitors (fallback when the host hasn't stated a daily count)
+  medianDailyCustomers?: number | null // host-stated typical customers/day; preferred for reach
   tvIds: string[]
   plays?: number // measured plays over the reporting window
   venueType?: string | null // e.g. 'Sports Bar' — for the report's venue-type mix
@@ -43,18 +44,28 @@ export function measuredPlaysTotal(venues: RunningVenue[]): number {
   return venues.reduce((s, v) => s + (v.plays ?? 0), 0)
 }
 
-// Steady per-day estimate: a venue's monthly visitors spread evenly. Counted once
-// per venue (not per screen) — two screens in one bar don't double the people walking by.
-function estPerDay(footTraffic: number): number {
-  return Math.round(footTraffic / 30)
+// Steady per-day estimate. Counted once per venue (not per screen) — two screens
+// in one bar don't double the people walking by. Prefer the host-stated typical
+// customers/day; otherwise spread the monthly foot-traffic estimate evenly.
+function estPerDay(v: Pick<RunningVenue, 'footTraffic' | 'medianDailyCustomers'>): number {
+  return v.medianDailyCustomers != null && v.medianDailyCustomers > 0
+    ? v.medianDailyCustomers
+    : Math.round(v.footTraffic / 30)
+}
+
+// A venue's monthly reach: the daily reach across ~30 days.
+function estPerMonth(v: Pick<RunningVenue, 'footTraffic' | 'medianDailyCustomers'>): number {
+  return v.medianDailyCustomers != null && v.medianDailyCustomers > 0
+    ? v.medianDailyCustomers * 30
+    : v.footTraffic
 }
 
 function estPerDayTotal(venues: RunningVenue[]): number {
-  return venues.reduce((s, v) => s + estPerDay(v.footTraffic), 0)
+  return venues.reduce((s, v) => s + estPerDay(v), 0)
 }
 
 export function estImpressionsPerMonth(venues: RunningVenue[]): number {
-  return venues.reduce((s, v) => s + v.footTraffic, 0)
+  return venues.reduce((s, v) => s + estPerMonth(v), 0)
 }
 
 // One point per day for the last `days`, oldest→newest, including zero-scan days.
@@ -99,8 +110,8 @@ export function locationRows(venues: RunningVenue[], scans: ScanRow[]): Location
     .map((v) => ({
       venueId: v.venueId,
       name: v.name,
-      estPerDay: estPerDay(v.footTraffic),
-      estPerMonth: v.footTraffic,
+      estPerDay: estPerDay(v),
+      estPerMonth: estPerMonth(v),
       scans: scansByVenue.get(v.venueId) ?? 0,
       plays: v.plays ?? 0,
     }))

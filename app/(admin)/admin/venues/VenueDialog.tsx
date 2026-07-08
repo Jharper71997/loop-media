@@ -77,6 +77,7 @@ export function VenueDialog({
     category_id: venue?.category_id ?? null,
     host_user_id: venue?.host_user_id ?? null,
     foot_traffic_estimate: venue?.foot_traffic_estimate ?? 0,
+    median_daily_customers: venue?.median_daily_customers ?? null,
     price_tier: venue?.price_tier ?? null,
     price_cents_override: venue?.price_cents_override ?? null,
     exclusivity_price_cents: venue?.exclusivity_price_cents ?? null,
@@ -207,6 +208,18 @@ export function VenueDialog({
             />
             <p className="text-xs text-muted-foreground">
               Must be above 0 for the venue to appear on the advertiser map.
+            </p>
+          </Field>
+
+          <Field label="Typical customers / day">
+            <Input
+              type="number"
+              min={0}
+              value={form.median_daily_customers ?? ''}
+              onChange={(e) => set('median_daily_customers', Number(e.target.value) || null)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Host-stated daily customers. Drives reach directly; blank falls back to foot traffic / 30.
             </p>
           </Field>
 

@@ -20,7 +20,8 @@ import {
   type LocationRow,
 } from '@/lib/analytics'
 import { isWithinOpenHours } from '@/lib/openHours'
-import { formatNumber, formatCents } from '@/lib/format'
+import { formatNumber } from '@/lib/format'
+import { hasInsightsMembership } from '@/lib/membership'
 
 type Admin = ReturnType<typeof createAdminClient>
 
@@ -70,6 +71,7 @@ export type CampaignReport = {
   byVenueType: VenueTypeRow[]
   exclusiveCount: number // venues this campaign owns its category at
   creditCents: number // SLA uptime credits issued this period
+  showScans: boolean // advertiser holds the Insights membership (QR scans unlocked)
   locationsCount: number
   locations: LocationRow[]
   monthlyTotalCents: number | null
@@ -132,7 +134,7 @@ export async function buildCampaignReport(
     const { data: tvData } = await admin
       .from('tvs')
       .select(
-        'id, venue:venues(id, name, lat, lng, foot_traffic_estimate, venue_type, business_open, business_close, business_days)'
+        'id, venue:venues(id, name, lat, lng, foot_traffic_estimate, median_daily_customers, venue_type, business_open, business_close, business_days)'
       )
       .in('id', tvIds)
     type TvRow = {
@@ -143,6 +145,7 @@ export async function buildCampaignReport(
         lat: number | null
         lng: number | null
         foot_traffic_estimate: number
+        median_daily_customers: number | null
         venue_type: string | null
         business_open: string | null
         business_close: string | null
@@ -167,6 +170,7 @@ export async function buildCampaignReport(
           lat: v.lat,
           lng: v.lng,
           footTraffic: v.foot_traffic_estimate ?? 0,
+          medianDailyCustomers: v.median_daily_customers ?? null,
           tvIds: [t.id],
           plays: 0,
           venueType: v.venue_type,
@@ -257,6 +261,12 @@ export async function buildCampaignReport(
     0
   )
 
+  // QR scan numbers only go to advertisers on the Insights membership (coming
+  // soon); everyone else gets a scans-free report.
+  const showScans = campaign.advertiser_id
+    ? await hasInsightsMembership(admin, campaign.advertiser_id)
+    : false
+
   return {
     campaignId,
     advertiserEmail: profile?.email ?? null,
@@ -270,6 +280,7 @@ export async function buildCampaignReport(
     byVenueType,
     exclusiveCount: exclusiveCount ?? 0,
     creditCents,
+    showScans,
     locationsCount: screenCount,
     locations,
     monthlyTotalCents: campaign.monthly_total_cents ?? null,
@@ -295,7 +306,7 @@ export function renderReportHtml(r: CampaignReport, appUrl: string): string {
           <td style="padding:10px 0;border-top:1px solid #27272a;">
             <div style="font-weight:600;color:#fafafa;font-size:14px;">${escapeHtml(loc.name)}</div>
             <div style="margin-top:4px;color:#a1a1aa;font-size:12px;">
-              ${formatNumber(loc.plays)} times shown &middot; ${formatNumber(loc.scans)} QR scans
+              ${formatNumber(loc.plays)} times shown${r.showScans ? ` &middot; ${formatNumber(loc.scans)} QR scans` : ''}
             </div>
           </td>
         </tr>`
@@ -312,24 +323,22 @@ export function renderReportHtml(r: CampaignReport, appUrl: string): string {
                 .map(
                   (t) => `<tr><td style="padding:8px 0;border-top:1px solid #27272a;color:#d4d4d8;font-size:13px;">
                     ${escapeHtml(t.type)}
-                    <span style="color:#71717a;">&middot; ${formatNumber(t.plays)} shown &middot; ${formatNumber(t.scans)} scans</span>
+                    <span style="color:#71717a;">&middot; ${formatNumber(t.plays)} shown${r.showScans ? ` &middot; ${formatNumber(t.scans)} scans` : ''}</span>
                   </td></tr>`
                 )
                 .join('')}
             </table>`
       : ''
 
-  // Exclusivity + SLA-credit lines, only when they apply.
+  // Exclusivity line, only when it applies.
   const extraLines: string[] = []
   if (r.exclusiveCount > 0) {
     extraLines.push(
       `You own your category exclusively at ${r.exclusiveCount} venue${r.exclusiveCount === 1 ? '' : 's'} this month.`
     )
   }
-  if (r.creditCents > 0) {
-    extraLines.push(
-      `We applied ${formatCents(r.creditCents)} in uptime credit for screens that ran below our guarantee.`
-    )
+  if (!r.showScans) {
+    extraLines.push('QR scan analytics are coming soon with Loop Insights.')
   }
   const extraHtml = extraLines.length
     ? `<div style="margin-top:20px;padding:12px 14px;background:#111113;border:1px solid #27272a;border-radius:10px;color:#d4d4d8;font-size:13px;line-height:1.5;">${extraLines
@@ -338,7 +347,7 @@ export function renderReportHtml(r: CampaignReport, appUrl: string): string {
     : ''
 
   const scanRate =
-    r.scansPer1000 != null
+    r.showScans && r.scansPer1000 != null
       ? `<div style="margin-top:10px;color:#71717a;font-size:12px;">${formatNumber(r.scansPer1000)} scans per 1,000 times shown</div>`
       : ''
 
@@ -361,15 +370,19 @@ export function renderReportHtml(r: CampaignReport, appUrl: string): string {
 
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
               <tr>
-                <td width="50%" style="padding:14px;background:#111113;border:1px solid #27272a;border-radius:10px;">
+                <td width="${r.showScans ? '50%' : '100%'}" style="padding:14px;background:#111113;border:1px solid #27272a;border-radius:10px;">
                   <div style="color:#71717a;font-size:12px;">Times shown</div>
                   <div style="margin-top:4px;color:#fafafa;font-size:24px;font-weight:700;">${formatNumber(r.totalPlays)}</div>
                 </td>
-                <td width="12"></td>
+                ${
+                  r.showScans
+                    ? `<td width="12"></td>
                 <td width="50%" style="padding:14px;background:#111113;border:1px solid #27272a;border-radius:10px;">
                   <div style="color:#71717a;font-size:12px;">QR scans</div>
                   <div style="margin-top:4px;color:#fafafa;font-size:24px;font-weight:700;">${formatNumber(r.totalScans)}</div>
-                </td>
+                </td>`
+                    : ''
+                }
               </tr>
             </table>
             ${scanRate}
@@ -388,7 +401,11 @@ export function renderReportHtml(r: CampaignReport, appUrl: string): string {
             </div>
 
             <p style="margin:22px 0 0;color:#52525b;font-size:11px;line-height:1.5;">
-              Times shown and QR scans are measured on the screens themselves, counted only during each venue's open hours. Numbers reflect the screens your ad ran on this month.
+              ${
+                r.showScans
+                  ? 'Times shown and QR scans are measured on the screens themselves, counted only during each venue&apos;s open hours.'
+                  : 'Times shown is measured on the screens themselves, counted only during each venue&apos;s open hours.'
+              } Numbers reflect the screens your ad ran on this month.
             </p>
           </td>
         </tr>

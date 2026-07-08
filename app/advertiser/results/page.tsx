@@ -2,9 +2,12 @@ import Link from 'next/link'
 import { Plus, BarChart3 } from 'lucide-react'
 import { requireProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { hasInsightsMembership } from '@/lib/membership'
 import { Card, CardContent } from '@/components/ui/card'
 import { buttonVariants } from '@/components/ui/button'
 import { MoneyStat } from '@/components/app/MoneyStat'
+import { ScanLocked } from '@/components/app/ScanLocked'
 import { formatCents, formatNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import {
@@ -40,7 +43,7 @@ export default async function ResultsPage() {
     campaignIds.length
       ? supabase
           .from('ad_placements')
-          .select('tv:tvs(id, venue:venues(id, name, lat, lng, foot_traffic_estimate))')
+          .select('tv:tvs(id, venue:venues(id, name, lat, lng, foot_traffic_estimate, median_daily_customers))')
           .in('campaign_id', campaignIds)
           .eq('status', 'active')
       : Promise.resolve({ data: [] as unknown[] }),
@@ -58,6 +61,7 @@ export default async function ResultsPage() {
         lat: number | null
         lng: number | null
         foot_traffic_estimate: number
+        median_daily_customers: number | null
       } | null
     } | null
   }
@@ -72,6 +76,7 @@ export default async function ResultsPage() {
         lat: v.lat,
         lng: v.lng,
         footTraffic: v.foot_traffic_estimate ?? 0,
+        medianDailyCustomers: v.median_daily_customers ?? null,
         tvIds: [],
       }
     if (p.tv?.id && !e.tvIds.includes(p.tv.id)) e.tvIds.push(p.tv.id)
@@ -86,6 +91,8 @@ export default async function ResultsPage() {
   const maxScans = Math.max(1, ...series.map((d) => d.scans))
 
   const hasData = venues.length > 0
+  // QR scan numbers are gated behind the Insights membership (coming soon).
+  const showScans = await hasInsightsMembership(createAdminClient(), profile.id)
 
   return (
     <div className="space-y-6">
@@ -116,65 +123,75 @@ export default async function ResultsPage() {
             <div className="rounded-xl border border-border bg-card/60 px-4 py-3.5">
               <MoneyStat label="Locations" value={formatNumber(venues.length)} />
             </div>
-            <div className="rounded-xl border border-border bg-card/60 px-4 py-3.5">
-              <MoneyStat label={`Scans · ${PERF_WINDOW_DAYS}d`} value={formatNumber(totalScans)} />
-            </div>
+            {showScans ? (
+              <div className="rounded-xl border border-border bg-card/60 px-4 py-3.5">
+                <MoneyStat label={`Scans · ${PERF_WINDOW_DAYS}d`} value={formatNumber(totalScans)} />
+              </div>
+            ) : (
+              <ScanLocked variant="tile" label={`Scans · ${PERF_WINDOW_DAYS}d`} />
+            )}
             <div className="rounded-xl border border-border bg-card/60 px-4 py-3.5">
               <MoneyStat label="Spend / mo" value={formatCents(spend)} />
             </div>
           </div>
 
-          {/* Daily QR scans — measured */}
-          <Card>
-            <CardContent className="p-5">
-              <div className="flex flex-wrap items-end justify-between gap-2">
-                <div>
-                  <p className="text-sm font-medium">Daily QR scans</p>
-                  <p className="text-xs text-muted-foreground">Last {PERF_WINDOW_DAYS} days · measured</p>
-                </div>
-                <p className="text-xs text-muted-foreground">{formatNumber(totalScans)} total</p>
-              </div>
-              {totalScans === 0 ? (
-                <p className="mt-4 text-sm text-muted-foreground">
-                  No scans yet. They appear here as people scan the on-screen code on your ad.
-                </p>
-              ) : (
-                <div className="mt-4 flex h-28 items-end gap-px">
-                  {series.map((d) => (
-                    <div
-                      key={d.date}
-                      className="flex-1 rounded-t-sm bg-primary/80"
-                      style={{ height: `${Math.max(2, (d.scans / maxScans) * 100)}%` }}
-                      title={`${d.date}: ${d.scans} scan${d.scans === 1 ? '' : 's'}`}
-                    />
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Best-performing locations */}
-          <section className="space-y-3">
-            <h2 className="font-heading text-lg font-semibold">Top locations</h2>
-            <Card className="py-0">
-              <CardContent className="divide-y divide-border p-0">
-                {rows.map((r) => (
-                  <div key={r.venueId} className="px-4 py-3.5">
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="truncate font-medium">{r.name}</span>
-                      <span className="shrink-0 font-heading text-lg font-bold tabular-nums">
-                        {formatNumber(r.scans)}
-                        <span className="ml-1 text-xs font-normal text-muted-foreground">scans</span>
-                      </span>
+          {showScans ? (
+            <>
+              {/* Daily QR scans — measured */}
+              <Card>
+                <CardContent className="p-5">
+                  <div className="flex flex-wrap items-end justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-medium">Daily QR scans</p>
+                      <p className="text-xs text-muted-foreground">Last {PERF_WINDOW_DAYS} days · measured</p>
                     </div>
+                    <p className="text-xs text-muted-foreground">{formatNumber(totalScans)} total</p>
                   </div>
-                ))}
-              </CardContent>
-            </Card>
-            <p className="text-xs text-muted-foreground">
-              QR scans are measured — each one is a real person who scanned your on-screen code.
-            </p>
-          </section>
+                  {totalScans === 0 ? (
+                    <p className="mt-4 text-sm text-muted-foreground">
+                      No scans yet. They appear here as people scan the on-screen code on your ad.
+                    </p>
+                  ) : (
+                    <div className="mt-4 flex h-28 items-end gap-px">
+                      {series.map((d) => (
+                        <div
+                          key={d.date}
+                          className="flex-1 rounded-t-sm bg-primary/80"
+                          style={{ height: `${Math.max(2, (d.scans / maxScans) * 100)}%` }}
+                          title={`${d.date}: ${d.scans} scan${d.scans === 1 ? '' : 's'}`}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Best-performing locations */}
+              <section className="space-y-3">
+                <h2 className="font-heading text-lg font-semibold">Top locations</h2>
+                <Card className="py-0">
+                  <CardContent className="divide-y divide-border p-0">
+                    {rows.map((r) => (
+                      <div key={r.venueId} className="px-4 py-3.5">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="truncate font-medium">{r.name}</span>
+                          <span className="shrink-0 font-heading text-lg font-bold tabular-nums">
+                            {formatNumber(r.scans)}
+                            <span className="ml-1 text-xs font-normal text-muted-foreground">scans</span>
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+                <p className="text-xs text-muted-foreground">
+                  QR scans are measured — each one is a real person who scanned your on-screen code.
+                </p>
+              </section>
+            </>
+          ) : (
+            <ScanLocked variant="panel" />
+          )}
         </>
       )}
     </div>

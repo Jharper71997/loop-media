@@ -19,8 +19,8 @@ export default async function RegisterVenuePage() {
         <h1 className="text-2xl font-semibold tracking-tight">Register a location</h1>
         <p className="text-sm text-muted-foreground">
           Tell us about your space and we&apos;ll get you set up to run the loop on your own TV. You
-          can register as many locations as you run, and each gets 2 free promo slots to advertise
-          your own venue.
+          can register as many locations as you run, and once a venue is live you get a code for
+          100% off advertising your business across the network.
         </p>
       </div>
 

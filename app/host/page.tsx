@@ -28,8 +28,6 @@ type RunningPlacement = {
   ad: { title: string; creative_type: string; owner_kind: string } | null
 }
 
-const PROMO_SLOTS = 2
-
 export default async function HostHome() {
   const profile = await requireProfile()
   const supabase = await createClient()
@@ -40,6 +38,10 @@ export default async function HostHome() {
     .eq('host_user_id', profile.id)
     .order('name')
   const venues = (venuesData ?? []) as unknown as VenueWithTvs[]
+
+  // The host's 100%-off advertising comp code, minted when a venue goes live.
+  const compCode =
+    venues.find((v) => v.status === 'active' && v.comp_promo_code)?.comp_promo_code ?? null
 
   const tvIds = venues.flatMap((v) => v.tvs.map((t) => t.id))
 
@@ -66,14 +68,6 @@ export default async function HostHome() {
       paidAdsByVenue.set(vid, (paidAdsByVenue.get(vid) ?? 0) + 1)
     }
   }
-
-  // Host promos used = non-rejected ads the host owns (matches the DB 3-slot cap).
-  const { count: promosUsed } = await supabase
-    .from('ads')
-    .select('id', { count: 'exact', head: true })
-    .eq('owner_user_id', profile.id)
-    .eq('owner_kind', 'host')
-    .neq('status', 'rejected')
 
   // This host's own paid campaigns running on OTHER venues' screens (they
   // advertise from /host/advertise). Surfaced so they manage it without leaving.
@@ -142,7 +136,7 @@ export default async function HostHome() {
             {venues.length > 1 ? 'Your venues' : 'Your venue'}
           </h1>
           <p className="text-sm text-muted-foreground">
-            Screen status, what&apos;s playing right now, and your free promo slots.
+            Screen status, what&apos;s playing right now, and your advertising perks.
           </p>
         </div>
         {venues.length > 0 && (
@@ -157,7 +151,7 @@ export default async function HostHome() {
           <CardContent className="flex flex-col items-center gap-4 p-8 text-center">
             <p className="text-sm text-muted-foreground">
               No venue is linked to your account yet. Register your space to run the loop on your
-              own TV, you&apos;ll also unlock 2 free promo slots.
+              own TV — once it&apos;s live, you can advertise across the network for free.
             </p>
             <Link href="/host/register" className={buttonVariants()}>
               <MapPin className="size-4" /> Register your venue
@@ -294,19 +288,25 @@ export default async function HostHome() {
             </Card>
           </section>
 
-          {/* Promo CTA */}
-          <section className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border bg-card p-5">
-            <div className="text-sm">
-              <p className="font-medium">Promote your business — free</p>
-              <p className="text-muted-foreground">
-                You&apos;ve used {promosUsed ?? 0} of your {PROMO_SLOTS} free promo slots on other
-                Loop screens around town.
-              </p>
-            </div>
-            <Link href="/host/promos" className={cn(buttonVariants(), 'shrink-0')}>
-              <Megaphone className="size-4" /> Manage promos
-            </Link>
-          </section>
+          {/* Advertising comp code — the host's free ads perk */}
+          {compCode && (
+            <section className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-primary/30 bg-primary/5 p-5">
+              <div className="flex items-start gap-3 text-sm">
+                <Megaphone className="mt-0.5 size-5 shrink-0 text-primary" />
+                <div>
+                  <p className="font-medium">Your advertising is on us</p>
+                  <p className="text-muted-foreground">
+                    Enter code{' '}
+                    <span className="font-mono font-semibold text-foreground">{compCode}</span> at
+                    checkout for 100% off your ads across the network.
+                  </p>
+                </div>
+              </div>
+              <Link href="/host/advertise" className={cn(buttonVariants(), 'shrink-0')}>
+                <Megaphone className="size-4" /> Advertise for free
+              </Link>
+            </section>
+          )}
 
           {/* Your ads running on other venues' screens */}
           {myCampaigns.length > 0 && (
@@ -336,22 +336,25 @@ export default async function HostHome() {
             </section>
           )}
 
-          {/* Advertise on other screens — host discount */}
-          <section className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-primary/30 bg-primary/5 p-5">
-            <div className="flex items-start gap-3 text-sm">
-              <Percent className="mt-0.5 size-5 shrink-0 text-primary" />
-              <div>
-                <p className="font-medium">Advertise across the whole network — 20% off</p>
-                <p className="text-muted-foreground">
-                  Your hardware is part of Loop Network, so you get 20% off every screen on the map.
-                  The discount is applied automatically at checkout.
-                </p>
+          {/* Advertise on other screens — host discount. Hidden once the host has
+              a 100%-off comp code (that card covers it). */}
+          {!compCode && (
+            <section className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-primary/30 bg-primary/5 p-5">
+              <div className="flex items-start gap-3 text-sm">
+                <Percent className="mt-0.5 size-5 shrink-0 text-primary" />
+                <div>
+                  <p className="font-medium">Advertise across the whole network — 20% off</p>
+                  <p className="text-muted-foreground">
+                    Your hardware is part of Loop Network, so you get 20% off every screen on the
+                    map. The discount is applied automatically at checkout.
+                  </p>
+                </div>
               </div>
-            </div>
-            <Link href="/host/advertise" className={cn(buttonVariants(), 'shrink-0')}>
-              <MapPin className="size-4" /> Advertise on other screens
-            </Link>
-          </section>
+              <Link href="/host/advertise" className={cn(buttonVariants(), 'shrink-0')}>
+                <MapPin className="size-4" /> Advertise on other screens
+              </Link>
+            </section>
+          )}
         </>
       )}
     </div>

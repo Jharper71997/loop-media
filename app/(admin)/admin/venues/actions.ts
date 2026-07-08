@@ -11,6 +11,7 @@ import {
   DEFAULT_LOOP_SECONDS,
   DEFAULT_SLOT_SECONDS,
 } from '@/lib/tv'
+import { createHostCompCode } from '@/lib/hostComp'
 import type { PriceTier } from '@/lib/db.types'
 
 export interface VenueInput {
@@ -25,6 +26,8 @@ export interface VenueInput {
   category_id: string | null
   host_user_id: string | null
   foot_traffic_estimate: number
+  // Host-stated typical customers per day; drives reach directly when set (>0).
+  median_daily_customers: number | null
   price_tier: PriceTier | null
   // Optional per-venue monthly price in cents. null = use the tier price.
   price_cents_override: number | null
@@ -65,6 +68,11 @@ export async function saveVenue(input: VenueInput) {
   const payload = {
     ...rest,
     host_user_id: rest.host_user_id || null,
+    // 0/empty means "not stated" -> null, so reach falls back to foot traffic / 30.
+    median_daily_customers:
+      rest.median_daily_customers && rest.median_daily_customers > 0
+        ? rest.median_daily_customers
+        : null,
     // Empty time inputs -> null so the fallback hours apply; no days selected ->
     // null (treated as open every day by the filter).
     business_open: rest.business_open || null,
@@ -126,6 +134,26 @@ export async function setVenueStatus(id: string, status: 'active' | 'inactive') 
   const supabase = await createClient()
   const { error } = await supabase.from('venues').update({ status }).eq('id', id)
   if (error) return { error: error.message }
+
+  // When a venue goes live, mint the host's 100%-off advertising comp code
+  // (readable, from the business name) once. Best-effort — never block activation
+  // on a Stripe hiccup; an admin can re-toggle to retry.
+  if (status === 'active' && process.env.STRIPE_SECRET_KEY) {
+    try {
+      const { data: v } = await supabase
+        .from('venues')
+        .select('name, comp_promo_code')
+        .eq('id', id)
+        .maybeSingle()
+      if (v && !v.comp_promo_code) {
+        const code = await createHostCompCode(v.name)
+        await supabase.from('venues').update({ comp_promo_code: code }).eq('id', id)
+      }
+    } catch (e) {
+      console.error('Host comp code minting failed for venue', id, e)
+    }
+  }
+
   revalidatePath('/admin/venues')
   return { error: null }
 }

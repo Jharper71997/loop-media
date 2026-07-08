@@ -9,7 +9,6 @@ import {
   MapPin,
   User,
   Store,
-  Megaphone,
   MonitorPlay,
   type LucideIcon,
 } from 'lucide-react'
@@ -30,7 +29,6 @@ const TABS: Record<AppRole, Tab[]> = {
   host: [
     { href: '/host', label: 'Venue', icon: Store, exact: true },
     { href: '/host/advertise', label: 'Advertise', icon: MonitorPlay },
-    { href: '/host/promos', label: 'Promos', icon: Megaphone },
     { href: '/host/account', label: 'Account', icon: User },
   ],
 }

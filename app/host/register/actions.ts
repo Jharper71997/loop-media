@@ -5,6 +5,7 @@ import { requireProfile } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { geocodeAddress } from '@/lib/geocode'
 import { genPairingCode, TV_PAIRING_CODE_LEN, DEFAULT_LOOP_SECONDS, DEFAULT_SLOT_SECONDS } from '@/lib/tv'
+import { AGREEMENT_VERSION } from '@/lib/agreement'
 
 export interface RegisterVenueInput {
   name: string
@@ -15,10 +16,16 @@ export interface RegisterVenueInput {
   category_id: string | null
   venue_type: string | null
   foot_traffic_estimate: number
+  // Host-stated typical customers per day; drives reach directly when set.
+  median_daily_customers?: number | null
   contact_phone: string | null
   business_open?: string
   business_close?: string
   business_days?: number[]
+  // Typed signature + version of the Advertising Service Agreement the host
+  // accepts at registration (see lib/agreement.ts).
+  agreement_signer_name: string
+  agreement_version?: string
   // Network details so we can program the venue's Pi before shipping it.
   network_type?: 'wifi' | 'ethernet'
   wifi_ssid?: string | null
@@ -83,6 +90,9 @@ export async function requestVenue(input: RegisterVenueInput) {
     return { error: 'Enter your city and state.' }
   }
   if (!input.postal_code.trim()) return { error: 'Enter your ZIP code.' }
+  if (!input.agreement_signer_name?.trim()) {
+    return { error: 'Type your name to sign the Advertising Service Agreement.' }
+  }
 
   const admin = createAdminClient()
 
@@ -122,11 +132,18 @@ export async function requestVenue(input: RegisterVenueInput) {
       venue_type: input.venue_type?.trim() || null,
       category_id: input.category_id,
       foot_traffic_estimate: Math.max(0, Math.round(input.foot_traffic_estimate || 0)),
+      median_daily_customers:
+        input.median_daily_customers && input.median_daily_customers > 0
+          ? Math.round(input.median_daily_customers)
+          : null,
       contact_name: profile.full_name || null,
       contact_email: profile.email,
       contact_phone: input.contact_phone?.trim() || null,
       host_user_id: profile.id,
       status: 'inactive',
+      agreement_signed_at: new Date().toISOString(),
+      agreement_signer_name: input.agreement_signer_name.trim(),
+      agreement_version: input.agreement_version || AGREEMENT_VERSION,
       business_open: input.business_open || '10:00',
       business_close: input.business_close || '22:00',
       business_days:

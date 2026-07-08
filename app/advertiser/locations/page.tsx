@@ -2,6 +2,8 @@ import Link from 'next/link'
 import { Plus, MapPin } from 'lucide-react'
 import { requireProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { hasInsightsMembership } from '@/lib/membership'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
@@ -126,13 +128,15 @@ export default async function LocationsPage() {
       ]
     : [34.7541, -77.4302]
   const liveCount = venues.filter((v) => v.live).length
+  // QR scan numbers are gated behind the Insights membership (coming soon).
+  const showScans = await hasInsightsMembership(createAdminClient(), profile.id)
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="font-heading text-2xl font-bold tracking-tight">Locations</h1>
         <p className="text-sm text-muted-foreground">
-          Every venue your ad plays at — live status, scans, and the map.
+          Every venue your ad plays at — live status{showScans ? ', scans,' : ''} and the map.
         </p>
       </div>
 
@@ -184,7 +188,7 @@ export default async function LocationsPage() {
                       <p className="truncate font-medium">{v.name}</p>
                       <p className="truncate text-xs text-muted-foreground">
                         {[v.city, v.state].filter(Boolean).join(', ') || 'Local venue'}
-                        {v.scans > 0 && (
+                        {showScans && v.scans > 0 && (
                           <>
                             {' · '}
                             {formatNumber(v.scans)} scan{v.scans === 1 ? '' : 's'}
