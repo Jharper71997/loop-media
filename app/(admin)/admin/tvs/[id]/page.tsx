@@ -381,9 +381,10 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
             <div>
               <p className="text-sm font-medium">Loop capacity</p>
               <p className="text-xs text-muted-foreground">
-                Set how many ad spots this screen sells and how long each slot runs. The always-on
-                house slides (Brew Loop, “Advertise here”, trivia) play on top and are counted in the
-                loop below.
+                Set how many ad spots this screen sells and the slot length used to size the loop.
+                The always-on house slides (Brew Loop, “Advertise here”, trivia) play on top and are
+                counted in the loop below. The exact on-screen time for each ad is set per ad in the
+                loop list further down.
               </p>
             </div>
             <LoopConfig
