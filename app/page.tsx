@@ -319,9 +319,9 @@ export default async function Home() {
               <span className="text-xl font-bold text-muted-foreground"> / screen / month</span>
             </p>
             <p className="max-w-md text-sm text-muted-foreground">
-              Pricing scales with each location&apos;s traffic, starting at $50/screen with a $200/mo
-              minimum. Cancel anytime, and we can design your ad if you need it. No long-term
-              contracts, and you always see the price before you buy.
+              Pricing scales with each location&apos;s traffic, starting at $50/screen. Pay only for
+              the screens you pick, no minimum. Cancel anytime, and we can design your ad if you need
+              it. No long-term contracts, and you always see the price before you buy.
             </p>
             <Link href="/signup" className={cn(buttonVariants({ size: 'lg' }))}>
               Start advertising
