@@ -19,7 +19,6 @@ import type { Tv } from '@/lib/db.types'
 import { RegenerateButton } from '../RegenerateButton'
 import { deleteTv } from '../actions'
 import {
-  TvLoopControls,
   RemovePlacementButton,
   AddPlacement,
   AdDurationField,
@@ -387,18 +386,6 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
           Created {formatDateTime(tv.created_at)}
         </p>
 
-        {/* Loop config */}
-        <Card>
-          <CardContent className="space-y-3 p-5">
-            <p className="text-sm font-medium">Loop configuration</p>
-            <TvLoopControls
-              id={tv.id}
-              loopLength={tv.loop_length_seconds}
-              slotSeconds={tv.slot_seconds}
-            />
-          </CardContent>
-        </Card>
-
         {/* Current loop */}
         <Card>
           <CardContent className="space-y-4 p-5">
@@ -461,6 +448,7 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
                       <span className="shrink-0 text-xs text-muted-foreground">plays full video</span>
                     ) : p.ad?.id ? (
                       <AdDurationField
+                        key={`${p.ad.id}-${p.ad.duration_seconds}`}
                         tvId={tv.id}
                         adId={p.ad.id}
                         seconds={p.ad.duration_seconds ?? 15}

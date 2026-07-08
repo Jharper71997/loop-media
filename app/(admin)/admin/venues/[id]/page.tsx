@@ -260,7 +260,7 @@ export default async function VenueDetail({ params }: { params: Promise<{ id: st
                             {tv.pairing_code ?? '—'}
                           </code>
                           <span className="text-xs text-muted-foreground">
-                            {Math.round(tv.loop_length_seconds / 60)}m / {tv.slot_seconds}s loop
+                            {Math.max(1, Math.floor(tv.loop_length_seconds / tv.slot_seconds))} ad slots
                           </span>
                         </div>
                         <p className="mt-1 text-xs text-muted-foreground">

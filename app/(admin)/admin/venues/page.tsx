@@ -238,7 +238,7 @@ export default async function VenuesPage({
                         </div>
                         <div className="text-xs text-muted-foreground">
                           Last seen {timeAgo(tv.last_heartbeat_at)} ·{' '}
-                          {Math.round(tv.loop_length_seconds / 60)}m / {tv.slot_seconds}s loop
+                          {Math.max(1, Math.floor(tv.loop_length_seconds / tv.slot_seconds))} ad slots
                         </div>
                       </div>
                       <div className="flex flex-col items-end gap-2">
