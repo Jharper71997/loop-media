@@ -29,6 +29,7 @@ const TABS: Record<AppRole, Tab[]> = {
   host: [
     { href: '/host', label: 'Venue', icon: Store, exact: true },
     { href: '/host/advertise', label: 'Advertise', icon: MonitorPlay },
+    { href: '/host/results', label: 'Results', icon: BarChart3 },
     { href: '/host/account', label: 'Account', icon: User },
   ],
 }

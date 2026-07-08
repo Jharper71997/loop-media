@@ -61,8 +61,9 @@ export function AppShell({
           </Link>
           <div className="flex items-center gap-1.5">
             {/* The guided buy flow hides the tab bar for both roles. A host inside
-                it would otherwise have no signposted way back to Venue/Promos/
-                Account, so give them a persistent "Hosting" exit. */}
+                it would otherwise have no signposted way back to their host tabs
+                (Venue/Advertise/Results/Account), so give them a persistent
+                "Hosting" exit. */}
             {role === 'host' && hideNav && (
               <Link
                 href="/host"
