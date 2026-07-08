@@ -782,7 +782,7 @@ function TriviaSlide({ venueId, qrImage }: { venueId: string; qrImage: string })
         </div>
         {lb.length ? (
           <ol className="mt-4 space-y-2">
-            {lb.slice(0, 2).map((p, i) => (
+            {lb.slice(0, 3).map((p, i) => (
               <li key={i} className="flex justify-between text-3xl">
                 <span>
                   {i + 1}. {p.name}

@@ -71,7 +71,7 @@ export async function GET(req: Request) {
   const top = [...byPlayer.entries()]
     .filter(([, s]) => s > 0)
     .sort((a, b) => b[1] - a[1])
-    .slice(0, 2)
+    .slice(0, 3)
   let leaderboard: { name: string; score: number }[] = []
   if (top.length) {
     const { data: players } = await supabase
