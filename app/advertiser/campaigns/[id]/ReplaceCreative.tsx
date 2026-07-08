@@ -19,6 +19,8 @@ import {
   buildFilter,
   computeDraw,
   exportImageBlob,
+  validateCreativeFile,
+  CREATIVE_ACCEPT,
   type FilterPreset,
 } from '@/lib/adCreative'
 import { replaceCreative } from './actions'
@@ -67,6 +69,15 @@ export function ReplaceCreative({
   const filterStr = buildFilter(preset, brightness, contrast)
   const qcx = qrX ?? QR_DEFAULT.x
   const qcy = qrY ?? QR_DEFAULT.y
+
+  // Validate a chosen creative before accepting it (web-safe video, size cap) so a
+  // file that would silently fail on the TV is rejected here with a clear reason.
+  function pickFile(f: File | null) {
+    if (!f) return setFile(null)
+    const err = validateCreativeFile(f)
+    if (err) return toast.error(err)
+    setFile(f)
+  }
 
   // Object URL for the chosen file; resets the editor whenever the file changes.
   useEffect(() => {
@@ -238,9 +249,9 @@ export function ReplaceCreative({
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*,video/*"
+          accept={CREATIVE_ACCEPT}
           className="hidden"
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          onChange={(e) => pickFile(e.target.files?.[0] ?? null)}
         />
       </label>
       <CreativeFitNotice file={file} />

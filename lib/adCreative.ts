@@ -33,6 +33,30 @@ export type FilterPreset = (typeof FILTER_PRESETS)[number]['value']
 
 export const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
 
+// ---- Upload guards for advertiser creatives ----
+// A video must be a web-safe container the TV's browser can decode. A phone's .mov
+// (or an HEVC file) can preview fine on the advertiser's device yet silently fail to
+// play on the Fire Stick — so the ad they paid for never runs. We steer/accept only
+// mp4 + webm, and cap size so a creative loads fast over a venue's WiFi. Images pass
+// (they're re-encoded to a 16:9 PNG on upload). Use CREATIVE_ACCEPT on the file input
+// and validateCreativeFile() on selection in every uploader so the rule stays in one place.
+export const MAX_CREATIVE_MB = 50
+export const OK_VIDEO_TYPES = ['video/mp4', 'video/webm']
+export const CREATIVE_ACCEPT = 'image/*,video/mp4,video/webm'
+
+export function validateCreativeFile(file: File): string | null {
+  if (file.size > MAX_CREATIVE_MB * 1_000_000) {
+    return `That file is ${(file.size / 1_000_000).toFixed(0)} MB. Keep it under ${MAX_CREATIVE_MB} MB so it loads fast on the venue's screen.`
+  }
+  const isVideo = file.type.startsWith('video/')
+  const isImage = file.type.startsWith('image/')
+  if (!isVideo && !isImage) return 'Upload an image or a video file.'
+  if (isVideo && !OK_VIDEO_TYPES.includes(file.type)) {
+    return 'Please upload an MP4 (H.264) or WebM video. Other formats — like a .mov from an iPhone — may not play on the TV.'
+  }
+  return null
+}
+
 export function buildFilter(preset: FilterPreset, brightness: number, contrast: number): string {
   const base = FILTER_PRESETS.find((p) => p.value === preset)?.css ?? ''
   return `${base} brightness(${brightness}%) contrast(${contrast}%)`.trim()

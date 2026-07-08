@@ -31,6 +31,8 @@ import {
   computeDraw,
   clampPan,
   exportImageBlob,
+  validateCreativeFile,
+  CREATIVE_ACCEPT,
   type FilterPreset,
 } from '@/lib/adCreative'
 import { CART_KEY } from '../browse/BrowseClient'
@@ -97,6 +99,15 @@ export function CreativeStep({
 
   const isVideo = !!file && file.type.startsWith('video')
   const filterStr = buildFilter(preset, brightness, contrast)
+
+  // Validate a chosen creative before accepting it (web-safe video, size cap) so a
+  // file that would silently fail on the TV is rejected here with a clear reason.
+  function pickFile(f: File | null) {
+    if (!f) return setFile(null)
+    const err = validateCreativeFile(f)
+    if (err) return toast.error(err)
+    setFile(f)
+  }
 
   // The scan destination: the typed website URL.
   const qrTarget = useMemo(() => qrUrl.trim(), [qrUrl])
@@ -416,9 +427,9 @@ export function CreativeStep({
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*,video/*"
+                accept={CREATIVE_ACCEPT}
                 className="hidden"
-                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                onChange={(e) => pickFile(e.target.files?.[0] ?? null)}
               />
             </label>
             <CreativeFitNotice file={file} />

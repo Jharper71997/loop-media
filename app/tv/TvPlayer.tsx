@@ -88,6 +88,14 @@ const clampOverscan = (n: number) => Math.max(0, Math.min(12, n))
 const STAGE_W = 1920
 const STAGE_H = 1080
 
+// Video ads advance on their own `ended` event. These bound a video that stalls or
+// never fires ended/error inside a TV WebView (a bad/unsupported upload), so it can
+// never freeze the whole loop on one slide: once metadata gives us the real clip
+// length we cap at it + a grace; until then a hard ceiling advances anyway. Generous
+// so a normal ad video is never cut short.
+const VIDEO_GRACE_MS = 4000
+const HARD_VIDEO_CEILING_MS = 180_000
+
 function buildPlaylist(m: Manifest): Slide[] {
   const slot = m.tv.slot_seconds || 15
   // Static QR-less trivia cards were retired — the live (QR) trivia game is the
@@ -665,16 +673,7 @@ function Player({
       <div className="absolute overflow-hidden" style={{ inset: `${overscanPct}%` }}>
       {slide.kind === 'ad' ? (
         slide.creative_type === 'video' ? (
-          <video
-            key={slide.id + index}
-            src={slide.creative_url}
-            className="lm-fade h-full w-full object-contain"
-            autoPlay
-            muted
-            playsInline
-            onEnded={advance}
-            onError={advance}
-          />
+          <VideoAdSlide key={slide.id + index} src={slide.creative_url} onDone={advance} />
         ) : (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -682,6 +681,9 @@ function Player({
             src={slide.creative_url}
             alt={slide.title}
             className="lm-fade h-full w-full object-contain"
+            // A broken / unreadable image ad skips to the next slide instead of sitting
+            // as a broken-image icon for the whole slot.
+            onError={advance}
           />
         )
       ) : slide.kind === 'trivia' ? (
@@ -825,6 +827,58 @@ function Player({
   )
 }
 
+// A video ad that manages its own advance. Normally it advances on the clip's natural
+// `ended`. But an uploaded creative can stall or silently fail to fire ended/error in a
+// TV WebView (wrong codec/container, a truncated file) — which would otherwise freeze
+// the loop on this one slide forever. So we also run a watchdog: onError advances at
+// once; once metadata loads we cap at the real duration + a grace; and until metadata
+// loads (or if it never does) a hard ceiling advances anyway. A bad video can therefore
+// never brick a screen — worst case it's skipped.
+function VideoAdSlide({ src, onDone }: { src: string; onDone: () => void }) {
+  const ref = useRef<HTMLVideoElement | null>(null)
+  // Hold the latest onDone in a ref so the watchdog effect arms once per src, not on
+  // every parent re-render (the 1s clock tick would otherwise keep re-arming it).
+  const doneRef = useRef(onDone)
+  doneRef.current = onDone
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    let fired = false
+    const finish = () => {
+      if (fired) return
+      fired = true
+      doneRef.current()
+    }
+    // Hard ceiling until (and unless) metadata tells us the real duration.
+    let watchdog = window.setTimeout(finish, HARD_VIDEO_CEILING_MS)
+    const onMeta = () => {
+      if (Number.isFinite(el.duration) && el.duration > 0) {
+        window.clearTimeout(watchdog)
+        watchdog = window.setTimeout(finish, el.duration * 1000 + VIDEO_GRACE_MS)
+      }
+    }
+    el.addEventListener('loadedmetadata', onMeta)
+    el.addEventListener('ended', finish)
+    el.addEventListener('error', finish)
+    return () => {
+      window.clearTimeout(watchdog)
+      el.removeEventListener('loadedmetadata', onMeta)
+      el.removeEventListener('ended', finish)
+      el.removeEventListener('error', finish)
+    }
+  }, [src])
+  return (
+    <video
+      ref={ref}
+      src={src}
+      className="lm-fade h-full w-full object-contain"
+      autoPlay
+      muted
+      playsInline
+    />
+  )
+}
+
 // A fixed 1920x1080 design canvas scaled to fit the device's viewport as a whole. The
 // child is authored at 1080p; we scale it by the SMALLER of the width/height ratios so
 // it always fits (letterboxed on the black field) and never overflows — an identical
@@ -834,12 +888,20 @@ function Player({
 function StageFit({ children }: { children: React.ReactNode }) {
   const [scale, setScale] = useState(1)
   useEffect(() => {
-    const fit = () =>
-      setScale(Math.min(window.innerWidth / STAGE_W, window.innerHeight / STAGE_H))
+    const fit = () => {
+      const s = Math.min(window.innerWidth / STAGE_W, window.innerHeight / STAGE_H)
+      // Guard a transient 0 / invalid viewport (some TV WebViews report 0 on the
+      // first tick) so the canvas can never scale to nothing and blank the screen.
+      setScale(Number.isFinite(s) && s > 0 ? s : 1)
+    }
     fit()
+    // Re-measure once after first paint in case the WebView reported a stale size
+    // at mount, then on every resize/orientation change thereafter.
+    const raf = requestAnimationFrame(fit)
     window.addEventListener('resize', fit)
     window.addEventListener('orientationchange', fit)
     return () => {
+      cancelAnimationFrame(raf)
       window.removeEventListener('resize', fit)
       window.removeEventListener('orientationchange', fit)
     }
