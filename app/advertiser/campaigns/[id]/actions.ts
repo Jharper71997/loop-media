@@ -8,7 +8,12 @@ import { stripe, appUrl } from '@/lib/stripe'
 import { activatePlacementsIfReady } from '@/lib/placement'
 import { hasUnlimitedChanges } from '@/lib/membership'
 import { applyAdChange } from '@/lib/adChanges'
-import { AD_CHANGE_FEE_CENTS, UNLIMITED_CHANGES_CENTS, CREATIVE_REFRESH_CENTS } from '@/lib/fees'
+import {
+  AD_CHANGE_FEE_CENTS,
+  AD_CHANGE_FREE_EVERY_DAYS,
+  UNLIMITED_CHANGES_CENTS,
+  CREATIVE_REFRESH_CENTS,
+} from '@/lib/fees'
 import {
   resolveCartCents,
   resolveAdvertiserContext,
@@ -353,8 +358,9 @@ export async function relaunchCampaign(
 //     the change is applied for free immediately. The ad goes back to review
 //     ('pending'); the TV loop only plays approved ads, so the unreviewed
 //     creative never reaches a screen, and placements + billing stay untouched.
-//   * Everyone else: stage the change and return a $10 Checkout URL. The Stripe
-//     webhook applies the creative once the fee is paid.
+//   * Everyone else: the FIRST change each rolling 7 days is free (applied
+//     immediately); any further change in that window is staged behind a $10
+//     Checkout URL, and the Stripe webhook applies the creative once paid.
 //
 // Returns { applied } (live now) or { checkoutUrl } (pay first) or { error }.
 export async function replaceCreative(
@@ -370,10 +376,27 @@ export async function replaceCreative(
 
   const admin = createAdminClient()
   const profile = await requireProfile()
-  // Members (active unlimited-changes membership) swap creatives free; everyone
-  // else pays the $10 fee via the Checkout below. Demo / no-Stripe setups are free
-  // too (nothing to charge against).
-  const free = (await hasUnlimitedChanges(admin, profile.id)) || !process.env.STRIPE_SECRET_KEY
+  // Fee policy: members (unlimited-changes membership) and demo/no-Stripe setups
+  // are always free. Everyone else gets ONE free change per rolling 7 days; a
+  // further change in that window pays the $10 fee at Checkout. "Used" = a change
+  // that actually went live (status 'applied') within the window — staged-but-
+  // abandoned or canceled changes don't burn the free one.
+  const isMember = await hasUnlimitedChanges(admin, profile.id)
+  const noStripe = !process.env.STRIPE_SECRET_KEY
+  let usedFreeThisWeek = false
+  if (!isMember && !noStripe) {
+    const since = new Date(
+      Date.now() - AD_CHANGE_FREE_EVERY_DAYS * 24 * 60 * 60 * 1000
+    ).toISOString()
+    const { count } = await admin
+      .from('ad_change_requests')
+      .select('id', { count: 'exact', head: true })
+      .eq('campaign_id', id)
+      .eq('status', 'applied')
+      .gte('applied_at', since)
+    usedFreeThisWeek = (count ?? 0) > 0
+  }
+  const free = isMember || noStripe || !usedFreeThisWeek
 
   // Record the change either way (audit + the webhook needs the row to apply).
   const { data: change, error: insErr } = await admin

@@ -33,8 +33,8 @@ export function MembershipUpsell() {
         <div>
           <p className="font-medium">Change your ad as often as you like</p>
           <p className="text-xs text-muted-foreground">
-            Skip the {formatCents(AD_CHANGE_FEE_CENTS)} per change. Unlimited changes for{' '}
-            {formatCents(UNLIMITED_CHANGES_CENTS)}/mo.
+            Your first change each week is free. Skip the {formatCents(AD_CHANGE_FEE_CENTS)} on extra
+            changes — unlimited for {formatCents(UNLIMITED_CHANGES_CENTS)}/mo.
           </p>
         </div>
       </div>

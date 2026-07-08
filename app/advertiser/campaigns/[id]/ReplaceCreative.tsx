@@ -221,8 +221,8 @@ export function ReplaceCreative({
       </div>
       <p className="text-xs text-muted-foreground">
         Images look best at 16:9 — 1920 × 1080. Your new spot goes to review, then replaces the
-        current one on your screens. Placements and billing stay as they are. We ask for{' '}
-        {AD_CHANGE_NOTICE_DAYS} days notice on changes.
+        current one on your screens. Placements and billing stay as they are. Your first change each
+        week is free. We ask for {AD_CHANGE_NOTICE_DAYS} days notice on changes.
       </p>
 
       <label className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-border bg-muted/30 px-4 py-6 text-center transition hover:border-primary/50">

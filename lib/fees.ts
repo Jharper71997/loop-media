@@ -11,6 +11,7 @@ export const CREATIVE_REFRESH_CENTS = 2000 // $20 / month
 // upsell: while it's active, changes are free. Changes also carry a 30-day notice
 // expectation, surfaced in the UI.
 export const AD_CHANGE_FEE_CENTS = 1000 // $10 per creative change
+export const AD_CHANGE_FREE_EVERY_DAYS = 7 // first creative change per 7 days is free
 export const AD_CHANGE_NOTICE_DAYS = 30 // notice we ask advertisers to give
 // Monthly price of the unlimited-changes membership. Inline price (the app uses
 // price_data everywhere, no dashboard Price IDs), so adjust here to reprice.
