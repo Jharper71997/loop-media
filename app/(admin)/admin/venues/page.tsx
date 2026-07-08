@@ -16,6 +16,7 @@ import { formatNumber, formatCents, timeAgo, isTvLive } from '@/lib/format'
 import { suggestTier, venuePriceCents, TIER_LABEL } from '@/lib/pricing'
 import { getPricingConfig } from '@/lib/pricing.server'
 import { isVenueListable } from '@/lib/venue'
+import { adSlotCount, houseSlideCount, loopOccupancy } from '@/lib/loop'
 import { venueBusinessHours, formatBusinessHours } from '@/lib/uptime'
 import type { Category, Territory, Venue, PriceTier, Tv } from '@/lib/db.types'
 import { VenueDialog } from './VenueDialog'
@@ -120,6 +121,32 @@ export default async function VenuesPage({
     }
   }
 
+  // Active, non-expired authored filler cards per territory. Filler is one of the
+  // always-on house slides (with the Brew Loop ad + "advertise" card + trivia
+  // teaser); counted here so each screen's slot fill reflects the house slides that
+  // occupy the loop, not just paid ads.
+  const fillerByTerritory = new Map<string, number>()
+  {
+    const territoryIds = [...new Set(rows.map((v) => v.territory_id).filter((x): x is string => !!x))]
+    if (territoryIds.length) {
+      const nowMs = Date.now()
+      const { data: fillerRows } = await supabase
+        .from('filler_content')
+        .select('territory_id, type, expires_at')
+        .in('territory_id', territoryIds)
+        .eq('active', true)
+      for (const f of (fillerRows ?? []) as {
+        territory_id: string
+        type: string
+        expires_at: string | null
+      }[]) {
+        if (f.type === 'trivia') continue // static trivia retired; the live teaser is counted separately
+        if (f.expires_at && new Date(f.expires_at).getTime() <= nowMs) continue
+        fillerByTerritory.set(f.territory_id, (fillerByTerritory.get(f.territory_id) ?? 0) + 1)
+      }
+    }
+  }
+
   const liveCount = allTvs.filter((r) => !!r.device_id && isTvLive(r.last_heartbeat_at)).length
 
   return (
@@ -211,7 +238,16 @@ export default async function VenuesPage({
                     <TvDialog venues={[]} presetVenueId={v.id} presetVenueName={v.name} />
                   </div>
                 ) : (
-                  screens.map((tv, i) => (
+                  screens.map((tv, i) => {
+                    const occ = loopOccupancy({
+                      adSlots: adSlotCount(tv.loop_length_seconds, tv.slot_seconds),
+                      houseSlides: houseSlideCount({
+                        triviaEnabled: v.trivia_enabled,
+                        fillerCards: fillerByTerritory.get(v.territory_id) ?? 0,
+                      }),
+                      paidSold: adsByTv.get(tv.id) ?? 0,
+                    })
+                    return (
                     <div
                       key={tv.id}
                       className="flex flex-wrap items-start justify-between gap-3 px-4 py-3"
@@ -238,7 +274,10 @@ export default async function VenuesPage({
                         </div>
                         <div className="text-xs text-muted-foreground">
                           Last seen {timeAgo(tv.last_heartbeat_at)} ·{' '}
-                          {Math.max(1, Math.floor(tv.loop_length_seconds / tv.slot_seconds))} ad slots
+                          <span className="tabular-nums">
+                            {occ.used}/{occ.total}
+                          </span>{' '}
+                          slots · <span className="tabular-nums">{occ.open}</span> open
                         </div>
                       </div>
                       <div className="flex flex-col items-end gap-2">
@@ -263,7 +302,7 @@ export default async function VenuesPage({
                         </div>
                       </div>
                     </div>
-                  ))
+                  )})
                 )}
                 {screens.length > 0 && (
                   <div className="flex justify-end px-4 py-2.5">

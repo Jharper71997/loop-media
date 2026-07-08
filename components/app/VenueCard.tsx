@@ -79,6 +79,12 @@ export function VenueCard({
               : 'Coming soon · screen not live yet'}
           </span>
         )}
+        {!venue.comingSoon && !venue.ownCategory && venue.open > 0 && (
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            <span className="font-medium text-foreground tabular-nums">{venue.open}</span> ad spot
+            {venue.open === 1 ? '' : 's'} open
+          </p>
+        )}
         <div className="mt-1 font-heading text-lg font-bold tabular-nums">
           {formatCents(venue.priceCents)}
           <span className="text-xs font-normal text-muted-foreground">/mo</span>

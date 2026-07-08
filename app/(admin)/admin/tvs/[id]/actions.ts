@@ -25,6 +25,16 @@ async function guardTv(supabase: Supa, profile: Profile, tvId: string): Promise<
   return null
 }
 
+// Set a screen's paid capacity + slot timing. The admin editor sends the number of
+// AD SLOTS to sell and the seconds per slot; we store loop_length = slots × seconds
+// (adSlotCount reverses it) and slot_seconds. House slides are injected on top, so
+// these numbers govern ONLY what advertisers can buy. Bounds keep a typo from
+// making a screen unsellable (0 slots) or absurd.
+const MIN_AD_SLOTS = 1
+const MAX_AD_SLOTS = 96
+const MIN_SLOT_SECONDS = 5
+const MAX_SLOT_SECONDS = 600
+
 export async function updateTvLoop(
   id: string,
   input: { loop_length_seconds: number; slot_seconds: number }
@@ -33,12 +43,18 @@ export async function updateTvLoop(
   const supabase = await createClient()
   const denied = await guardTv(supabase, profile, id)
   if (denied) return { error: denied }
+
+  const slot = Math.round(input.slot_seconds)
+  if (!Number.isFinite(slot) || slot < MIN_SLOT_SECONDS || slot > MAX_SLOT_SECONDS)
+    return { error: `Seconds per slot must be between ${MIN_SLOT_SECONDS} and ${MAX_SLOT_SECONDS}.` }
+  const loop = Math.round(input.loop_length_seconds)
+  const slots = Math.floor(loop / slot)
+  if (!Number.isFinite(loop) || slots < MIN_AD_SLOTS || slots > MAX_AD_SLOTS)
+    return { error: `Ad slots must be between ${MIN_AD_SLOTS} and ${MAX_AD_SLOTS}.` }
+
   const { error } = await supabase
     .from('tvs')
-    .update({
-      loop_length_seconds: input.loop_length_seconds,
-      slot_seconds: input.slot_seconds,
-    })
+    .update({ loop_length_seconds: loop, slot_seconds: slot })
     .eq('id', id)
   if (error) return { error: error.message }
   revalidatePath(`/admin/tvs/${id}`)

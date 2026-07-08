@@ -18,6 +18,7 @@ import { AutoRefresh } from '@/components/app/AutoRefresh'
 import type { Tv } from '@/lib/db.types'
 import { RegenerateButton } from '../RegenerateButton'
 import { deleteTv } from '../actions'
+import { loopOccupancy } from '@/lib/loop'
 import {
   RemovePlacementButton,
   AddPlacement,
@@ -25,6 +26,7 @@ import {
   SetAllDurations,
   HouseDurationField,
   OverscanControl,
+  LoopConfig,
 } from './TvControls'
 
 type TvFull = Tv & {
@@ -167,6 +169,11 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
       houseSlides.push({ kind: 'filler', label: f.payload?.headline || 'Featured card', seconds: tv.filler_seconds ?? 10 })
     }
   }
+  // Loop occupancy with the always-on house slides counted as filled: `used` and
+  // `total` include them; `open` is the sellable remainder advertisers can buy.
+  const houseSeconds = houseSlides.reduce((s, h) => s + h.seconds, 0)
+  const occ = loopOccupancy({ adSlots: maxSlots, houseSlides: houseSlides.length, paidSold: used })
+
   // Seed the "apply to all" box with the first image ad's current time (else the
   // screen's slot length) so it opens on a sensible value.
   const firstAdSeconds =
@@ -290,9 +297,11 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
             <CardContent className="p-5">
               <p className="text-sm text-muted-foreground">Slot fill</p>
               <p className="mt-1 font-heading text-2xl font-bold tabular-nums">
-                {used}/{maxSlots}
+                {occ.used}/{occ.total}
               </p>
-              <p className="text-xs text-muted-foreground">{open} open</p>
+              <p className="text-xs text-muted-foreground">
+                {occ.open} open · {used} paid + {houseSlides.length} house
+              </p>
             </CardContent>
           </Card>
         </div>
@@ -364,6 +373,29 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
             </CardContent>
           </Card>
         )}
+
+        {/* Loop capacity: how many paid ad slots this screen sells + slot timing.
+            House slides play on top, so this governs only what advertisers can buy. */}
+        <Card>
+          <CardContent className="space-y-3 p-5">
+            <div>
+              <p className="text-sm font-medium">Loop capacity</p>
+              <p className="text-xs text-muted-foreground">
+                Set how many ad spots this screen sells and how long each slot runs. The always-on
+                house slides (Brew Loop, “Advertise here”, trivia) play on top and are counted in the
+                loop below.
+              </p>
+            </div>
+            <LoopConfig
+              id={tv.id}
+              adSlots={maxSlots}
+              slotSeconds={tv.slot_seconds}
+              houseCount={houseSlides.length}
+              houseSeconds={houseSeconds}
+              paidSold={used}
+            />
+          </CardContent>
+        </Card>
 
         {/* Display: overscan safe-margin for this specific TV. */}
         <Card>

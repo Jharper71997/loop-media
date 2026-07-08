@@ -24,65 +24,94 @@ import {
   updateOverscan,
 } from './actions'
 
-// --- edit loop length + slot length (the per-screen inventory cap) ---
-export function TvLoopControls({
+// --- Loop capacity: how many AD slots this screen sells + seconds per slot ---
+// The admin sets the number of ad spots (what advertisers can buy) and the per-slot
+// timing; we store loop_length = slots × seconds. The always-on house slides play
+// on top, so the live panel shows the real loop: ad slots + house = total slides,
+// how long a full loop runs, and how many spots are open right now.
+export function LoopConfig({
   id,
-  loopLength,
+  adSlots,
   slotSeconds,
+  houseCount,
+  houseSeconds,
+  paidSold,
 }: {
   id: string
-  loopLength: number
+  adSlots: number
   slotSeconds: number
+  houseCount: number
+  houseSeconds: number
+  paidSold: number
 }) {
   const router = useRouter()
   const [pending, start] = useTransition()
-  const [loop, setLoop] = useState(loopLength)
+  const [slots, setSlots] = useState(adSlots)
   const [slot, setSlot] = useState(slotSeconds)
-  const slots = Math.max(1, Math.floor((loop || 360) / (slot || 15)))
+
+  const totalSlides = slots + houseCount
+  const loopSec = slots * slot + houseSeconds
+  const loopLabel = loopSec >= 60 ? `${Math.floor(loopSec / 60)}m ${loopSec % 60}s` : `${loopSec}s`
+  const openNow = Math.max(0, slots - paidSold)
+  const dirty = (slots !== adSlots || slot !== slotSeconds) && slots >= 1 && slot >= 5
 
   function save() {
     start(async () => {
-      const res = await updateTvLoop(id, { loop_length_seconds: loop, slot_seconds: slot })
+      const res = await updateTvLoop(id, { loop_length_seconds: slots * slot, slot_seconds: slot })
       if (res.error) toast.error(res.error)
       else {
-        toast.success('Loop updated')
+        toast.success('Loop capacity updated')
         router.refresh()
       }
     })
   }
 
   return (
-    <div className="flex flex-wrap items-end gap-4">
-      <div className="space-y-1.5">
-        <Label className="text-xs text-muted-foreground">Loop length (sec)</Label>
-        <Input
-          type="number"
-          min={60}
-          className="h-8 w-28"
-          value={loop}
-          onChange={(e) => setLoop(Number(e.target.value) || 360)}
-        />
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-end gap-4">
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground">Ad slots (spots to sell)</Label>
+          <Input
+            type="number"
+            min={1}
+            max={96}
+            className="h-8 w-28"
+            value={slots}
+            onChange={(e) => setSlots(Math.max(1, Math.floor(Number(e.target.value) || 1)))}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground">Seconds per slot</Label>
+          <Input
+            type="number"
+            min={5}
+            max={600}
+            className="h-8 w-28"
+            value={slot}
+            onChange={(e) => setSlot(Math.max(5, Math.floor(Number(e.target.value) || 15)))}
+          />
+        </div>
+        <Button size="sm" disabled={pending || !dirty} onClick={save}>
+          <Save className="size-4" /> Save
+        </Button>
       </div>
-      <div className="space-y-1.5">
-        <Label className="text-xs text-muted-foreground">Slot length (sec)</Label>
-        <Input
-          type="number"
-          min={5}
-          className="h-8 w-28"
-          value={slot}
-          onChange={(e) => setSlot(Number(e.target.value) || 15)}
-        />
+
+      <div className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2.5 text-sm">
+        <p className="text-foreground">
+          <span className="font-medium tabular-nums">{totalSlides}</span> slide
+          {totalSlides === 1 ? '' : 's'} in the loop —{' '}
+          <span className="tabular-nums">{slots}</span> ad{' '}
+          <span className="text-muted-foreground">+ {houseCount} house</span> — running about{' '}
+          <span className="font-medium tabular-nums">{loopLabel}</span> per full loop.
+        </p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Advertisers can buy <span className="font-medium text-foreground tabular-nums">{slots}</span>{' '}
+          spot{slots === 1 ? '' : 's'} on this screen ·{' '}
+          <span className="tabular-nums">{paidSold}</span> sold ·{' '}
+          <span className="font-medium text-foreground tabular-nums">{openNow}</span> open. Video ads
+          play their full length; image/house slides use their own seconds.
+        </p>
       </div>
-      <p className="pb-1.5 text-sm text-muted-foreground">
-        = <span className="font-medium text-foreground tabular-nums">{slots}</span> ad slots
-      </p>
-      <Button
-        size="sm"
-        disabled={pending || (loop === loopLength && slot === slotSeconds)}
-        onClick={save}
-      >
-        <Save className="size-4" /> Save
-      </Button>
     </div>
   )
 }
