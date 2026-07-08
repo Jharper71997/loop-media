@@ -845,13 +845,18 @@ function StageFit({ children }: { children: React.ReactNode }) {
     }
   }, [])
   return (
-    <div className="absolute inset-0 grid place-items-center overflow-hidden bg-black">
+    <div className="absolute inset-0 overflow-hidden bg-black">
+      {/* Center via absolute + translate(-50%,-50%) — NOT CSS grid. A grid track sizes
+          itself to the 1920px canvas and centers the SCALED canvas inside that oversized
+          track, shoving it down-and-right so only the top-left shows on a smaller
+          viewport (the Fire Stick symptom). Absolute+translate centers against the
+          viewport itself, so the scaled canvas is always dead-center and letterboxed. */}
       <div
-        className="relative"
+        className="absolute left-1/2 top-1/2"
         style={{
           width: STAGE_W,
           height: STAGE_H,
-          transform: `scale(${scale})`,
+          transform: `translate(-50%, -50%) scale(${scale})`,
           transformOrigin: 'center center',
         }}
       >
