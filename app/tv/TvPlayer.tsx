@@ -77,6 +77,17 @@ const DEFAULT_OVERSCAN_PCT = 0
 // Clamp any overscan value (per-screen, default, or live calibration) to a sane range.
 const clampOverscan = (n: number) => Math.max(0, Math.min(12, n))
 
+// The TV is authored on a FIXED 1920x1080 canvas and then scaled as a whole to fit
+// whatever the device's browser viewport actually is (a Fire Stick may report 1280x720,
+// a laptop something non-16:9, etc.). Every slide — uploaded ads AND the house slides
+// (Brew Loop $5-off, "Advertise here", trivia teaser) — is laid out in these 1080p
+// coordinates, so nothing can overflow or clip on a screen that isn't exactly 1080p.
+// Without this, the house slides' fixed pixel sizes (huge headlines, big QR) spilled
+// past the edges on any device whose browser canvas wasn't 1920x1080 — the "zoomed in,
+// edges cut off" report. Scaling the whole canvas makes the layout resolution-independent.
+const STAGE_W = 1920
+const STAGE_H = 1080
+
 function buildPlaylist(m: Manifest): Slide[] {
   const slot = m.tv.slot_seconds || 15
   // Static QR-less trivia cards were retired — the live (QR) trivia game is the
@@ -643,10 +654,14 @@ function Player({
         .lm-ken { animation: lm-kenburns 9s ease-out both }
         @media (prefers-reduced-motion: reduce) { .lm-ken { animation: none } }
       `}</style>
+      {/* Fixed 1920x1080 canvas scaled to fit this device's viewport as a whole, so
+          every slide is laid out at 1080p and can't overflow/clip on a Fire Stick or
+          browser whose canvas isn't exactly 1920x1080. */}
+      <StageFit>
       {/* Overscan-safe stage: ALL content lives inside this inset rectangle, so a TV
           that zooms past its panel edges only eats the surrounding black margin —
-          never the corner QR or the edges of an ad. The inset width is the screen's
-          overscan_pct (default 3%), tunable via the calibration overlay below. */}
+          never the corner QR or the edges of an ad. Default 0 = edge-to-edge; raise a
+          screen's overscan_pct only for a physical TV that clips its own edges. */}
       <div className="absolute overflow-hidden" style={{ inset: `${overscanPct}%` }}>
       {slide.kind === 'ad' ? (
         slide.creative_type === 'video' ? (
@@ -743,8 +758,12 @@ function Player({
         )}
       </div>
 
-      {/* Which screen this is + an unpair control. Hidden during playback (TVs
-          can't hover); a tap/remote-click reveals it for a few seconds. */}
+      </div>
+      </StageFit>
+
+      {/* Which screen this is + an unpair control — kept at viewport scale (outside the
+          scaled canvas) so it stays a tappable size. Hidden during playback (TVs can't
+          hover); a tap/remote-click reveals it for a few seconds. */}
       <div
         className={`absolute top-3 right-3 flex items-center gap-2 transition-opacity duration-300 ${
           controlsShown ? 'opacity-100' : 'pointer-events-none opacity-0'
@@ -787,7 +806,6 @@ function Player({
           Unpair
         </button>
       </div>
-      </div>
 
       {/* Overscan calibration overlay — draws the current safe-area frame over the
           live loop and tints the strip a TV may clip, with +/- to find the right
@@ -803,6 +821,42 @@ function Player({
           }}
         />
       )}
+    </div>
+  )
+}
+
+// A fixed 1920x1080 design canvas scaled to fit the device's viewport as a whole. The
+// child is authored at 1080p; we scale it by the SMALLER of the width/height ratios so
+// it always fits (letterboxed on the black field) and never overflows — an identical
+// layout on a Fire Stick that reports 1280x720, a non-16:9 browser window, or a real
+// 1080p TV. This is what keeps the house slides' fixed pixel sizes from spilling past
+// the edges ("zoomed in, cut off") on any device whose canvas isn't exactly 1920x1080.
+function StageFit({ children }: { children: React.ReactNode }) {
+  const [scale, setScale] = useState(1)
+  useEffect(() => {
+    const fit = () =>
+      setScale(Math.min(window.innerWidth / STAGE_W, window.innerHeight / STAGE_H))
+    fit()
+    window.addEventListener('resize', fit)
+    window.addEventListener('orientationchange', fit)
+    return () => {
+      window.removeEventListener('resize', fit)
+      window.removeEventListener('orientationchange', fit)
+    }
+  }, [])
+  return (
+    <div className="absolute inset-0 grid place-items-center overflow-hidden bg-black">
+      <div
+        className="relative"
+        style={{
+          width: STAGE_W,
+          height: STAGE_H,
+          transform: `scale(${scale})`,
+          transformOrigin: 'center center',
+        }}
+      >
+        {children}
+      </div>
     </div>
   )
 }
