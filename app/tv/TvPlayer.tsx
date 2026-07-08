@@ -2,17 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Image from 'next/image'
-import {
-  Sun,
-  CloudSun,
-  CloudFog,
-  CloudRain,
-  CloudSnow,
-  CloudDrizzle,
-  CloudLightning,
-  Thermometer,
-  type LucideIcon,
-} from 'lucide-react'
 import { QR_SIZE_DEFAULT } from '@/lib/adCreative'
 
 const DEVICE_KEY = 'lm_device'
@@ -56,7 +45,6 @@ type Manifest = {
 
 type Slide =
   | (AdItem & { kind: 'ad' })
-  | { kind: 'weather' }
   | { kind: 'clock' }
   | { kind: 'trivia' }
   | { kind: 'promo' }
@@ -68,17 +56,6 @@ const FILLER_SECONDS = 10
 // read the question and scan without it churning to the next one.
 const TRIVIA_SLIDE_SECONDS = 22
 
-// WMO weather code -> label + icon (Open-Meteo).
-function weatherInfo(code: number): { label: string; Icon: LucideIcon } {
-  if (code === 0) return { label: 'Clear', Icon: Sun }
-  if (code <= 3) return { label: 'Partly cloudy', Icon: CloudSun }
-  if (code <= 48) return { label: 'Fog', Icon: CloudFog }
-  if (code <= 67) return { label: 'Rain', Icon: CloudRain }
-  if (code <= 77) return { label: 'Snow', Icon: CloudSnow }
-  if (code <= 82) return { label: 'Showers', Icon: CloudDrizzle }
-  return { label: 'Storms', Icon: CloudLightning }
-}
-
 function buildPlaylist(m: Manifest): Slide[] {
   const slot = m.tv.slot_seconds || 15
   // Static QR-less trivia cards were retired — the live (QR) trivia game is the
@@ -86,13 +63,13 @@ function buildPlaylist(m: Manifest): Slide[] {
   // if one lingers in the data.
   const cards = (m.filler ?? []).filter((c) => c.type !== 'trivia')
   // Filler pool rotated between ads (and used to fill empty screens): the live
-  // trivia teaser, weather, then any authored cards.
+  // trivia teaser, then any authored cards. May be empty (no trivia, no cards).
   const fillerPool: Slide[] = []
   if (m.trivia) fillerPool.push({ kind: 'trivia' })
-  fillerPool.push({ kind: 'weather' })
   for (const card of cards) fillerPool.push({ kind: 'filler', card })
   let fi = 0
-  const nextFiller = (): Slide => fillerPool[fi++ % fillerPool.length]
+  const nextFiller = (): Slide | null =>
+    fillerPool.length ? fillerPool[fi++ % fillerPool.length] : null
 
   // The Jville Brew Loop house ad plays on EVERY screen (only when the manifest
   // carries it). It leads the loop so a screen opens with real content.
@@ -100,17 +77,17 @@ function buildPlaylist(m: Manifest): Slide[] {
 
   if (!m.items.length) {
     // No ads sold yet: lead with the Brew Loop ad, rotate the filler pool
-    // (trivia, weather, authored cards), then the "advertise on this screen"
-    // house slide LAST — a new screen shouldn't open by begging for advertisers.
+    // (trivia, authored cards), then the "advertise on this screen" house slide
+    // LAST — a new screen shouldn't open by begging for advertisers.
     return [...brewloop, ...fillerPool, { kind: 'promo' }]
   }
   const out: Slide[] = [...brewloop]
   m.items.forEach((it) => {
     out.push({ ...it, kind: 'ad', duration: it.duration || slot })
-    // Drop a filler card after EVERY ad (cycling trivia → weather → authored
-    // cards). The old "every 3rd ad" meant a screen with 1-2 ads showed no
-    // trivia at all; alternating keeps the trivia teaser on screen regularly.
-    out.push(nextFiller())
+    // Drop a filler card after each ad (cycling trivia → authored cards) when the
+    // pool has anything; otherwise ads just run back to back.
+    const f = nextFiller()
+    if (f) out.push(f)
   })
   out.push({ kind: 'promo' })
   return out
@@ -322,7 +299,6 @@ function Player({
   const [index, setIndex] = useState(0)
   const [stale, setStale] = useState(false)
   const [now, setNow] = useState(() => new Date())
-  const [weather, setWeather] = useState<{ temp: number; code: number } | null>(null)
   const [fatal, setFatal] = useState<string | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -541,27 +517,6 @@ function Player({
     return () => clearInterval(id)
   }, [])
 
-  // Weather (refresh every 15 min) using the venue's coordinates.
-  useEffect(() => {
-    const lat = manifest?.venue?.lat
-    const lng = manifest?.venue?.lng
-    if (lat == null || lng == null) return
-    const fetchWeather = async () => {
-      try {
-        const r = await fetch(
-          `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,weather_code&temperature_unit=fahrenheit`
-        )
-        const d = await r.json()
-        setWeather({ temp: Math.round(d.current.temperature_2m), code: d.current.weather_code })
-      } catch {
-        /* keep last */
-      }
-    }
-    fetchWeather()
-    const id = setInterval(fetchWeather, 15 * 60 * 1000)
-    return () => clearInterval(id)
-  }, [manifest?.venue?.lat, manifest?.venue?.lng])
-
   // Memoized so the playlist (and the current `slide`) keep a stable reference
   // between renders. Without this, the 1s clock tick rebuilt `slide` every
   // second, which reset the advance timer below before it could fire — freezing
@@ -618,7 +573,6 @@ function Player({
   if (!manifest || !slide) return <Splash>Loading loop…</Splash>
 
   const venueName = manifest.venue?.name ?? ''
-  const w = weather ? weatherInfo(weather.code) : null
 
   return (
     <div
@@ -661,18 +615,6 @@ function Player({
             className="lm-fade lm-ken h-full w-full object-cover"
           />
         )
-      ) : slide.kind === 'weather' ? (
-        <FillerFrame title="Loop Network">
-          {w ? (
-            <w.Icon className="size-44 text-primary" strokeWidth={1.5} />
-          ) : (
-            <Thermometer className="size-44 text-primary" strokeWidth={1.5} />
-          )}
-          <div className="mt-4 text-7xl font-semibold">
-            {weather ? `${weather.temp}°F` : '—'}
-          </div>
-          <div className="mt-2 text-3xl text-white/60">{w?.label ?? 'Weather'}</div>
-        </FillerFrame>
       ) : slide.kind === 'trivia' ? (
         <TriviaSlide
           venueId={manifest.venue?.id ?? ''}
