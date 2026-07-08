@@ -120,6 +120,10 @@ create table tvs (
   advertise_seconds    int,
   trivia_slide_seconds int,
   filler_seconds       int,
+  -- Per-screen overscan compensation: safe-area inset per side (percent of each
+  -- dimension) for a TV that zooms past its edges. null = player default (3%),
+  -- 0 = edge-to-edge. See migration 0052.
+  overscan_pct         int check (overscan_pct is null or (overscan_pct >= 0 and overscan_pct <= 15)),
   last_sync_at        timestamptz,
   last_heartbeat_at   timestamptz,
   created_at          timestamptz not null default now(),

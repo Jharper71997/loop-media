@@ -37,7 +37,7 @@ export async function GET(req: Request) {
   const supabase = createAdminClient()
   const { data: tvRow } = await supabase
     .from('tvs')
-    .select('id, device_secret, loop_length_seconds, slot_seconds, brewloop_seconds, advertise_seconds, trivia_slide_seconds, filler_seconds, venue:venues(id, name, lat, lng, play_code, trivia_enabled, territory:territories(id, name))')
+    .select('id, device_secret, loop_length_seconds, slot_seconds, brewloop_seconds, advertise_seconds, trivia_slide_seconds, filler_seconds, overscan_pct, venue:venues(id, name, lat, lng, play_code, trivia_enabled, territory:territories(id, name))')
     .eq('device_id', device)
     .maybeSingle()
 
@@ -54,6 +54,7 @@ export async function GET(req: Request) {
     advertise_seconds: number | null
     trivia_slide_seconds: number | null
     filler_seconds: number | null
+    overscan_pct: number | null
     venue: {
       id: string
       name: string
@@ -216,6 +217,7 @@ export async function GET(req: Request) {
       advertise_seconds: tv.advertise_seconds,
       trivia_slide_seconds: tv.trivia_slide_seconds,
       filler_seconds: tv.filler_seconds,
+      overscan_pct: tv.overscan_pct,
     },
     venue: tv.venue,
     items,

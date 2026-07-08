@@ -41,6 +41,10 @@ type Manifest = {
     advertise_seconds?: number | null
     trivia_slide_seconds?: number | null
     filler_seconds?: number | null
+    // Overscan safe-area inset per side, as a % of each dimension (migration 0052).
+    // Absent in older cached manifests, so optional — the player falls back to the
+    // DEFAULT_OVERSCAN_PCT constant below.
+    overscan_pct?: number | null
   }
   venue: { id: string; name: string; lat: number | null; lng: number | null; territory: { name: string } | null } | null
   items: AdItem[]
@@ -64,6 +68,15 @@ const FILLER_SECONDS = 10
 // The trivia join slide holds longer than a plain filler card so a patron can
 // read the question and scan without it churning to the next one.
 const TRIVIA_SLIDE_SECONDS = 22
+
+// Default overscan safe-area inset (percent per side) when a screen has no
+// per-screen overscan_pct set. Many TVs zoom ~2-5% past their edges and cut off
+// content; on this black-background signage app a small inset reads as a thin
+// black frame, so a modest default protects every screen out of the box. A screen
+// can override this (higher for a bad TV, 0 for true edge-to-edge) on its admin page.
+const DEFAULT_OVERSCAN_PCT = 3
+// Clamp any overscan value (per-screen, default, or live calibration) to a sane range.
+const clampOverscan = (n: number) => Math.max(0, Math.min(12, n))
 
 function buildPlaylist(m: Manifest): Slide[] {
   const slot = m.tv.slot_seconds || 15
@@ -331,6 +344,18 @@ function Player({
     controlsTimer.current = setTimeout(() => setControlsShown(false), 5000)
   }, [])
 
+  // Overscan calibration: a visual aid, opened from the revealed controls (or by
+  // loading with ?calibrate=1), that draws the safe-area frame and tints the strip
+  // a TV may clip — so someone standing at the venue can SEE the cutoff and dial in
+  // the right inset for that TV. `calibrateOverride` is a live preview only; the
+  // saved value is the per-screen overscan_pct set on the admin screen page.
+  const [calibrating, setCalibrating] = useState(
+    () =>
+      typeof window !== 'undefined' &&
+      new URLSearchParams(window.location.search).get('calibrate') === '1'
+  )
+  const [calibrateOverride, setCalibrateOverride] = useState<number | null>(null)
+
   // Fullscreen so the screen looks like a real display, not a browser tab.
   // Browsers require a user gesture, so we go fullscreen on the first tap/click
   // anywhere (and expose a button). No-ops on TV browsers that lack the API.
@@ -588,6 +613,15 @@ function Player({
   if (!manifest || !slide) return <Splash>Loading loop…</Splash>
 
   const venueName = manifest.venue?.name ?? ''
+  // Effective safe-area inset for this screen: live calibration preview if active,
+  // else the per-screen saved value, else the built-in default.
+  const overscanPct = clampOverscan(
+    calibrateOverride ?? manifest.tv.overscan_pct ?? DEFAULT_OVERSCAN_PCT
+  )
+  const bumpOverscan = (delta: number) =>
+    setCalibrateOverride((v) =>
+      clampOverscan((v ?? manifest.tv.overscan_pct ?? DEFAULT_OVERSCAN_PCT) + delta)
+    )
 
   return (
     <div
@@ -609,6 +643,11 @@ function Player({
         .lm-ken { animation: lm-kenburns 9s ease-out both }
         @media (prefers-reduced-motion: reduce) { .lm-ken { animation: none } }
       `}</style>
+      {/* Overscan-safe stage: ALL content lives inside this inset rectangle, so a TV
+          that zooms past its panel edges only eats the surrounding black margin —
+          never the corner QR or the edges of an ad. The inset width is the screen's
+          overscan_pct (default 3%), tunable via the calibration overlay below. */}
+      <div className="absolute overflow-hidden" style={{ inset: `${overscanPct}%` }}>
       {slide.kind === 'ad' ? (
         slide.creative_type === 'video' ? (
           <video
@@ -730,12 +769,116 @@ function Player({
         <button
           onClick={(e) => {
             e.stopPropagation()
+            setCalibrating(true)
+            revealControls()
+          }}
+          className="rounded-full bg-black/60 px-2.5 py-1 text-xs text-white/70 hover:bg-black/80 hover:text-white"
+        >
+          Calibrate
+        </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
             if (window.confirm('Unpair this screen? It will return to the pairing code entry.'))
               onUnpair()
           }}
           className="rounded-full bg-black/60 px-2.5 py-1 text-xs text-white/70 hover:bg-black/80 hover:text-white"
         >
           Unpair
+        </button>
+      </div>
+      </div>
+
+      {/* Overscan calibration overlay — draws the current safe-area frame over the
+          live loop and tints the strip a TV may clip, with +/- to find the right
+          inset for this TV. Rendered at the root (not inside the inset stage) so its
+          frame sits exactly at the stage edge. */}
+      {calibrating && (
+        <CalibrationOverlay
+          pct={overscanPct}
+          onBump={bumpOverscan}
+          onClose={() => {
+            setCalibrating(false)
+            setCalibrateOverride(null)
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+// The overscan calibration overlay. Purely a visual aid: it previews the inset live
+// (via +/-) so someone at the venue can see exactly what their TV cuts off and read
+// off the right number. The value is SAVED on the admin screen page (overscan_pct);
+// closing here reverts the preview to the saved value.
+function CalibrationOverlay({
+  pct,
+  onBump,
+  onClose,
+}: {
+  pct: number
+  onBump: (delta: number) => void
+  onClose: () => void
+}) {
+  // Keyboard support for anyone with a paired keyboard: up/down (or +/-) adjust,
+  // Escape closes. On-screen buttons cover TV remotes / touch displays.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowUp' || e.key === '+' || e.key === '=') {
+        e.preventDefault()
+        onBump(1)
+      } else if (e.key === 'ArrowDown' || e.key === '-' || e.key === '_') {
+        e.preventDefault()
+        onBump(-1)
+      } else if (e.key === 'Escape') {
+        e.preventDefault()
+        onClose()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onBump, onClose])
+
+  const btn =
+    'grid size-14 place-items-center rounded-full bg-white/10 text-3xl font-bold text-white ring-1 ring-white/30 hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-yellow-300'
+
+  return (
+    // Stop clicks from bubbling to the root (which would toggle fullscreen).
+    <div className="absolute inset-0 z-50" onClick={(e) => e.stopPropagation()}>
+      {/* The frame marks the safe area; the box-shadow spread floods everything
+          OUTSIDE it with translucent red — the strip a TV may clip. */}
+      <div
+        className="pointer-events-none absolute rounded-sm border-2 border-dashed border-yellow-300"
+        style={{ inset: `${pct}%`, boxShadow: '0 0 0 9999px rgba(220,38,38,0.32)' }}
+      />
+      <div className="absolute left-1/2 top-1/2 w-[min(90%,34rem)] -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-black/85 px-8 py-6 text-center backdrop-blur">
+        <div className="text-xs font-semibold uppercase tracking-[0.25em] text-yellow-300">
+          Screen calibration
+        </div>
+        <div className="mt-2 text-7xl font-bold tabular-nums text-white">{pct}%</div>
+        <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-white/70">
+          The <span className="text-yellow-300">yellow frame</span> is the safe area. The{' '}
+          <span className="text-red-400">red edge</span> is what your TV may cut off. Raise this
+          until nothing important — the QR, the edges of an ad — sits in the red.
+        </p>
+        <div className="mt-6 flex items-center justify-center gap-6">
+          <button aria-label="Less inset" className={btn} onClick={() => onBump(-1)}>
+            −
+          </button>
+          <button aria-label="More inset" className={btn} onClick={() => onBump(1)}>
+            +
+          </button>
+        </div>
+        <p className="mt-5 text-xs leading-relaxed text-white/50">
+          Then set this screen&apos;s overscan to{' '}
+          <span className="font-semibold text-white">{pct}%</span> in your Loop Network dashboard to
+          save it for good.
+        </p>
+        <button
+          onClick={onClose}
+          className="mt-4 rounded-full bg-white/15 px-6 py-2 text-sm font-medium text-white ring-1 ring-white/25 hover:bg-white/25 focus:outline-none focus:ring-2 focus:ring-yellow-300"
+        >
+          Done
         </button>
       </div>
     </div>

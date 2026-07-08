@@ -124,6 +124,24 @@ export async function updateHouseSlideSeconds(tvId: string, kind: string, second
   return { error: null as string | null }
 }
 
+// Set the per-screen overscan safe-area inset (percent per side). Compensates for a
+// TV that zooms past its panel edges and clips content (the corner QR, ad edges).
+// 0 = edge-to-edge; the player defaults to 3 when never set. The screen applies it
+// on its next ~30s sync. Territory-guarded via the screen.
+export async function updateOverscan(tvId: string, pct: number) {
+  const profile = await requireAdmin()
+  const supabase = await createClient()
+  const denied = await guardTv(supabase, profile, tvId)
+  if (denied) return { error: denied }
+  const n = Math.round(pct)
+  if (!Number.isFinite(n) || n < 0 || n > 15)
+    return { error: 'Enter a whole number of percent between 0 and 15.' }
+  const { error } = await supabase.from('tvs').update({ overscan_pct: n }).eq('id', tvId)
+  if (error) return { error: error.message }
+  revalidatePath(`/admin/tvs/${tvId}`)
+  return { error: null as string | null }
+}
+
 // Pull an ad off this screen (kept in history as ended; frees its slot). Also
 // record an exclusion so the placement engine won't just re-add it on its next
 // run (the override has to stick). See migration 0013.

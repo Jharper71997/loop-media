@@ -109,6 +109,8 @@ export interface Tv {
   advertise_seconds: number | null
   trivia_slide_seconds: number | null
   filler_seconds: number | null
+  // Per-screen overscan safe-area inset % (null = player default 3). See migration 0052.
+  overscan_pct: number | null
   last_sync_at: string | null
   last_heartbeat_at: string | null
   created_at: string

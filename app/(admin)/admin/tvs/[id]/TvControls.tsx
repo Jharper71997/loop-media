@@ -21,6 +21,7 @@ import {
   updateAdDuration,
   setAllAdDurations,
   updateHouseSlideSeconds,
+  updateOverscan,
 } from './actions'
 
 // --- edit loop length + slot length (the per-screen inventory cap) ---
@@ -224,6 +225,48 @@ export function SetAllDurations({
         }
       >
         Apply to all
+      </Button>
+    </div>
+  )
+}
+
+// Per-screen overscan safe-area inset (%). Raise it when this venue's TV zooms past
+// its edges and clips the QR / ad edges; 0 = edge-to-edge. The screen picks up the
+// change on its next ~30s sync. Use the on-screen "Calibrate" tool at the venue to
+// see the cutoff and find the number.
+export function OverscanControl({ id, overscan }: { id: string; overscan: number }) {
+  const router = useRouter()
+  const [pending, start] = useTransition()
+  const [val, setVal] = useState(overscan)
+  const dirty = val !== overscan && val >= 0 && val <= 15
+  return (
+    <div className="flex flex-wrap items-end gap-3">
+      <div className="space-y-1.5">
+        <Label className="text-xs text-muted-foreground">Overscan safe margin (%)</Label>
+        <Input
+          type="number"
+          min={0}
+          max={15}
+          className="h-8 w-24"
+          value={val}
+          onChange={(e) => setVal(Number(e.target.value))}
+        />
+      </div>
+      <Button
+        size="sm"
+        disabled={pending || !dirty}
+        onClick={() =>
+          start(async () => {
+            const res = await updateOverscan(id, val)
+            if (res.error) toast.error(res.error)
+            else {
+              toast.success('Overscan updated')
+              router.refresh()
+            }
+          })
+        }
+      >
+        <Save className="size-4" /> Save
       </Button>
     </div>
   )
