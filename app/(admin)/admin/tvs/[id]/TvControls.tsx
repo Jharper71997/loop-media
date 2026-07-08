@@ -20,6 +20,7 @@ import {
   removePlacement,
   updateAdDuration,
   setAllAdDurations,
+  updateHouseSlideSeconds,
 } from './actions'
 
 // --- edit loop length + slot length (the per-screen inventory cap) ---
@@ -120,6 +121,55 @@ export function AdDurationField({
         onClick={() =>
           start(async () => {
             const res = await updateAdDuration(tvId, adId, val)
+            if (res.error) toast.error(res.error)
+            else {
+              toast.success('Duration updated')
+              router.refresh()
+            }
+          })
+        }
+      >
+        <Save className="size-4" />
+      </Button>
+    </div>
+  )
+}
+
+// Per-house-slide on-screen seconds (stored per-screen on the tvs row). Same look
+// as AdDurationField; saves via updateHouseSlideSeconds keyed by the slide kind.
+export function HouseDurationField({
+  tvId,
+  slideKind,
+  seconds,
+}: {
+  tvId: string
+  slideKind: string
+  seconds: number
+}) {
+  const router = useRouter()
+  const [pending, start] = useTransition()
+  const [val, setVal] = useState(seconds)
+  const dirty = val !== seconds && val > 0
+  return (
+    <div className="flex shrink-0 items-center gap-1.5">
+      <Input
+        type="number"
+        min={3}
+        max={600}
+        aria-label="Seconds on screen"
+        className="h-8 w-16"
+        value={val}
+        onChange={(e) => setVal(Number(e.target.value) || 0)}
+      />
+      <span className="text-xs text-muted-foreground">sec</span>
+      <Button
+        size="icon-sm"
+        variant="ghost"
+        aria-label="Save seconds"
+        disabled={pending || !dirty}
+        onClick={() =>
+          start(async () => {
+            const res = await updateHouseSlideSeconds(tvId, slideKind, val)
             if (res.error) toast.error(res.error)
             else {
               toast.success('Duration updated')

@@ -37,7 +37,7 @@ export async function GET(req: Request) {
   const supabase = createAdminClient()
   const { data: tvRow } = await supabase
     .from('tvs')
-    .select('id, device_secret, loop_length_seconds, slot_seconds, venue:venues(id, name, lat, lng, play_code, trivia_enabled, territory:territories(id, name))')
+    .select('id, device_secret, loop_length_seconds, slot_seconds, brewloop_seconds, advertise_seconds, trivia_slide_seconds, filler_seconds, venue:venues(id, name, lat, lng, play_code, trivia_enabled, territory:territories(id, name))')
     .eq('device_id', device)
     .maybeSingle()
 
@@ -50,6 +50,10 @@ export async function GET(req: Request) {
     device_secret: string | null
     loop_length_seconds: number
     slot_seconds: number
+    brewloop_seconds: number | null
+    advertise_seconds: number | null
+    trivia_slide_seconds: number | null
+    filler_seconds: number | null
     venue: {
       id: string
       name: string
@@ -205,7 +209,14 @@ export async function GET(req: Request) {
   }
 
   return NextResponse.json({
-    tv: { loop_length_seconds: tv.loop_length_seconds, slot_seconds: tv.slot_seconds },
+    tv: {
+      loop_length_seconds: tv.loop_length_seconds,
+      slot_seconds: tv.slot_seconds,
+      brewloop_seconds: tv.brewloop_seconds,
+      advertise_seconds: tv.advertise_seconds,
+      trivia_slide_seconds: tv.trivia_slide_seconds,
+      filler_seconds: tv.filler_seconds,
+    },
     venue: tv.venue,
     items,
     filler,

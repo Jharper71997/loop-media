@@ -104,6 +104,11 @@ export interface Tv {
   status: TvStatus
   loop_length_seconds: number
   slot_seconds: number
+  // Per-screen house-slide durations (null = player default). See migration 0050.
+  brewloop_seconds: number | null
+  advertise_seconds: number | null
+  trivia_slide_seconds: number | null
+  filler_seconds: number | null
   last_sync_at: string | null
   last_heartbeat_at: string | null
   created_at: string

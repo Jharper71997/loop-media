@@ -97,6 +97,33 @@ export async function setAllAdDurations(tvId: string, seconds: number) {
   return { error: null as string | null }
 }
 
+// House slide kind -> the tvs column that stores its per-screen seconds.
+const HOUSE_SECONDS_COLUMN: Record<string, string> = {
+  brewloop: 'brewloop_seconds',
+  advertise: 'advertise_seconds',
+  trivia: 'trivia_slide_seconds',
+  filler: 'filler_seconds',
+}
+
+// Set how long a HOUSE slide (Brew Loop ad / "Advertise here" card / trivia teaser
+// / filler card) holds on THIS screen. Stored per-screen on tvs; the TV player
+// reads it and falls back to its built-in default when null. Territory-guarded.
+export async function updateHouseSlideSeconds(tvId: string, kind: string, seconds: number) {
+  const profile = await requireAdmin()
+  const supabase = await createClient()
+  const denied = await guardTv(supabase, profile, tvId)
+  if (denied) return { error: denied }
+  const column = HOUSE_SECONDS_COLUMN[kind]
+  if (!column) return { error: 'Unknown house slide.' }
+  const secs = validSeconds(seconds)
+  if (secs === null)
+    return { error: `Enter a whole number of seconds between ${MIN_AD_SECONDS} and ${MAX_AD_SECONDS}.` }
+  const { error } = await supabase.from('tvs').update({ [column]: secs }).eq('id', tvId)
+  if (error) return { error: error.message }
+  revalidatePath(`/admin/tvs/${tvId}`)
+  return { error: null as string | null }
+}
+
 // Pull an ad off this screen (kept in history as ended; frees its slot). Also
 // record an exclusion so the placement engine won't just re-add it on its next
 // run (the override has to stick). See migration 0013.

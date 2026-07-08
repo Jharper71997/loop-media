@@ -23,6 +23,7 @@ import {
   AddPlacement,
   AdDurationField,
   SetAllDurations,
+  HouseDurationField,
 } from './TvControls'
 
 type TvFull = Tv & {
@@ -142,11 +143,12 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
   // always play, the trivia teaser plays where trivia is on, plus any authored
   // filler cards for this territory. Each is fixed-time (~10s, trivia 22s) and is
   // NOT a paid slot. We list them as rows below so the admin matches the real screen.
-  const houseSlides: { label: string; seconds: number }[] = [
-    { label: 'Brew Loop ad', seconds: 10 },
-    { label: '“Advertise on this screen” card', seconds: 10 },
+  const houseSlides: { kind: string; label: string; seconds: number }[] = [
+    { kind: 'brewloop', label: 'Brew Loop ad', seconds: tv.brewloop_seconds ?? 10 },
+    { kind: 'advertise', label: '“Advertise on this screen” card', seconds: tv.advertise_seconds ?? 10 },
   ]
-  if (tv.venue?.trivia_enabled) houseSlides.push({ label: 'Trivia teaser', seconds: 22 })
+  if (tv.venue?.trivia_enabled)
+    houseSlides.push({ kind: 'trivia', label: 'Trivia teaser', seconds: tv.trivia_slide_seconds ?? 22 })
   if (tv.venue?.territory_id) {
     const { data: fillerRows } = await supabase
       .from('filler_content')
@@ -161,7 +163,7 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
     }[]) {
       if (f.type === 'trivia') continue // static trivia retired; the live teaser above covers it
       if (f.expires_at && new Date(f.expires_at).getTime() <= nowMs) continue
-      houseSlides.push({ label: f.payload?.headline || 'Featured card', seconds: 10 })
+      houseSlides.push({ kind: 'filler', label: f.payload?.headline || 'Featured card', seconds: tv.filler_seconds ?? 10 })
     }
   }
   // Seed the "apply to all" box with the first image ad's current time (else the
@@ -414,7 +416,7 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
               <p className="text-xs text-muted-foreground">
                 {used} paid ad{used === 1 ? '' : 's'} ({used} of {maxSlots} paid slots) plus{' '}
                 {houseSlides.length} house slide{houseSlides.length === 1 ? '' : 's'} that always
-                play. House slides run on a fixed timer and can&apos;t be edited or removed.
+                play. Set each one&apos;s seconds below too; house slides can&apos;t be removed.
               </p>
             </div>
             {placements.length > 0 && (
@@ -489,9 +491,12 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
                       Always plays · not a paid slot
                     </p>
                   </div>
-                  <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                    {h.seconds}s · fixed
-                  </span>
+                  <HouseDurationField
+                    key={`${h.kind}-${h.seconds}`}
+                    tvId={tv.id}
+                    slideKind={h.kind}
+                    seconds={h.seconds}
+                  />
                 </div>
               ))}
             </div>

@@ -32,7 +32,16 @@ type FillerCard = {
 }
 
 type Manifest = {
-  tv: { loop_length_seconds: number; slot_seconds: number }
+  tv: {
+    loop_length_seconds: number
+    slot_seconds: number
+    // Per-screen house-slide durations (migration 0050); absent in older cached
+    // manifests, so optional — the player falls back to the constants below.
+    brewloop_seconds?: number | null
+    advertise_seconds?: number | null
+    trivia_slide_seconds?: number | null
+    filler_seconds?: number | null
+  }
   venue: { id: string; name: string; lat: number | null; lng: number | null; territory: { name: string } | null } | null
   items: AdItem[]
   filler?: FillerCard[]
@@ -527,13 +536,19 @@ function Player({
   // How long this slide holds. Videos run to their own `ended` event; everything
   // else (images, filler, promo) uses the admin-set seconds.
   const isVideoAd = slide?.kind === 'ad' && slide.creative_type === 'video'
-  const slideSeconds = slide
-    ? slide.kind === 'ad'
+  // Ads use their own per-ad seconds; each house slide uses its per-screen time
+  // (admin-set on the screen page) or falls back to the built-in default.
+  const slideSeconds = !slide
+    ? 0
+    : slide.kind === 'ad'
       ? slide.duration
       : slide.kind === 'trivia'
-        ? TRIVIA_SLIDE_SECONDS
-        : FILLER_SECONDS
-    : 0
+        ? (manifest?.tv.trivia_slide_seconds ?? TRIVIA_SLIDE_SECONDS)
+        : slide.kind === 'brewloop'
+          ? (manifest?.tv.brewloop_seconds ?? FILLER_SECONDS)
+          : slide.kind === 'promo'
+            ? (manifest?.tv.advertise_seconds ?? FILLER_SECONDS)
+            : (manifest?.tv.filler_seconds ?? FILLER_SECONDS)
 
   // Advance the loop on a timer keyed to PRIMITIVES (index, length, this slide's
   // duration/kind) — never the rebuilt `slide` object — so unrelated re-renders

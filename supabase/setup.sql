@@ -114,6 +114,12 @@ create table tvs (
   status              tv_status not null default 'unpaired',
   loop_length_seconds int not null default 360 check (loop_length_seconds > 0),
   slot_seconds        int not null default 15  check (slot_seconds > 0),
+  -- Per-screen on-screen time for the injected house slides (null = player
+  -- default: 10s, trivia 22s). See migration 0050. Paid ads use ads.duration_seconds.
+  brewloop_seconds     int,
+  advertise_seconds    int,
+  trivia_slide_seconds int,
+  filler_seconds       int,
   last_sync_at        timestamptz,
   last_heartbeat_at   timestamptz,
   created_at          timestamptz not null default now(),
