@@ -24,7 +24,7 @@ const BREWLOOP_OFFER_URL =
 // The Loop Network "advertise on this screen" house-slide QR points at the
 // marketing site (not the in-app signup flow) — a business owner scans it to
 // learn about Loop Network. Override via env if the domain changes.
-const LOOP_SITE_URL = process.env.NEXT_PUBLIC_LOOP_SITE_URL || 'https://theloopnetwork.org'
+const LOOP_SITE_URL = process.env.NEXT_PUBLIC_LOOP_SITE_URL || 'https://loopnetwork.org'
 
 // Returns the ordered ad loop for a paired device, plus venue info the display
 // uses for filler (weather etc). Only approved/active ads with a creative play.
