@@ -937,8 +937,7 @@ function AdvertiseAd({ qrImage }: { qrImage: string }) {
           <span className="text-primary">on this screen.</span>
         </div>
         <div className="mt-5 max-w-lg text-3xl leading-snug text-white/70">
-          Local ads people actually see. Every ad carries its own QR, so you know exactly what it
-          drives.
+          Local ads people actually see, right where your customers already are.
         </div>
         {qrImage ? (
           <div className="mt-9 flex items-center gap-7">
