@@ -8,7 +8,6 @@ import { TIER_LABEL } from '@/lib/pricing'
 import { US_CENTER, US_ZOOM } from '@/lib/geo'
 import { MapFitBounds } from '@/components/app/MapFitBounds'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import type { BrowseVenue } from './BrowseClient'
 
 // Brand-aligned marker palette. Concrete colors (not CSS vars) because Leaflet
@@ -57,7 +56,6 @@ export default function MapView({
   const legend: { color: string; label: string }[] = [
     { color: MARKER.open, label: 'Open' },
     { color: MARKER.cart, label: 'In cart' },
-    { color: MARKER.comingSoon, label: 'Offline (still buyable)' },
     { color: MARKER.categoryFull, label: 'Category taken' },
     { color: MARKER.full, label: 'Full' },
     ...(userLoc ? [{ color: MARKER.you, label: 'You' }] : []),
@@ -99,13 +97,11 @@ export default function MapView({
           const inCart = cart.includes(v.id)
           const color = inCart
             ? MARKER.cart
-            : v.comingSoon
-              ? MARKER.comingSoon
-              : v.categoryFull
-                ? MARKER.categoryFull
-                : v.open === 0
-                  ? MARKER.full
-                  : MARKER.open
+            : v.categoryFull
+              ? MARKER.categoryFull
+              : v.open === 0
+                ? MARKER.full
+                : MARKER.open
           return (
             <CircleMarker
               key={v.id}
@@ -114,9 +110,8 @@ export default function MapView({
               pathOptions={{
                 color,
                 fillColor: color,
-                fillOpacity: inCart ? 0.85 : v.comingSoon ? 0.3 : 0.6,
+                fillOpacity: inCart ? 0.85 : 0.6,
                 weight: inCart ? 3 : 2,
-                dashArray: v.comingSoon ? '4 3' : undefined,
               }}
             >
               <Popup minWidth={184}>
@@ -147,24 +142,14 @@ export default function MapView({
                       </Button>
                     </div>
                   ) : (
-                    // Buyable — including offline ("coming soon") screens; the ad just
-                    // starts once the screen is back online.
-                    <div className="space-y-1.5">
-                      {v.comingSoon && <Badge variant="warning">Currently offline</Badge>}
-                      <Button
-                        size="sm"
-                        variant={inCart ? 'secondary' : 'default'}
-                        className="w-full"
-                        onClick={() => onToggle(v.id)}
-                      >
-                        {inCart ? 'Added — remove' : 'Add to cart'}
-                      </Button>
-                      {v.comingSoon && (
-                        <p className="text-xs text-muted-foreground">
-                          Offline right now — your ad runs automatically once it&apos;s back on.
-                        </p>
-                      )}
-                    </div>
+                    <Button
+                      size="sm"
+                      variant={inCart ? 'secondary' : 'default'}
+                      className="w-full"
+                      onClick={() => onToggle(v.id)}
+                    >
+                      {inCart ? 'Added — remove' : 'Add to cart'}
+                    </Button>
                   )}
                 </div>
               </Popup>

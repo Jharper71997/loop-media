@@ -26,7 +26,8 @@ export type VenueCardData = {
 }
 
 // One tappable business in the build flow. Tapping the card adds/removes when
-// available; screens whose TV isn't live yet offer a notify-me waitlist instead.
+// available (offline screens included — the ad runs once the screen is back on);
+// only sold-out screens offer a notify-me waitlist instead.
 export function VenueCard({
   venue,
   inCart,
@@ -42,7 +43,9 @@ export function VenueCard({
   onToggle: () => void
   onNotify: () => void
 }) {
-  const addable = !venue.categoryFull && venue.open > 0 && !venue.comingSoon
+  // Live-or-not is operational noise for the buy side — an active venue with open
+  // slots is buyable regardless of whether its screen happens to be on right now.
+  const addable = !venue.categoryFull && venue.open > 0
   // What this place actually is, so advertisers know where their ad runs.
   const businessType = venue.category ?? venue.venue_type ?? TIER_LABEL[venue.tier]
   const info = [businessType, `${venue.screens} screen${venue.screens === 1 ? '' : 's'}`]
@@ -72,14 +75,7 @@ export function VenueCard({
             </span>
           )}
         </div>
-        {venue.comingSoon && (
-          <span className="mt-1 inline-block rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-            {waitlisted
-              ? "Coming soon · we'll email you the day it goes live"
-              : 'Coming soon · screen not live yet'}
-          </span>
-        )}
-        {!venue.comingSoon && !venue.ownCategory && venue.open > 0 && (
+        {!venue.ownCategory && venue.open > 0 && (
           <p className="mt-0.5 text-xs text-muted-foreground">
             <span className="font-medium text-foreground tabular-nums">{venue.open}</span> ad spot
             {venue.open === 1 ? '' : 's'} open
@@ -98,8 +94,8 @@ export function VenueCard({
           <Badge variant="secondary" title="A venue won't run ads from its own line of business.">
             Same business
           </Badge>
-        ) : venue.comingSoon ? (
-          // Onboarded but its screen isn't live yet — offer the notify waitlist.
+        ) : venue.open === 0 ? (
+          // Sold out — offer the waitlist so they hear when a spot frees up.
           <Button
             variant={waitlisted ? 'secondary' : 'outline'}
             size="sm"
@@ -115,12 +111,10 @@ export function VenueCard({
               </>
             ) : (
               <>
-                <Bell className="size-4" /> Notify me
+                <Bell className="size-4" /> Notify
               </>
             )}
           </Button>
-        ) : venue.open === 0 ? (
-          <Badge variant="destructive">Full</Badge>
         ) : (
           <span
             className={cn(
