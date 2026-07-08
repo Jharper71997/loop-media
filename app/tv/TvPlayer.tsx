@@ -731,12 +731,15 @@ function Player({
               />
               <div className="text-left">
                 <div className="font-heading text-6xl font-extrabold text-primary">$5 off</div>
-                <div className="mt-1 text-2xl text-white/70">Scan to book your ride</div>
+                <div className="mt-1 text-2xl text-white/70">
+                  Scan &amp; use code{' '}
+                  <span className="font-mono font-semibold text-white">LOOP5</span>
+                </div>
               </div>
             </div>
           ) : (
             <div className="mt-9 rounded-full bg-primary px-7 py-2.5 text-2xl font-semibold text-primary-foreground">
-              $5 off your ride — book at jvillebrewloop.com
+              $5 off with code LOOP5 — book at jvillebrewloop.com
             </div>
           )}
         </FillerFrame>
