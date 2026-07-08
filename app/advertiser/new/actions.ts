@@ -20,6 +20,7 @@ import {
 } from '@/lib/exclusivity'
 import { notifyCampaignCreated } from '@/lib/notifyAdvertiser'
 import { CREATIVE_SETUP_FEE_CENTS, CREATIVE_REFRESH_CENTS } from '@/lib/fees'
+import { QR_SIZE_DEFAULT } from '@/lib/adCreative'
 
 export interface NewCampaignInput {
   territory_id: string
@@ -32,6 +33,8 @@ export interface NewCampaignInput {
   // Free-drag QR center as fractions [0,1] of the 16:9 frame (default ~ bottom-right).
   qr_x?: number
   qr_y?: number
+  // QR width as a fraction of the frame width (default QR_SIZE_DEFAULT).
+  qr_size?: number
   creative_type: 'video' | 'image' | null
   creative_url: string | null
   creative_help_brief: string | null
@@ -150,6 +153,7 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
       qr_target_url: input.qr_target_url.trim(),
       qr_x: input.qr_x ?? 0.9,
       qr_y: input.qr_y ?? 0.88,
+      qr_size: input.qr_size ?? QR_SIZE_DEFAULT,
     })
     .select('id')
     .single()

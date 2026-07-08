@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import QRCode from 'qrcode'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { genPairingCode, deviceSecretOk } from '@/lib/tv'
+import { QR_SIZE_DEFAULT } from '@/lib/adCreative'
 
 // Public base URL the phone-scannable QR must point at (the deployed domain in
 // prod; localhost in dev). Prefers explicit env, then forwarded host headers.
@@ -67,7 +68,7 @@ export async function GET(req: Request) {
   const { data: placements } = await supabase
     .from('ad_placements')
     .select(
-      'slot_position, ad:ads(id, title, creative_type, creative_url, duration_seconds, qr_target_url, qr_x, qr_y, status)'
+      'slot_position, ad:ads(id, title, creative_type, creative_url, duration_seconds, qr_target_url, qr_x, qr_y, qr_size, status)'
     )
     .eq('tv_id', tv.id)
     .eq('status', 'active')
@@ -84,6 +85,7 @@ export async function GET(req: Request) {
       qr_target_url: string | null
       qr_x: number | null
       qr_y: number | null
+      qr_size: number | null
       status: string
     } | null
   }
@@ -118,6 +120,7 @@ export async function GET(req: Request) {
         qr_image,
         qr_x: ad.qr_x ?? 0.9,
         qr_y: ad.qr_y ?? 0.88,
+        qr_size: ad.qr_size ?? QR_SIZE_DEFAULT,
       }
     })
   )

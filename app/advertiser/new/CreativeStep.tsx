@@ -22,6 +22,9 @@ import {
   EXPORT_W,
   EXPORT_H,
   QR_DEFAULT,
+  QR_SIZE_DEFAULT,
+  QR_SIZE_MIN,
+  QR_SIZE_MAX,
   FILTER_PRESETS,
   clamp,
   buildFilter,
@@ -72,9 +75,10 @@ export function CreativeStep({
   const [brief, setBrief] = useState('')
   const [pending, start] = useTransition()
 
-  // Free-drag QR center (fractions of the frame).
+  // Free-drag QR center (fractions of the frame) + QR width (fraction of frame width).
   const [qrX, setQrX] = useState(QR_DEFAULT.x)
   const [qrY, setQrY] = useState(QR_DEFAULT.y)
+  const [qrSize, setQrSize] = useState(QR_SIZE_DEFAULT)
 
   // Photo editor (images only). nat = natural pixel size once the image loads.
   const [nat, setNat] = useState<{ w: number; h: number } | null>(null)
@@ -312,6 +316,7 @@ export function CreativeStep({
         qr_target_url: qrTarget,
         qr_x: qrX,
         qr_y: qrY,
+        qr_size: qrSize,
         creative_type,
         creative_url,
         creative_help_brief: mode === 'help' ? brief : null,
@@ -512,6 +517,7 @@ export function CreativeStep({
                       style={{
                         left: `${qrX * 100}%`,
                         top: `${qrY * 100}%`,
+                        width: `${qrSize * 100}%`,
                         transform: 'translate(-50%, -50%)',
                       }}
                     >
@@ -521,14 +527,38 @@ export function CreativeStep({
                           src={qrPreview}
                           alt="QR preview"
                           draggable={false}
-                          className="size-12 rounded-sm"
+                          className="block w-full rounded-sm"
                         />
                       ) : (
-                        <div className="size-12 rounded-sm bg-muted" />
+                        <div className="aspect-square w-full rounded-sm bg-muted" />
                       )}
                     </div>
                   )}
                 </div>
+
+                {qrTarget && (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <Label>QR code size</Label>
+                      <span className="text-xs text-muted-foreground">
+                        {Math.round(qrSize * 100)}%
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={QR_SIZE_MIN}
+                      max={QR_SIZE_MAX}
+                      step={0.005}
+                      value={qrSize}
+                      onChange={(e) => setQrSize(Number(e.target.value))}
+                      className="h-2 w-full cursor-pointer accent-primary"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Drag the code to move it; use the slider to size it. This is exactly how it
+                      shows on screen.
+                    </p>
+                  </div>
+                )}
 
                 {!isVideo && (
                   <div className="space-y-3">

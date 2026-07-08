@@ -13,6 +13,13 @@ export const EXPORT_H = 720
 // bottom-right, matching the old 'bottom-right' corner so placements don't jump.
 export const QR_DEFAULT = { x: 0.9, y: 0.88 }
 
+// QR SIZE — the QR (white chip) width as a fraction of the 16:9 frame width.
+// The preview and the TV both render at this fraction so they match. Default
+// applies to legacy ads (qr_size null) and new ads that don't set it.
+export const QR_SIZE_DEFAULT = 0.09
+export const QR_SIZE_MIN = 0.05
+export const QR_SIZE_MAX = 0.18
+
 // Filter presets are plain CSS filter strings. The SAME string is set on the
 // preview <img> (style.filter) and on the export canvas (ctx.filter), so what the
 // advertiser sees is what gets baked into the uploaded PNG.

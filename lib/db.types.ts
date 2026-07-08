@@ -133,6 +133,8 @@ export interface Ad {
   // renders at left = qr_x*100%, top = qr_y*100% with translate(-50%,-50%).
   qr_x: number
   qr_y: number
+  // QR width as a fraction of the frame width (null = QR_SIZE_DEFAULT).
+  qr_size: number | null
   reviewed_by: string | null
   reviewed_at: string | null
   created_at: string

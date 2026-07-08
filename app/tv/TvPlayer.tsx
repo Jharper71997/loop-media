@@ -13,6 +13,7 @@ import {
   Thermometer,
   type LucideIcon,
 } from 'lucide-react'
+import { QR_SIZE_DEFAULT } from '@/lib/adCreative'
 
 const DEVICE_KEY = 'lm_device'
 const DEVICE_SECRET_KEY = 'lm_device_secret'
@@ -32,6 +33,8 @@ type AdItem = {
   // manifests omit these — default to the old bottom-right spot).
   qr_x?: number
   qr_y?: number
+  // QR width as a fraction of the frame width (older manifests omit it).
+  qr_size?: number
 }
 
 type FillerCard = {
@@ -777,11 +780,12 @@ function Player({
           style={{
             left: `${(slide.qr_x ?? 0.9) * 100}%`,
             top: `${(slide.qr_y ?? 0.88) * 100}%`,
+            width: `${(slide.qr_size ?? QR_SIZE_DEFAULT) * 100}%`,
             transform: 'translate(-50%, -50%)',
           }}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={slide.qr_image} alt="Scan" className="size-24 rounded-sm" />
+          <img src={slide.qr_image} alt="Scan" className="block w-full rounded-sm" />
         </div>
       )}
 
