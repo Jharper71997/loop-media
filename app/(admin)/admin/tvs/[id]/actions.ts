@@ -45,6 +45,58 @@ export async function updateTvLoop(
   return { error: null as string | null }
 }
 
+// How long a slide may hold on screen. The DB requires > 0; keep a sane signage
+// range so a typo can't set 0 (schema reject) or an absurd value.
+const MIN_AD_SECONDS = 3
+const MAX_AD_SECONDS = 600
+
+function validSeconds(seconds: number): number | null {
+  const secs = Math.round(seconds)
+  if (!Number.isFinite(secs) || secs < MIN_AD_SECONDS || secs > MAX_AD_SECONDS) return null
+  return secs
+}
+
+// Set how long ONE ad holds on screen (ads.duration_seconds). The TV player reads
+// this per slide (see /api/tv/loop line: `ad.duration_seconds || slot_seconds`),
+// so the change shows on the screen within ~30s on its next sync. Video ads run to
+// their own end and ignore this. Territory-guarded via the screen.
+export async function updateAdDuration(tvId: string, adId: string, seconds: number) {
+  const profile = await requireAdmin()
+  const supabase = await createClient()
+  const denied = await guardTv(supabase, profile, tvId)
+  if (denied) return { error: denied }
+  const secs = validSeconds(seconds)
+  if (secs === null)
+    return { error: `Enter a whole number of seconds between ${MIN_AD_SECONDS} and ${MAX_AD_SECONDS}.` }
+  const { error } = await supabase.from('ads').update({ duration_seconds: secs }).eq('id', adId)
+  if (error) return { error: error.message }
+  revalidatePath(`/admin/tvs/${tvId}`)
+  return { error: null as string | null }
+}
+
+// "Apply to all": push the same on-screen time to every ad currently placed on
+// this screen, in one click. Only touches ads active on THIS screen.
+export async function setAllAdDurations(tvId: string, seconds: number) {
+  const profile = await requireAdmin()
+  const supabase = await createClient()
+  const denied = await guardTv(supabase, profile, tvId)
+  if (denied) return { error: denied }
+  const secs = validSeconds(seconds)
+  if (secs === null)
+    return { error: `Enter a whole number of seconds between ${MIN_AD_SECONDS} and ${MAX_AD_SECONDS}.` }
+  const { data: pls } = await supabase
+    .from('ad_placements')
+    .select('ad_id')
+    .eq('tv_id', tvId)
+    .eq('status', 'active')
+  const adIds = [...new Set((pls ?? []).map((p) => p.ad_id).filter((x): x is string => !!x))]
+  if (!adIds.length) return { error: 'No ads on this screen yet.' }
+  const { error } = await supabase.from('ads').update({ duration_seconds: secs }).in('id', adIds)
+  if (error) return { error: error.message }
+  revalidatePath(`/admin/tvs/${tvId}`)
+  return { error: null as string | null }
+}
+
 // Pull an ad off this screen (kept in history as ended; frees its slot). Also
 // record an exclusion so the placement engine won't just re-add it on its next
 // run (the override has to stick). See migration 0013.

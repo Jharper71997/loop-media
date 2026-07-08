@@ -14,7 +14,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { updateTvLoop, addPlacement, removePlacement } from './actions'
+import {
+  updateTvLoop,
+  addPlacement,
+  removePlacement,
+  updateAdDuration,
+  setAllAdDurations,
+} from './actions'
 
 // --- edit loop length + slot length (the per-screen inventory cap) ---
 export function TvLoopControls({
@@ -74,6 +80,100 @@ export function TvLoopControls({
         onClick={save}
       >
         <Save className="size-4" /> Save
+      </Button>
+    </div>
+  )
+}
+
+// Per-ad on-screen seconds (ads.duration_seconds). Compact inline field on each
+// row of the current loop; the screen picks up the change on its next ~30s sync.
+export function AdDurationField({
+  tvId,
+  adId,
+  seconds,
+}: {
+  tvId: string
+  adId: string
+  seconds: number
+}) {
+  const router = useRouter()
+  const [pending, start] = useTransition()
+  const [val, setVal] = useState(seconds)
+  const dirty = val !== seconds && val > 0
+  return (
+    <div className="flex shrink-0 items-center gap-1.5">
+      <Input
+        type="number"
+        min={3}
+        max={600}
+        aria-label="Seconds on screen"
+        className="h-8 w-16"
+        value={val}
+        onChange={(e) => setVal(Number(e.target.value) || 0)}
+      />
+      <span className="text-xs text-muted-foreground">sec</span>
+      <Button
+        size="icon-sm"
+        variant="ghost"
+        aria-label="Save seconds"
+        disabled={pending || !dirty}
+        onClick={() =>
+          start(async () => {
+            const res = await updateAdDuration(tvId, adId, val)
+            if (res.error) toast.error(res.error)
+            else {
+              toast.success('Duration updated')
+              router.refresh()
+            }
+          })
+        }
+      >
+        <Save className="size-4" />
+      </Button>
+    </div>
+  )
+}
+
+// "Apply to all": set one on-screen time for every ad on this screen at once.
+export function SetAllDurations({
+  tvId,
+  defaultSeconds,
+}: {
+  tvId: string
+  defaultSeconds: number
+}) {
+  const router = useRouter()
+  const [pending, start] = useTransition()
+  const [val, setVal] = useState(defaultSeconds)
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <Label className="text-xs text-muted-foreground">Set all ads to</Label>
+      <Input
+        type="number"
+        min={3}
+        max={600}
+        aria-label="Seconds for all ads"
+        className="h-8 w-20"
+        value={val}
+        onChange={(e) => setVal(Number(e.target.value) || 0)}
+      />
+      <span className="text-xs text-muted-foreground">sec</span>
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={pending || !(val > 0)}
+        onClick={() =>
+          start(async () => {
+            const res = await setAllAdDurations(tvId, val)
+            if (res.error) toast.error(res.error)
+            else {
+              toast.success('All ads updated')
+              router.refresh()
+            }
+          })
+        }
+      >
+        Apply to all
       </Button>
     </div>
   )

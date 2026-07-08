@@ -18,13 +18,20 @@ import { AutoRefresh } from '@/components/app/AutoRefresh'
 import type { Tv } from '@/lib/db.types'
 import { RegenerateButton } from '../RegenerateButton'
 import { deleteTv } from '../actions'
-import { TvLoopControls, RemovePlacementButton, AddPlacement } from './TvControls'
+import {
+  TvLoopControls,
+  RemovePlacementButton,
+  AddPlacement,
+  AdDurationField,
+  SetAllDurations,
+} from './TvControls'
 
 type TvFull = Tv & {
   venue: {
     id: string
     name: string
     territory_id: string
+    trivia_enabled: boolean | null
     business_open: string | null
     business_close: string | null
     business_days: number[] | null
@@ -59,7 +66,7 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
 
   const { data: tvData } = await supabase
     .from('tvs')
-    .select('*, venue:venues(id, name, territory_id, business_open, business_close, business_days)')
+    .select('*, venue:venues(id, name, territory_id, trivia_enabled, business_open, business_close, business_days)')
     .eq('id', id)
     .maybeSingle()
   if (!tvData) notFound()
@@ -82,7 +89,7 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
   // Current loop: active placements in slot order.
   const { data: plData } = await supabase
     .from('ad_placements')
-    .select('id, slot_position, ad:ads(id, title, creative_type, creative_url, status, owner_user_id)')
+    .select('id, slot_position, ad:ads(id, title, creative_type, creative_url, status, owner_user_id, duration_seconds)')
     .eq('tv_id', id)
     .eq('status', 'active')
     .order('slot_position')
@@ -96,6 +103,7 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
       creative_url: string | null
       status: string
       owner_user_id: string
+      duration_seconds: number
     } | null
   }
   const placements = (plData ?? []) as unknown as PRow[]
@@ -129,6 +137,22 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
 
   const used = placements.length
   const open = Math.max(0, maxSlots - used)
+
+  // Slides the app ALWAYS injects on top of paid ads, so "used of maxSlots" (paid
+  // inventory) isn't everything on the TV. The Brew Loop ad + "Advertise here" card
+  // always play; the trivia teaser plays where trivia is on. Each is fixed-time
+  // (~10s, trivia longer) and is NOT a paid slot — this is why the loop shows more
+  // than the paid-slot count.
+  const houseSlides = [
+    'the Brew Loop ad',
+    'the “Advertise here” card',
+    ...(tv.venue?.trivia_enabled ? ['the trivia teaser'] : []),
+  ]
+  // Seed the "apply to all" box with the first image ad's current time (else the
+  // screen's slot length) so it opens on a sensible value.
+  const firstAdSeconds =
+    placements.find((p) => p.ad && p.ad.creative_type !== 'video')?.ad?.duration_seconds ??
+    tv.slot_seconds
 
   // ---- proof of play: uptime today + ad plays today/this month ----
   // Counts are scoped to the venue's OPEN hours and bucketed by the venue's
@@ -378,7 +402,24 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
         {/* Current loop */}
         <Card>
           <CardContent className="space-y-4 p-5">
-            <p className="text-sm font-medium">Now playing ({used} of {maxSlots} slots)</p>
+            <div className="space-y-1">
+              <p className="text-sm font-medium">
+                Now playing ({used} of {maxSlots} paid slots)
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Plus {houseSlides.length} house slide{houseSlides.length === 1 ? '' : 's'} that
+                always play and aren&apos;t paid slots: {houseSlides.join(', ')}. Those run on a
+                fixed timer (about 10s each), so they aren&apos;t in the seconds below.
+              </p>
+            </div>
+            {placements.length > 0 && (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/60 bg-muted/30 px-3 py-2.5">
+                <p className="text-xs text-muted-foreground">
+                  Each ad below shows for its own seconds. Change one, or set them all at once:
+                </p>
+                <SetAllDurations tvId={tv.id} defaultSeconds={firstAdSeconds} />
+              </div>
+            )}
             {placements.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 Nothing is running on this screen yet. Add an approved ad below, or it will fill
@@ -416,6 +457,15 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
                         <p className="truncate text-sm text-muted-foreground">—</p>
                       )}
                     </div>
+                    {p.ad?.creative_type === 'video' ? (
+                      <span className="shrink-0 text-xs text-muted-foreground">plays full video</span>
+                    ) : p.ad?.id ? (
+                      <AdDurationField
+                        tvId={tv.id}
+                        adId={p.ad.id}
+                        seconds={p.ad.duration_seconds ?? 15}
+                      />
+                    ) : null}
                     <RemovePlacementButton id={p.id} tvId={tv.id} />
                   </div>
                 ))}
