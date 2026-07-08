@@ -372,12 +372,12 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
               <p className="text-sm font-medium">Display</p>
               <p className="text-xs text-muted-foreground">
                 If this TV zooms past its edges and cuts off the QR or the edges of an ad, raise
-                the safe margin so nothing important reaches the edge. 0 = edge-to-edge; 3 is the
-                default. Tap <span className="font-medium text-foreground">Calibrate</span> on the
-                screen itself to see the cutoff and find the right number.
+                the safe margin so nothing important reaches the edge. 0 = edge-to-edge (default).
+                Tap <span className="font-medium text-foreground">Calibrate</span> on the screen
+                itself to see the cutoff and find the right number.
               </p>
             </div>
-            <OverscanControl id={tv.id} overscan={tv.overscan_pct ?? 3} />
+            <OverscanControl id={tv.id} overscan={tv.overscan_pct ?? 0} />
           </CardContent>
         </Card>
 

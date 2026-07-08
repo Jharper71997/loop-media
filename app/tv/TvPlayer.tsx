@@ -70,11 +70,10 @@ const FILLER_SECONDS = 10
 const TRIVIA_SLIDE_SECONDS = 22
 
 // Default overscan safe-area inset (percent per side) when a screen has no
-// per-screen overscan_pct set. Many TVs zoom ~2-5% past their edges and cut off
-// content; on this black-background signage app a small inset reads as a thin
-// black frame, so a modest default protects every screen out of the box. A screen
-// can override this (higher for a bad TV, 0 for true edge-to-edge) on its admin page.
-const DEFAULT_OVERSCAN_PCT = 3
+// per-screen overscan_pct set. Default 0 = edge-to-edge (no inset), so screens are
+// unchanged unless a specific TV actually overscans — then raise that screen's
+// overscan_pct on its admin page (use the on-screen Calibrate tool to find the number).
+const DEFAULT_OVERSCAN_PCT = 0
 // Clamp any overscan value (per-screen, default, or live calibration) to a sane range.
 const clampOverscan = (n: number) => Math.max(0, Math.min(12, n))
 
@@ -631,11 +630,12 @@ function Player({
         revealControls()
       }}
     >
-      {/* Motion: a soft fade on every slide, plus a slow Ken-Burns push on image
-          ads, so the loop reads as broadcast signage instead of a hard-cut
-          slideshow. Videos keep object-contain (never crop footage); image ads use
-          object-cover (creatives are exported 16:9 to match the screen, so cover
-          doesn't crop) so the zoom has no black bars. */}
+      {/* Motion: a soft fade on every slide. Videos keep object-contain (never crop
+          footage); image ads ALSO use object-contain so a creative that isn't 16:9
+          shows WHOLE — its top/bottom (or sides) are never sliced off. A true 16:9 ad
+          fills the frame edge-to-edge; anything else letterboxes onto the black field
+          instead of being cropped. (We dropped object-cover, which zoomed-and-cropped
+          non-16:9 ads — visible as "zoomed in, parts missing" at /tv in a browser.) */}
       <style>{`
         @keyframes lm-fade { from { opacity: 0 } to { opacity: 1 } }
         @keyframes lm-kenburns { from { transform: scale(1.06) } to { transform: scale(1.0) } }
@@ -666,7 +666,7 @@ function Player({
             key={slide.id + index}
             src={slide.creative_url}
             alt={slide.title}
-            className="lm-fade lm-ken h-full w-full object-cover"
+            className="lm-fade h-full w-full object-contain"
           />
         )
       ) : slide.kind === 'trivia' ? (
