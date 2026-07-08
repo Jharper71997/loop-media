@@ -187,7 +187,16 @@ export function PlayClient({ code }: { code: string }) {
   return (
     <Shell>
       <div className="flex w-full max-w-md items-center justify-between text-sm">
-        <span className="text-muted-foreground">{join.venue_name}</span>
+        <span className="flex items-center gap-1.5">
+          <Image
+            src="/loop-network-emblem.png"
+            alt=""
+            width={20}
+            height={22}
+            className="h-4 w-auto"
+          />
+          <span className="font-heading font-bold text-primary">Loop Trivia</span>
+        </span>
         <span className="font-mono text-primary">
           {(state?.you?.score ?? 0) > 0 ? `🔥 ${state?.you?.score} in a row` : '0 in a row'}
         </span>
