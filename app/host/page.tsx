@@ -246,7 +246,7 @@ export default async function HostHome() {
                               </span>
                               <LiveStatus lastHeartbeat={t.last_heartbeat_at} paired={paired} />
                             </div>
-                            <TvSetupSteps paired={paired} />
+                            <TvSetupSteps paired={paired} pairingCode={t.pairing_code} />
                           </div>
                         )
                       })
