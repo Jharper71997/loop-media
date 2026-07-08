@@ -298,7 +298,13 @@ begin
     new.id,
     new.email,
     new.raw_user_meta_data ->> 'full_name',
-    coalesce((new.raw_user_meta_data ->> 'role')::user_role, 'advertiser')
+    -- Any @loopnetwork.org email is a global admin (territory_id defaults null).
+    -- Safe only while email confirmation is required for login. See migration 0049.
+    case
+      when lower(new.email) like '%@loopnetwork.org'
+        then 'admin'::user_role
+      else coalesce((new.raw_user_meta_data ->> 'role')::user_role, 'advertiser')
+    end
   )
   on conflict (id) do nothing;
   return new;
