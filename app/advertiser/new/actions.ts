@@ -58,18 +58,7 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
   }
   const isAdmin = profile.role === 'admin'
   if (!input.title.trim()) return { error: 'Give your ad a title.' }
-  // Require a real website link for the QR (no phone/tel: fallback). Prepend
-  // https:// for a bare domain; reject anything that isn't an http(s) URL.
-  const rawQr = input.qr_target_url?.trim()
-  if (!rawQr) return { error: 'Add a website link for your ad.' }
-  const hasScheme = /^[a-z][a-z0-9+.-]*:/i.test(rawQr)
-  try {
-    const u = new URL(hasScheme ? rawQr : `https://${rawQr}`)
-    if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new Error('scheme')
-    input.qr_target_url = u.toString()
-  } catch {
-    return { error: 'Enter a valid website link (like https://your-site.com).' }
-  }
+  if (!input.qr_target_url?.trim()) return { error: 'Add a scan link for your ad.' }
   if (!input.territory_id) return { error: 'Pick a market.' }
 
   let venueIds = [...new Set((input.venue_ids ?? []).filter(Boolean))]
