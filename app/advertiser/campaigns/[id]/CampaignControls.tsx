@@ -106,10 +106,10 @@ export function CampaignControls({ id, status }: { id: string; status: string })
             <CreditCard className="size-4" /> Relaunch & pay
           </Button>
         )}
-        {/* Add more screens to this live campaign (prorated). Advertiser shell only
-            — the host advertise tree doesn't carry this subpage. */}
-        {status === 'active' && base === '/advertiser' && (
-          <Link href={`/advertiser/campaigns/${id}/add`} className={cn(buttonVariants(), 'gap-1.5')}>
+        {/* Add more screens to this live campaign (prorated) — base-aware so it
+            works in both the advertiser and host advertise trees. */}
+        {status === 'active' && (
+          <Link href={`${base}/campaigns/${id}/add`} className={cn(buttonVariants(), 'gap-1.5')}>
             <Plus className="size-4" /> Add screens
           </Link>
         )}

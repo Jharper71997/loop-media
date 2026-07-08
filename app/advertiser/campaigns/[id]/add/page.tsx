@@ -9,8 +9,10 @@ import { AddScreensClient } from './AddScreensClient'
 // Pick more venues to add to an existing active campaign. Scoped to the
 // campaign's market (the placement engine only fills that territory) and hides
 // venues already on the campaign or blocked by the ad's category exclusivity.
-export default async function AddScreensPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
+//
+// Shared impl so BOTH the advertiser tree and the host advertise tree render it
+// with base-aware back-link/redirect (basePath = '/advertiser' or '/host/advertise').
+export async function renderAddScreens(id: string, basePath: string) {
   const profile = await requireProfile()
   const supabase = await createClient()
 
@@ -20,7 +22,7 @@ export default async function AddScreensPage({ params }: { params: Promise<{ id:
     .eq('id', id)
     .maybeSingle()
   if (!camp || camp.advertiser_id !== profile.id) notFound()
-  if (camp.status !== 'active') redirect(`/advertiser/campaigns/${id}`)
+  if (camp.status !== 'active') redirect(`${basePath}/campaigns/${id}`)
 
   const ad = Array.isArray(camp.ad) ? camp.ad[0] : camp.ad
   const adCategory = (ad?.category_id as string | null) ?? null
@@ -57,7 +59,7 @@ export default async function AddScreensPage({ params }: { params: Promise<{ id:
     <div className="space-y-5">
       <div className="flex items-center gap-3">
         <Link
-          href={`/advertiser/campaigns/${id}`}
+          href={`${basePath}/campaigns/${id}`}
           className="text-muted-foreground hover:text-foreground"
           aria-label="Back to campaign"
         >
@@ -65,12 +67,15 @@ export default async function AddScreensPage({ params }: { params: Promise<{ id:
         </Link>
         <div>
           <h1 className="font-heading text-xl font-bold tracking-tight">Add screens</h1>
-          <p className="text-sm text-muted-foreground">
-            More venues for this campaign. Your subscription updates automatically.
-          </p>
+          <p className="text-sm text-muted-foreground">More venues for this campaign.</p>
         </div>
       </div>
       <AddScreensClient campaignId={id} venues={available} />
     </div>
   )
+}
+
+export default async function AddScreensPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  return renderAddScreens(id, '/advertiser')
 }

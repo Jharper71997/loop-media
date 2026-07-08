@@ -8,12 +8,17 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { formatCents } from '@/lib/format'
+import { useBasePath } from '@/lib/useBasePath'
 import { addScreensToCampaign } from '../actions'
 
 type V = { id: string; name: string; city: string | null; state: string | null }
 
 export function AddScreensClient({ campaignId, venues }: { campaignId: string; venues: V[] }) {
   const router = useRouter()
+  const base = useBasePath()
+  // Host advertising surfaces stay $-free (they run on a 100%-off host perk), so
+  // hide the monthly/proration figures for hosts.
+  const isHost = base === '/host/advertise'
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [pending, start] = useTransition()
 
@@ -35,10 +40,12 @@ export function AddScreensClient({ campaignId, venues }: { campaignId: string; v
       }
       toast.success(
         `Added ${res.added} screen${res.added === 1 ? '' : 's'}${
-          res.newMonthlyCents != null ? ` — new total ${formatCents(res.newMonthlyCents)}/mo` : ''
+          !isHost && res.newMonthlyCents != null
+            ? ` — new total ${formatCents(res.newMonthlyCents)}/mo`
+            : ''
         }`
       )
-      router.push(`/advertiser/campaigns/${campaignId}`)
+      router.push(`${base}/campaigns/${campaignId}`)
       router.refresh()
     })
   }
@@ -105,8 +112,9 @@ export function AddScreensClient({ campaignId, venues }: { campaignId: string; v
               : 'Select screens to add'}
         </Button>
         <p className="mt-2 text-xs text-muted-foreground">
-          We&apos;ll prorate the difference onto your next invoice; your monthly total updates right
-          away.
+          {isHost
+            ? 'These screens are added to your campaign right away.'
+            : "We'll prorate the difference onto your next invoice; your monthly total updates right away."}
         </p>
       </div>
     </div>

@@ -177,7 +177,7 @@ export default async function HostHome() {
             </Card>
             <Card>
               <CardContent className="p-5">
-                <p className="text-sm text-muted-foreground">Scans driven · 30d</p>
+                <p className="text-sm text-muted-foreground">QR scans from your screens · 30d</p>
                 <p className="text-2xl font-semibold tabular-nums text-primary">
                   {formatNumber(scans30)}
                 </p>
