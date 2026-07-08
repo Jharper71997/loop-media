@@ -4,6 +4,7 @@ import { ArrowLeft, ImageOff, Tv as TvIcon } from 'lucide-react'
 import { requireAdmin } from '@/lib/auth'
 import { getTerritoryContext } from '@/lib/territory'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { PageHeader } from '@/components/admin/PageHeader'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -12,6 +13,7 @@ import type { Ad, Campaign, Package, Profile, Subscription } from '@/lib/db.type
 import { CampaignAdminControls } from './CampaignAdminControls'
 import { EditAdvertiserDialog } from './EditAdvertiserDialog'
 import { DeleteAdvertiserDialog } from './DeleteAdvertiserDialog'
+import { AdvertiserStatusControls } from './AdvertiserStatusControls'
 
 const PERF_WINDOW_DAYS = 30
 
@@ -56,6 +58,18 @@ export default async function AdvertiserDetail({
     .maybeSingle()
   if (!advData) notFound()
   const advertiser = advData as Profile
+
+  // Deactivated = a Supabase auth ban (our reversible "on hold" flag, which lives on
+  // auth.users, not profiles). Read it via the admin API; treat a lookup failure as
+  // active so the page never hard-fails on it.
+  let deactivated = false
+  try {
+    const { data: authUser } = await createAdminClient().auth.admin.getUserById(id)
+    const bannedUntil = (authUser?.user as { banned_until?: string | null } | undefined)?.banned_until
+    deactivated = !!bannedUntil && new Date(bannedUntil).getTime() > Date.now()
+  } catch {
+    /* treat as active */
+  }
 
   const { data: campData } = await supabase
     .from('campaigns')
@@ -142,6 +156,7 @@ export default async function AdvertiserDetail({
               territoryId={advertiser.territory_id}
               territories={territory.territories.map((t) => ({ id: t.id, name: t.name }))}
             />
+            <AdvertiserStatusControls id={advertiser.id} deactivated={deactivated} />
             <DeleteAdvertiserDialog
               id={advertiser.id}
               name={advertiser.full_name}
@@ -158,6 +173,16 @@ export default async function AdvertiserDetail({
         >
           <ArrowLeft className="size-4" /> All advertisers
         </Link>
+
+        {deactivated && (
+          <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
+            <p className="font-medium">This advertiser is deactivated</p>
+            <p className="text-muted-foreground">
+              Their login is blocked, billing is paused, and their ads are off screens. Use
+              Reactivate to restore everything, or Delete to remove them permanently.
+            </p>
+          </div>
+        )}
 
         {/* Top stats */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

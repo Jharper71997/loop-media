@@ -263,6 +263,100 @@ export async function updateAdvertiserProfile(
   return ok()
 }
 
+// ---- reversible deactivate / reactivate ----
+// Deactivate = a Supabase auth BAN (blocks login AND is our "deactivated" flag, so
+// no schema change), plus pausing their billing and pulling their ads off screens.
+// Nothing is deleted — reactivate restores it all. Use this for a temporary hold;
+// deleteAdvertiser (below) is the permanent, email-freeing removal.
+const DEACTIVATE_BAN = '876000h' // ~100y; 'none' clears the ban on reactivate
+
+async function guardAdvertiser(id: string) {
+  const profile = await requireAdmin()
+  if (id === profile.id) return { error: 'You can’t do this to your own account.' as string }
+  const admin = createAdminClient()
+  const { data: target } = await admin
+    .from('profiles')
+    .select('role, territory_id')
+    .eq('id', id)
+    .maybeSingle()
+  if (!target) return { error: 'Advertiser not found.' }
+  if (target.role !== 'advertiser') return { error: 'This account is not an advertiser.' }
+  if (!adminCanTerritory(profile, target.territory_id)) return { error: 'Not allowed for your territory.' }
+  return { admin }
+}
+
+export async function deactivateAdvertiser(id: string) {
+  const g = await guardAdvertiser(id)
+  if ('error' in g) return { error: g.error }
+  const { admin } = g
+
+  // Their ad ids drive the placement + ad pause (placements have no advertiser_id).
+  const { data: ads } = await admin.from('ads').select('id').eq('owner_user_id', id)
+  const adIds = (ads ?? []).map((a) => a.id)
+  if (adIds.length) {
+    await admin.from('ad_placements').update({ status: 'paused' }).in('ad_id', adIds).eq('status', 'active')
+    await admin.from('ads').update({ status: 'paused' }).in('id', adIds).in('status', ['approved', 'active'])
+  }
+  await admin.from('campaigns').update({ status: 'paused' }).eq('advertiser_id', id).eq('status', 'active')
+  await admin.from('subscriptions').update({ status: 'paused' }).eq('advertiser_id', id).eq('status', 'active')
+
+  // Pause Stripe collection (reversible) on each subscription.
+  if (process.env.STRIPE_SECRET_KEY) {
+    const { data: subs } = await admin
+      .from('subscriptions')
+      .select('stripe_subscription_id')
+      .eq('advertiser_id', id)
+    for (const s of subs ?? []) {
+      if (!s.stripe_subscription_id) continue
+      try {
+        await stripe().subscriptions.update(s.stripe_subscription_id, {
+          pause_collection: { behavior: 'void' },
+        })
+      } catch {
+        /* best effort */
+      }
+    }
+  }
+
+  const { error } = await admin.auth.admin.updateUserById(id, { ban_duration: DEACTIVATE_BAN })
+  if (error) return { error: error.message }
+  return ok()
+}
+
+export async function reactivateAdvertiser(id: string) {
+  const g = await guardAdvertiser(id)
+  if ('error' in g) return { error: g.error }
+  const { admin } = g
+
+  const { error } = await admin.auth.admin.updateUserById(id, { ban_duration: 'none' })
+  if (error) return { error: error.message }
+
+  const { data: ads } = await admin.from('ads').select('id').eq('owner_user_id', id)
+  const adIds = (ads ?? []).map((a) => a.id)
+  await admin.from('campaigns').update({ status: 'active' }).eq('advertiser_id', id).eq('status', 'paused')
+  if (adIds.length) {
+    await admin.from('ads').update({ status: 'approved' }).in('id', adIds).eq('status', 'paused')
+    await admin.from('ad_placements').update({ status: 'active' }).in('ad_id', adIds).eq('status', 'paused')
+  }
+  await admin.from('subscriptions').update({ status: 'active' }).eq('advertiser_id', id).eq('status', 'paused')
+
+  if (process.env.STRIPE_SECRET_KEY) {
+    const { data: subs } = await admin
+      .from('subscriptions')
+      .select('stripe_subscription_id')
+      .eq('advertiser_id', id)
+    for (const s of subs ?? []) {
+      if (!s.stripe_subscription_id) continue
+      try {
+        await stripe().subscriptions.update(s.stripe_subscription_id, { pause_collection: null })
+      } catch {
+        /* best effort */
+      }
+    }
+  }
+  return ok()
+}
+
 // Permanently delete an advertiser account. Hard-deletes the auth user, which
 // cascades their profile → ads → campaigns → subscriptions → ad_placements →
 // targets (FK ON DELETE CASCADE). Any venue they HOST survives with host_user_id

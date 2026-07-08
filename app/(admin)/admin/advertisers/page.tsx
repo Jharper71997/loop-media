@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { requireAdmin } from '@/lib/auth'
 import { getTerritoryContext } from '@/lib/territory'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { PageHeader } from '@/components/admin/PageHeader'
 import { ListSearch } from '@/components/admin/ListSearch'
 import {
@@ -123,10 +124,30 @@ export default async function AdvertisersPage({
   })
   const hasPending = (id: string) => (adsByOwner.get(id) ?? []).some((x) => x.status === 'pending')
 
-  // Status filter: advertisers with an ad waiting in review, or with a live ad.
-  if (status === 'pending') advertisers = advertisers.filter((a) => hasPending(a.id))
-  else if (status === 'active')
-    advertisers = advertisers.filter((a) => countsFor(adsByOwner.get(a.id) ?? []).active > 0)
+  // Deactivated advertisers are a Supabase auth ban (our reversible "on hold" flag,
+  // stored on auth.users). Pull the banned set so we can hide them by default and
+  // surface them under their own filter.
+  const deactivatedIds = new Set<string>()
+  try {
+    const { data: authList } = await createAdminClient().auth.admin.listUsers({ perPage: 1000 })
+    const nowMs = Date.now()
+    for (const u of authList?.users ?? []) {
+      const banned = (u as { banned_until?: string | null }).banned_until
+      if (banned && new Date(banned).getTime() > nowMs) deactivatedIds.add(u.id)
+    }
+  } catch {
+    /* if the lookup fails, show everyone as active rather than hard-fail */
+  }
+
+  // Status filter: deactivated get their own view; every other view HIDES them.
+  if (status === 'deactivated') {
+    advertisers = advertisers.filter((a) => deactivatedIds.has(a.id))
+  } else {
+    advertisers = advertisers.filter((a) => !deactivatedIds.has(a.id))
+    if (status === 'pending') advertisers = advertisers.filter((a) => hasPending(a.id))
+    else if (status === 'active')
+      advertisers = advertisers.filter((a) => countsFor(adsByOwner.get(a.id) ?? []).active > 0)
+  }
 
   return (
     <>
@@ -141,6 +162,7 @@ export default async function AdvertisersPage({
           statusOptions={[
             { value: 'pending', label: 'Has pending ad' },
             { value: 'active', label: 'Has live ad' },
+            { value: 'deactivated', label: 'Deactivated' },
           ]}
         />
 
@@ -166,6 +188,7 @@ export default async function AdvertisersPage({
                     <div className="truncate text-xs text-muted-foreground">{a.email}</div>
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1">
+                    {deactivatedIds.has(a.id) && <Badge variant="secondary">Deactivated</Badge>}
                     {counts.active > 0 ? (
                       <Badge>{counts.active} active</Badge>
                     ) : (
@@ -221,6 +244,7 @@ export default async function AdvertisersPage({
                       >
                         {a.full_name ?? '—'}
                         {counts.pending > 0 && <Badge variant="warning">Pending</Badge>}
+                        {deactivatedIds.has(a.id) && <Badge variant="secondary">Deactivated</Badge>}
                       </Link>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
