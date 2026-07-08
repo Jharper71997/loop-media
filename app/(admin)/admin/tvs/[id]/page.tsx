@@ -139,14 +139,31 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
 
   // Slides the app ALWAYS injects on top of paid ads, so "used of maxSlots" (paid
   // inventory) isn't everything on the TV. The Brew Loop ad + "Advertise here" card
-  // always play; the trivia teaser plays where trivia is on. Each is fixed-time
-  // (~10s, trivia longer) and is NOT a paid slot — this is why the loop shows more
-  // than the paid-slot count.
-  const houseSlides = [
-    'the Brew Loop ad',
-    'the “Advertise here” card',
-    ...(tv.venue?.trivia_enabled ? ['the trivia teaser'] : []),
+  // always play, the trivia teaser plays where trivia is on, plus any authored
+  // filler cards for this territory. Each is fixed-time (~10s, trivia 22s) and is
+  // NOT a paid slot. We list them as rows below so the admin matches the real screen.
+  const houseSlides: { label: string; seconds: number }[] = [
+    { label: 'Brew Loop ad', seconds: 10 },
+    { label: '“Advertise on this screen” card', seconds: 10 },
   ]
+  if (tv.venue?.trivia_enabled) houseSlides.push({ label: 'Trivia teaser', seconds: 22 })
+  if (tv.venue?.territory_id) {
+    const { data: fillerRows } = await supabase
+      .from('filler_content')
+      .select('type, payload, expires_at')
+      .eq('territory_id', tv.venue.territory_id)
+      .eq('active', true)
+    const nowMs = new Date().getTime()
+    for (const f of (fillerRows ?? []) as {
+      type: string
+      payload: { headline?: string } | null
+      expires_at: string | null
+    }[]) {
+      if (f.type === 'trivia') continue // static trivia retired; the live teaser above covers it
+      if (f.expires_at && new Date(f.expires_at).getTime() <= nowMs) continue
+      houseSlides.push({ label: f.payload?.headline || 'Featured card', seconds: 10 })
+    }
+  }
   // Seed the "apply to all" box with the first image ad's current time (else the
   // screen's slot length) so it opens on a sensible value.
   const firstAdSeconds =
@@ -391,74 +408,93 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
           <CardContent className="space-y-4 p-5">
             <div className="space-y-1">
               <p className="text-sm font-medium">
-                Now playing ({used} of {maxSlots} paid slots)
+                On this screen — {used + houseSlides.length} slide
+                {used + houseSlides.length === 1 ? '' : 's'} in the loop
               </p>
               <p className="text-xs text-muted-foreground">
-                Plus {houseSlides.length} house slide{houseSlides.length === 1 ? '' : 's'} that
-                always play and aren&apos;t paid slots: {houseSlides.join(', ')}. Those run on a
-                fixed timer (about 10s each), so they aren&apos;t in the seconds below.
+                {used} paid ad{used === 1 ? '' : 's'} ({used} of {maxSlots} paid slots) plus{' '}
+                {houseSlides.length} house slide{houseSlides.length === 1 ? '' : 's'} that always
+                play. House slides run on a fixed timer and can&apos;t be edited or removed.
               </p>
             </div>
             {placements.length > 0 && (
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/60 bg-muted/30 px-3 py-2.5">
                 <p className="text-xs text-muted-foreground">
-                  Each ad below shows for its own seconds. Change one, or set them all at once:
+                  Each paid ad shows for its own seconds. Change one, or set them all at once:
                 </p>
                 <SetAllDurations tvId={tv.id} defaultSeconds={firstAdSeconds} />
               </div>
             )}
-            {placements.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Nothing is running on this screen yet. Add an approved ad below, or it will fill
-                automatically when the placement engine runs.
-              </p>
-            ) : (
-              <div className="divide-y divide-border">
-                {placements.map((p) => (
-                  <div key={p.id} className="flex items-center gap-4 py-3 first:pt-0 last:pb-0">
-                    <span className="w-10 shrink-0 text-center font-mono text-sm text-muted-foreground">
-                      #{p.slot_position}
-                    </span>
-                    <div className="flex h-12 w-20 shrink-0 items-center justify-center overflow-hidden rounded bg-black">
-                      {p.ad?.creative_url ? (
-                        p.ad.creative_type === 'video' ? (
-                          <video src={p.ad.creative_url} className="h-full w-full object-contain" muted />
-                        ) : (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={p.ad.creative_url} alt={p.ad.title} className="h-full w-full object-contain" />
-                        )
+            <div className="divide-y divide-border">
+              {placements.length === 0 && (
+                <p className="pb-3 text-sm text-muted-foreground">
+                  No paid ads yet — only the house slides below are playing. Add an approved ad
+                  below, or it fills automatically when the placement engine runs.
+                </p>
+              )}
+              {placements.map((p) => (
+                <div key={p.id} className="flex items-center gap-4 py-3 first:pt-0">
+                  <span className="w-12 shrink-0 text-center font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
+                    paid
+                  </span>
+                  <div className="flex h-12 w-20 shrink-0 items-center justify-center overflow-hidden rounded bg-black">
+                    {p.ad?.creative_url ? (
+                      p.ad.creative_type === 'video' ? (
+                        <video src={p.ad.creative_url} className="h-full w-full object-contain" muted />
                       ) : (
-                        <ImageOff className="size-4 text-muted-foreground" />
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium">{p.ad?.title ?? 'Untitled'}</p>
-                      {p.ad?.owner_user_id ? (
-                        <Link
-                          href={`/admin/advertisers/${p.ad.owner_user_id}`}
-                          className="truncate block text-sm text-primary hover:underline"
-                        >
-                          {ownerName.get(p.ad.owner_user_id) ?? 'View advertiser'}
-                        </Link>
-                      ) : (
-                        <p className="truncate text-sm text-muted-foreground">—</p>
-                      )}
-                    </div>
-                    {p.ad?.creative_type === 'video' ? (
-                      <span className="shrink-0 text-xs text-muted-foreground">plays full video</span>
-                    ) : p.ad?.id ? (
-                      <AdDurationField
-                        key={`${p.ad.id}-${p.ad.duration_seconds}`}
-                        tvId={tv.id}
-                        adId={p.ad.id}
-                        seconds={p.ad.duration_seconds ?? 15}
-                      />
-                    ) : null}
-                    <RemovePlacementButton id={p.id} tvId={tv.id} />
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={p.ad.creative_url} alt={p.ad.title} className="h-full w-full object-contain" />
+                      )
+                    ) : (
+                      <ImageOff className="size-4 text-muted-foreground" />
+                    )}
                   </div>
-                ))}
-              </div>
-            )}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium">{p.ad?.title ?? 'Untitled'}</p>
+                    {p.ad?.owner_user_id ? (
+                      <Link
+                        href={`/admin/advertisers/${p.ad.owner_user_id}`}
+                        className="truncate block text-sm text-primary hover:underline"
+                      >
+                        {ownerName.get(p.ad.owner_user_id) ?? 'View advertiser'}
+                      </Link>
+                    ) : (
+                      <p className="truncate text-sm text-muted-foreground">—</p>
+                    )}
+                  </div>
+                  {p.ad?.creative_type === 'video' ? (
+                    <span className="shrink-0 text-xs text-muted-foreground">plays full video</span>
+                  ) : p.ad?.id ? (
+                    <AdDurationField
+                      key={`${p.ad.id}-${p.ad.duration_seconds}`}
+                      tvId={tv.id}
+                      adId={p.ad.id}
+                      seconds={p.ad.duration_seconds ?? 15}
+                    />
+                  ) : null}
+                  <RemovePlacementButton id={p.id} tvId={tv.id} />
+                </div>
+              ))}
+              {houseSlides.map((h, i) => (
+                <div key={`house-${i}`} className="flex items-center gap-4 py-3 first:pt-0">
+                  <span className="w-12 shrink-0 text-center font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
+                    house
+                  </span>
+                  <div className="flex h-12 w-20 shrink-0 items-center justify-center rounded border border-dashed border-border bg-muted/30 text-[10px] uppercase tracking-wide text-muted-foreground">
+                    house
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium">{h.label}</p>
+                    <p className="truncate text-sm text-muted-foreground">
+                      Always plays · not a paid slot
+                    </p>
+                  </div>
+                  <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                    {h.seconds}s · fixed
+                  </span>
+                </div>
+              ))}
+            </div>
 
             <div className="border-t border-border pt-4">
               <p className="mb-2 text-sm font-medium">Add an ad to this screen</p>
