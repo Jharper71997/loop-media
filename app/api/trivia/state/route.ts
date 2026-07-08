@@ -69,12 +69,26 @@ export async function GET(req: Request) {
     .eq('venue_id', venueId)
     .gte('created_at', weekStart.toISOString())
 
-  // Current streak = walk a player's answers in round order; +1 per correct, back
-  // to 0 on any miss. The final value is their live run.
+  // CURRENT streak = walk a player's answers in round order; +1 per correct, back
+  // to 0 on any miss. The final value is their live run — this is the "X in a row"
+  // shown on the player's own phone (resets to 0 when they miss).
   const streakOf = (rows: { round: number; is_correct: boolean }[]): number => {
     let s = 0
     for (const r of [...rows].sort((a, b) => a.round - b.round)) s = r.is_correct ? s + 1 : 0
     return s
+  }
+  // BEST streak this week = the longest run of correct-in-a-row a player reached.
+  // The leaderboard ranks by THIS (a weekly high score), not the current streak,
+  // so getting 3 in a row and then missing doesn't wipe you off the board — your
+  // best run stands until someone beats it or the weekly window resets.
+  const bestStreakOf = (rows: { round: number; is_correct: boolean }[]): number => {
+    let s = 0
+    let best = 0
+    for (const r of [...rows].sort((a, b) => a.round - b.round)) {
+      s = r.is_correct ? s + 1 : 0
+      if (s > best) best = s
+    }
+    return best
   }
   const seqByPlayer = new Map<string, { round: number; is_correct: boolean }[]>()
   for (const a of (answers ?? []) as { player_id: string; round: number; is_correct: boolean }[]) {
@@ -82,8 +96,9 @@ export async function GET(req: Request) {
     arr.push({ round: Number(a.round), is_correct: a.is_correct })
     seqByPlayer.set(a.player_id, arr)
   }
+  // Leaderboard is ranked by each player's best run of the week.
   const byPlayer = new Map<string, number>()
-  for (const [pid, rows] of seqByPlayer) byPlayer.set(pid, streakOf(rows))
+  for (const [pid, rows] of seqByPlayer) byPlayer.set(pid, bestStreakOf(rows))
   const top = [...byPlayer.entries()]
     .filter(([, s]) => s > 0)
     .sort((a, b) => b[1] - a[1])

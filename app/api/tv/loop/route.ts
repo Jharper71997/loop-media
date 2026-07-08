@@ -21,6 +21,11 @@ function baseUrl(req: Request): string {
 const BREWLOOP_OFFER_URL =
   process.env.NEXT_PUBLIC_BREWLOOP_OFFER_URL || 'https://the-loop-eight.vercel.app/events'
 
+// The Loop Network "advertise on this screen" house-slide QR points at the
+// marketing site (not the in-app signup flow) — a business owner scans it to
+// learn about Loop Network. Override via env if the domain changes.
+const LOOP_SITE_URL = process.env.NEXT_PUBLIC_LOOP_SITE_URL || 'https://theloopnetwork.org'
+
 // Returns the ordered ad loop for a paired device, plus venue info the display
 // uses for filler (weather etc). Only approved/active ads with a creative play.
 export async function GET(req: Request) {
@@ -177,14 +182,12 @@ export async function GET(req: Request) {
     }
   }
 
-  // Scan-to-advertise QR for the house / "advertise on this screen" slide: a
-  // business owner who sees it can scan to sign up and run their ad on THIS
-  // screen. Venue + tv ride along in the link so a signup can be attributed to
-  // the screen that drove it. Always present (unlike ads/trivia).
-  const advertiseUrl = `${base}/signup?ref=screen&v=${tv.venue?.id ?? ''}&tv=${tv.id}`
+  // Scan QR for the house / "advertise on this screen" slide: a business owner who
+  // sees it scans to reach the Loop Network site and learn more. Points at the
+  // marketing site (not the in-app signup flow). Always present (unlike ads/trivia).
   const advertise = {
-    url: advertiseUrl,
-    qr_image: await QRCode.toDataURL(advertiseUrl, {
+    url: LOOP_SITE_URL,
+    qr_image: await QRCode.toDataURL(LOOP_SITE_URL, {
       margin: 1,
       width: 240,
       color: { dark: '#000000', light: '#ffffff' },
