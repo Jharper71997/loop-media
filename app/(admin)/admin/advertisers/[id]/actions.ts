@@ -262,3 +262,57 @@ export async function updateAdvertiserProfile(
   if (error) return { error: error.message }
   return ok()
 }
+
+// Permanently delete an advertiser account. Hard-deletes the auth user, which
+// cascades their profile → ads → campaigns → subscriptions → ad_placements →
+// targets (FK ON DELETE CASCADE). Any venue they HOST survives with host_user_id
+// nulled; payment/credit history is kept (advertiser_id nulled). Their EMAIL is
+// freed, so the person can sign up fresh as an advertiser OR a host.
+//
+// The one thing a DB cascade can't stop is Stripe billing, so we cancel every
+// subscription first — otherwise the card keeps getting charged after the row is
+// gone. Territory-guarded; a city admin can only delete advertisers in their city.
+export async function deleteAdvertiser(id: string) {
+  const profile = await requireAdmin()
+  if (id === profile.id) return { error: 'You can’t delete your own account here.' }
+
+  const admin = createAdminClient()
+
+  // Confirm the target is an advertiser in this admin's territory before touching
+  // anything (profiles RLS is any-admin, so scope it here — same as the edit action).
+  const { data: target } = await admin
+    .from('profiles')
+    .select('role, territory_id')
+    .eq('id', id)
+    .maybeSingle()
+  if (!target) return { error: 'Advertiser not found.' }
+  if (target.role !== 'advertiser')
+    return { error: 'This account is not an advertiser — delete it from its own page.' }
+  if (!adminCanTerritory(profile, target.territory_id))
+    return { error: 'Not allowed for your territory.' }
+
+  // Cancel Stripe billing first (best-effort per sub — a Stripe hiccup must not
+  // leave the account half-deleted, and an already-canceled sub is fine to skip).
+  if (process.env.STRIPE_SECRET_KEY) {
+    const { data: subs } = await admin
+      .from('subscriptions')
+      .select('stripe_subscription_id')
+      .eq('advertiser_id', id)
+    for (const s of subs ?? []) {
+      if (!s.stripe_subscription_id) continue
+      try {
+        await stripe().subscriptions.cancel(s.stripe_subscription_id)
+      } catch {
+        /* already canceled / not found — keep going */
+      }
+    }
+  }
+
+  // Hard-delete the auth user (shouldSoftDelete defaults false), which cascades the
+  // profile and all owned rows and frees the email for a fresh signup.
+  const { error } = await admin.auth.admin.deleteUser(id)
+  if (error) return { error: error.message }
+
+  revalidatePath('/admin/advertisers', 'layout')
+  return { error: null as string | null }
+}

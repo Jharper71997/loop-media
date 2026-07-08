@@ -11,6 +11,7 @@ import { formatCents, formatNumber, formatDateTime } from '@/lib/format'
 import type { Ad, Campaign, Package, Profile, Subscription } from '@/lib/db.types'
 import { CampaignAdminControls } from './CampaignAdminControls'
 import { EditAdvertiserDialog } from './EditAdvertiserDialog'
+import { DeleteAdvertiserDialog } from './DeleteAdvertiserDialog'
 
 const PERF_WINDOW_DAYS = 30
 
@@ -133,13 +134,20 @@ export default async function AdvertiserDetail({
         title={advertiser.full_name ?? advertiser.email}
         description={advertiser.email}
         action={
-          <EditAdvertiserDialog
-            id={advertiser.id}
-            fullName={advertiser.full_name}
-            phone={advertiser.phone}
-            territoryId={advertiser.territory_id}
-            territories={territory.territories.map((t) => ({ id: t.id, name: t.name }))}
-          />
+          <div className="flex items-center gap-2">
+            <EditAdvertiserDialog
+              id={advertiser.id}
+              fullName={advertiser.full_name}
+              phone={advertiser.phone}
+              territoryId={advertiser.territory_id}
+              territories={territory.territories.map((t) => ({ id: t.id, name: t.name }))}
+            />
+            <DeleteAdvertiserDialog
+              id={advertiser.id}
+              name={advertiser.full_name}
+              email={advertiser.email}
+            />
+          </div>
         }
       />
 
