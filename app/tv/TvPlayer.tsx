@@ -709,80 +709,9 @@ function Player({
           )}
         </FillerFrame>
       ) : slide.kind === 'brewloop' ? (
-        <FillerFrame title="">
-          <Image
-            src="/brewloop-wordmark.png"
-            alt="Jville Brew Loop"
-            width={1536}
-            height={1024}
-            priority
-            className="h-auto w-[34rem] max-w-[82%]"
-          />
-          <div className="mt-2 max-w-4xl px-8 font-heading text-6xl font-extrabold leading-tight text-white">
-            One ticket. All night.
-          </div>
-          <div className="mt-5 max-w-3xl px-8 text-3xl text-white/70">
-            Ride the shared shuttle that loops between town&apos;s best local spots — hop on and off
-            as much as you want.
-          </div>
-          {manifest.brewloop?.qr_image ? (
-            <div className="mt-9 flex items-center gap-7">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={manifest.brewloop.qr_image}
-                alt="Scan to book"
-                className="size-40 rounded-2xl bg-white p-3 ring-2 ring-primary"
-              />
-              <div className="text-left">
-                <div className="font-heading text-6xl font-extrabold text-primary">$5 off</div>
-                <div className="mt-1 text-2xl text-white/70">
-                  Scan &amp; use code{' '}
-                  <span className="font-mono font-semibold text-white">LOOP5</span>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="mt-9 rounded-full bg-primary px-7 py-2.5 text-2xl font-semibold text-primary-foreground">
-              $5 off with code LOOP5 — book at jvillebrewloop.com
-            </div>
-          )}
-        </FillerFrame>
+        <BrewLoopAd qrImage={manifest.brewloop?.qr_image ?? ''} />
       ) : (
-        <FillerFrame title="">
-          <Image
-            src="/loop-network-logo.png"
-            alt="Loop Network"
-            width={260}
-            height={260}
-            priority
-            className="h-16 w-auto"
-          />
-          <div className="mt-6 max-w-4xl px-8 font-heading text-7xl font-extrabold leading-tight text-white">
-            Your business, on this screen.
-          </div>
-          <div className="mt-5 max-w-3xl px-8 text-3xl text-white/70">
-            Local ads people actually see — with a QR on every ad, so you know exactly what it
-            drives.
-          </div>
-          {manifest.advertise?.qr_image ? (
-            <div className="mt-9 flex items-center gap-7">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={manifest.advertise.qr_image}
-                alt="Scan to advertise"
-                className="size-40 rounded-2xl bg-white p-3 ring-2 ring-primary"
-              />
-              <div className="text-left">
-                <div className="font-heading text-5xl font-extrabold text-primary">Advertise here</div>
-                <div className="mt-1 text-2xl text-white/70">Scan to get started</div>
-              </div>
-            </div>
-          ) : (
-            <div className="mt-9 rounded-full bg-primary px-7 py-2.5 text-2xl font-semibold text-primary-foreground">
-              Scan to advertise on Loop Network
-            </div>
-          )}
-        </FillerFrame>
+        <AdvertiseAd qrImage={manifest.advertise?.qr_image ?? ''} />
       )}
 
       {/* Scan-to-act QR (only on ad slides with a destination): a bare,
@@ -856,11 +785,14 @@ function Player({
   )
 }
 
-// Live "play trivia" teaser shown on the TV: scannable join QR + game code and a
-// live leaderboard. Polls the public state endpoint while it's on screen.
+// Live "play trivia" teaser shown on the TV: a scannable join QR and this week's
+// leaderboard. The GAME QUESTION is intentionally NOT shown here — it's answered
+// on the phone. Putting the live question on the TV made it look like it "skipped"
+// (the question changes across slide appearances and at round boundaries), so the
+// TV now only invites people to scan and tracks the standings, which update
+// smoothly. Polls the public state endpoint for the leaderboard while on screen.
 function TriviaSlide({ venueId, qrImage }: { venueId: string; qrImage: string }) {
   const [lb, setLb] = useState<{ name: string; score: number }[]>([])
-  const [prompt, setPrompt] = useState<string | null>(null)
 
   useEffect(() => {
     if (!venueId) return
@@ -872,19 +804,12 @@ function TriviaSlide({ venueId, qrImage }: { venueId: string; qrImage: string })
         const d = await r.json()
         if (!alive) return
         setLb(d.leaderboard ?? [])
-        // Freeze the question for the life of this slide. The slide is only up
-        // ~10s but polls every 3s, and the game round rolls every 30s — without
-        // this hold, a round boundary inside the slide would swap the prompt to
-        // the next question mid-display (the "bounce"). The leaderboard still
-        // updates; the prompt holds once set. A fresh question loads next time
-        // the trivia slide comes around (the component remounts).
-        setPrompt((prev) => prev ?? d.question?.prompt ?? null)
       } catch {
         /* keep last */
       }
     }
     tick()
-    const id = setInterval(tick, 3000)
+    const id = setInterval(tick, 5000)
     return () => {
       alive = false
       clearInterval(id)
@@ -894,9 +819,7 @@ function TriviaSlide({ venueId, qrImage }: { venueId: string; qrImage: string })
   return (
     <div className="flex h-full w-full items-center justify-center gap-16 bg-gradient-to-br from-[#1c1813] via-[#100e0a] to-black px-16 text-white">
       <div className="flex flex-col items-center">
-        <div className="text-3xl font-extrabold tracking-wide text-primary">
-          PLAY TRIVIA
-        </div>
+        <div className="text-3xl font-extrabold tracking-wide text-primary">PLAY TRIVIA</div>
         {qrImage && (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={qrImage} alt="Scan to play" className="mt-6 size-60 rounded-2xl bg-white p-3" />
@@ -904,8 +827,17 @@ function TriviaSlide({ venueId, qrImage }: { venueId: string; qrImage: string })
         <div className="mt-5 text-2xl text-white/70">Scan to play on your phone</div>
       </div>
       <div className="max-w-xl">
-        {prompt && <div className="mb-8 text-4xl font-semibold leading-snug">{prompt}</div>}
-        <div className="text-sm uppercase tracking-[0.2em] text-white/40">This Week&apos;s Leaders</div>
+        <div className="font-heading text-5xl font-extrabold leading-tight">
+          Trivia night,
+          <br />
+          <span className="text-primary">live on your phone.</span>
+        </div>
+        <div className="mt-4 text-2xl text-white/60">
+          Answer from your seat and climb this week&apos;s leaderboard.
+        </div>
+        <div className="mt-8 text-sm uppercase tracking-[0.2em] text-white/40">
+          This Week&apos;s Leaders
+        </div>
         {lb.length ? (
           <ol className="mt-4 space-y-2">
             {lb.slice(0, 2).map((p, i) => (
@@ -913,14 +845,118 @@ function TriviaSlide({ venueId, qrImage }: { venueId: string; qrImage: string })
                 <span>
                   {i + 1}. {p.name}
                 </span>
-                <span className="font-mono text-primary">
-                  {p.score}
-                </span>
+                <span className="font-mono text-primary">{p.score}</span>
               </li>
             ))}
           </ol>
         ) : (
           <div className="mt-4 text-3xl text-white/50">Be the first to play!</div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// The Jville Brew Loop house ad — a real two-column advertisement (brand + hook on
+// the left, the $5-off offer + scannable QR on the right) rather than a logo
+// dropped on a card. Uses the TRANSPARENT round badge so nothing renders as a
+// black block. Brand voice: shared shuttle, "friends", no alcohol/DUI angle.
+function BrewLoopAd({ qrImage }: { qrImage: string }) {
+  return (
+    <div className="relative flex h-full w-full items-center justify-center gap-20 overflow-hidden bg-gradient-to-br from-[#171310] via-[#0c0a07] to-black px-20 text-white">
+      {/* soft gold glow behind the brand */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute top-1/2 -left-40 h-[42rem] w-[42rem] -translate-y-1/2 rounded-full bg-primary/10 blur-3xl"
+      />
+      <div className="relative z-10 max-w-2xl">
+        <Image
+          src="/brewloop-badge.png"
+          alt="Jville Brew Loop"
+          width={1024}
+          height={1024}
+          priority
+          className="size-44 drop-shadow-[0_0_30px_rgba(212,163,51,0.35)]"
+        />
+        <div className="mt-8 font-heading text-7xl font-extrabold leading-[0.95] tracking-tight">
+          One ticket.
+          <br />
+          <span className="text-primary">Ride all night.</span>
+        </div>
+        <div className="mt-6 max-w-xl text-3xl leading-snug text-white/70">
+          A shared shuttle that loops between town&apos;s best local spots. Hop on, hop off, all
+          night long.
+        </div>
+      </div>
+      <div className="relative z-10 flex flex-col items-center">
+        <div className="font-heading text-8xl font-black leading-none text-primary drop-shadow">
+          $5 OFF
+        </div>
+        <div className="mt-3 text-2xl font-medium text-white/80">your first ride</div>
+        {qrImage && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={qrImage}
+            alt="Scan to book"
+            className="mt-8 size-64 rounded-3xl bg-white p-4 ring-4 ring-primary"
+          />
+        )}
+        <div className="mt-6 text-center text-2xl text-white/70">
+          Scan to book &middot; code{' '}
+          <span className="font-mono font-bold text-white">LOOP5</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// The "advertise on this screen" house ad. Renders the full Loop Network logo
+// lockup LARGE (it was tiny before) on a flat near-black field that matches the
+// logo art's own dark background, so there's no visible rectangle seam.
+function AdvertiseAd({ qrImage }: { qrImage: string }) {
+  return (
+    <div className="relative flex h-full w-full items-center justify-center gap-16 overflow-hidden bg-[#0a0908] px-16 text-white">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute top-0 right-0 h-[40rem] w-[40rem] rounded-full bg-primary/10 blur-3xl"
+      />
+      <div className="relative z-10 flex flex-1 justify-center">
+        <Image
+          src="/loop-network-logo.png"
+          alt="Loop Network"
+          width={1244}
+          height={1244}
+          priority
+          className="w-[27rem] max-w-full"
+        />
+      </div>
+      <div className="relative z-10 flex flex-1 flex-col items-start">
+        <div className="font-heading text-6xl font-extrabold leading-[1.05]">
+          Your business,
+          <br />
+          <span className="text-primary">on this screen.</span>
+        </div>
+        <div className="mt-5 max-w-lg text-3xl leading-snug text-white/70">
+          Local ads people actually see. Every ad carries its own QR, so you know exactly what it
+          drives.
+        </div>
+        {qrImage ? (
+          <div className="mt-9 flex items-center gap-7">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={qrImage}
+              alt="Scan to advertise"
+              className="size-44 rounded-2xl bg-white p-3.5 ring-4 ring-primary"
+            />
+            <div className="text-left">
+              <div className="font-heading text-5xl font-extrabold text-primary">Advertise here</div>
+              <div className="mt-2 text-2xl text-white/70">Scan to get started</div>
+            </div>
+          </div>
+        ) : (
+          <div className="mt-9 rounded-full bg-primary px-8 py-3 text-2xl font-semibold text-primary-foreground">
+            Scan to advertise on Loop Network
+          </div>
         )}
       </div>
     </div>
