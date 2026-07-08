@@ -57,6 +57,13 @@ export function RegisterVenueForm({
     if (!address.trim()) return toast.error('Enter your street address.')
     if (!city.trim() || !stateVal.trim()) return toast.error('Enter your city and state.')
     if (!zip.trim()) return toast.error('Enter your ZIP code.')
+    if (!dailyCustomers.trim() || Number(dailyCustomers) <= 0)
+      return toast.error('Enter your typical traffic per day.')
+    if (!phone.trim()) return toast.error('Enter a contact phone.')
+    if (networkType === 'wifi' && !ssid.trim())
+      return toast.error('Enter your WiFi network name.')
+    if (networkType === 'wifi' && !wifiPassword.trim())
+      return toast.error('Enter your WiFi password.')
     if (!agreed) return toast.error('Please accept the Advertising Service Agreement.')
     if (!signerName.trim()) return toast.error('Type your name to sign the agreement.')
     start(async () => {
@@ -99,31 +106,26 @@ export function RegisterVenueForm({
 
       <div className="space-y-1.5">
         <Label>Street address</Label>
-        <Input
-          value={address}
-          onChange={(e) => setAddress(e.target.value)}
-          placeholder="614 Ensign Pl"
-          required
-        />
+        <Input value={address} onChange={(e) => setAddress(e.target.value)} required />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-[2fr_1fr_1fr]">
         <div className="space-y-1.5">
           <Label>City</Label>
-          <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="Hebron" />
+          <Input value={city} onChange={(e) => setCity(e.target.value)} required />
         </div>
         <div className="space-y-1.5">
           <Label>State</Label>
           <Input
             value={stateVal}
             onChange={(e) => setStateVal(e.target.value.toUpperCase())}
-            placeholder="IN"
             maxLength={2}
+            required
           />
         </div>
         <div className="space-y-1.5">
           <Label>ZIP</Label>
-          <Input value={zip} onChange={(e) => setZip(e.target.value)} placeholder="46341" required />
+          <Input value={zip} onChange={(e) => setZip(e.target.value)} required />
         </div>
       </div>
 
@@ -151,14 +153,15 @@ export function RegisterVenueForm({
       </div>
 
       <div className="space-y-1.5">
-        <Label>Typical customers per day (optional)</Label>
+        <Label>Typical traffic per day</Label>
         <Input
           type="number"
           inputMode="numeric"
-          min={0}
+          min={1}
           value={dailyCustomers}
           onChange={(e) => setDailyCustomers(e.target.value)}
           placeholder="e.g. 150"
+          required
         />
         <p className="text-xs text-muted-foreground">
           Your usual foot traffic on an average day. We use this to estimate reach for advertisers.
@@ -166,12 +169,13 @@ export function RegisterVenueForm({
       </div>
 
       <div className="space-y-1.5">
-        <Label>Contact phone (optional)</Label>
+        <Label>Contact phone</Label>
         <Input
           type="tel"
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
           placeholder="So we can reach you about setup"
+          required
         />
       </div>
 
@@ -181,10 +185,10 @@ export function RegisterVenueForm({
       </div>
 
       <div className="space-y-3 rounded-lg border border-border p-4">
-        <Label className="text-sm font-medium">Network details (optional)</Label>
+        <Label className="text-sm font-medium">Network details</Label>
         <p className="text-xs text-muted-foreground">
-          Optional. If you&apos;d like a hand getting your screen online, share how it connects and
-          we&apos;ll help. Anything you enter is stored privately and only used for support.
+          How your screen connects to the internet, so we can get it online. Stored privately and
+          only used for support.
         </p>
         <div className="flex gap-2">
           <Button
@@ -208,7 +212,12 @@ export function RegisterVenueForm({
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>WiFi network name (SSID)</Label>
-              <Input value={ssid} onChange={(e) => setSsid(e.target.value)} placeholder="MyVenue-WiFi" />
+              <Input
+                value={ssid}
+                onChange={(e) => setSsid(e.target.value)}
+                placeholder="MyVenue-WiFi"
+                required
+              />
             </div>
             <div className="space-y-1.5">
               <Label>WiFi password</Label>
@@ -216,6 +225,7 @@ export function RegisterVenueForm({
                 value={wifiPassword}
                 onChange={(e) => setWifiPassword(e.target.value)}
                 placeholder="Network password"
+                required
               />
             </div>
           </div>

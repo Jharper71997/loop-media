@@ -93,6 +93,16 @@ export async function requestVenue(input: RegisterVenueInput) {
   if (!input.agreement_signer_name?.trim()) {
     return { error: 'Type your name to sign the Advertising Service Agreement.' }
   }
+  if (!input.median_daily_customers || input.median_daily_customers <= 0) {
+    return { error: 'Enter your typical traffic per day.' }
+  }
+  if (!input.contact_phone?.trim()) {
+    return { error: 'Enter a contact phone so we can reach you.' }
+  }
+  const netType = input.network_type === 'ethernet' ? 'ethernet' : 'wifi'
+  if (netType === 'wifi' && (!input.wifi_ssid?.trim() || !input.wifi_password?.trim())) {
+    return { error: 'Enter your WiFi network name and password.' }
+  }
 
   const admin = createAdminClient()
 
@@ -174,15 +184,14 @@ export async function requestVenue(input: RegisterVenueInput) {
   }
   if (tvError) return { error: tvError }
 
-  // Optional network details for support. Only stored if the host actually
-  // entered any — we no longer ship/pre-program hardware, so this is just a note.
-  if (input.wifi_ssid?.trim() || input.wifi_password || input.network_note?.trim()) {
-    const networkType = input.network_type === 'ethernet' ? 'ethernet' : 'wifi'
+  // Network details for support (required at registration). Wired venues store
+  // just the ethernet choice; WiFi venues store SSID + password.
+  {
     await admin.from('venue_provisioning').upsert({
       venue_id: venue.id,
-      network_type: networkType,
-      wifi_ssid: networkType === 'wifi' ? input.wifi_ssid?.trim() || null : null,
-      wifi_password: networkType === 'wifi' ? input.wifi_password || null : null,
+      network_type: netType,
+      wifi_ssid: netType === 'wifi' ? input.wifi_ssid?.trim() || null : null,
+      wifi_password: netType === 'wifi' ? input.wifi_password || null : null,
       network_note: input.network_note?.trim() || null,
       updated_at: new Date().toISOString(),
     })
