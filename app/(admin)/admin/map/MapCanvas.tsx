@@ -14,6 +14,7 @@ export type VenuePin = {
   lat: number | null
   lng: number | null
   footTraffic: number
+  medianDailyCustomers: number | null
   screensTotal: number
   online: number
   offline: number
@@ -84,7 +85,11 @@ export function MapCanvas({
                 <br />
                 {v.category ?? '—'}
                 <br />
-                {v.footTraffic > 0 ? `${v.footTraffic.toLocaleString()} visits/mo` : 'Traffic not set'}
+                {v.medianDailyCustomers && v.medianDailyCustomers > 0
+                  ? `${v.medianDailyCustomers.toLocaleString()} customers/day`
+                  : v.footTraffic > 0
+                    ? `${v.footTraffic.toLocaleString()} visits/mo`
+                    : 'Traffic not set'}
                 <br />
                 {v.used}/{v.capacity} slots filled · {v.screensTotal} screen
                 {v.screensTotal === 1 ? '' : 's'}

@@ -17,7 +17,7 @@ export default async function MapPage() {
   let venueQ = supabase
     .from('venues')
     .select(
-      'id, name, status, lat, lng, foot_traffic_estimate, category:categories(name), tvs(id, status, last_heartbeat_at, loop_length_seconds, slot_seconds)'
+      'id, name, status, lat, lng, foot_traffic_estimate, median_daily_customers, category:categories(name), tvs(id, status, last_heartbeat_at, loop_length_seconds, slot_seconds)'
     )
     .in('status', ['active', 'inactive'])
   if (t) venueQ = venueQ.eq('territory_id', t)
@@ -29,6 +29,7 @@ export default async function MapPage() {
     lat: number | null
     lng: number | null
     foot_traffic_estimate: number
+    median_daily_customers: number | null
     category: { name: string } | null
     tvs: {
       id: string
@@ -94,6 +95,7 @@ export default async function MapPage() {
       lat: v.lat,
       lng: v.lng,
       footTraffic: v.foot_traffic_estimate,
+      medianDailyCustomers: v.median_daily_customers,
       screensTotal: v.tvs.length,
       // tvs.status is only ever written 'online'/'unpaired' (never 'offline'), so
       // a dark screen must be detected from its heartbeat — every other admin
