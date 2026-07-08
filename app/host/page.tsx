@@ -252,6 +252,32 @@ export default async function HostHome() {
                       })
                     )}
                   </div>
+
+                  {v.status === 'active' && v.comp_promo_code && (
+                    <div className="mt-4 rounded-lg border border-primary/30 bg-primary/5 p-3">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="flex items-start gap-2 text-sm">
+                          <Megaphone className="mt-0.5 size-4 shrink-0 text-primary" />
+                          <div>
+                            <p className="font-medium">Advertise free — your host perk</p>
+                            <p className="text-muted-foreground">
+                              Enter code{' '}
+                              <span className="font-mono font-semibold text-foreground">
+                                {v.comp_promo_code}
+                              </span>{' '}
+                              at checkout for 100% off, good for up to 2 screens.
+                            </p>
+                          </div>
+                        </div>
+                        <Link
+                          href="/host/advertise"
+                          className={cn(buttonVariants({ size: 'sm' }), 'shrink-0')}
+                        >
+                          Advertise
+                        </Link>
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             ))}
@@ -287,26 +313,6 @@ export default async function HostHome() {
               </CardContent>
             </Card>
           </section>
-
-          {/* Advertising comp code — the host's free ads perk */}
-          {compCode && (
-            <section className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-primary/30 bg-primary/5 p-5">
-              <div className="flex items-start gap-3 text-sm">
-                <Megaphone className="mt-0.5 size-5 shrink-0 text-primary" />
-                <div>
-                  <p className="font-medium">Your advertising is on us</p>
-                  <p className="text-muted-foreground">
-                    Enter code{' '}
-                    <span className="font-mono font-semibold text-foreground">{compCode}</span> at
-                    checkout for 100% off your ads across the network.
-                  </p>
-                </div>
-              </div>
-              <Link href="/host/advertise" className={cn(buttonVariants(), 'shrink-0')}>
-                <Megaphone className="size-4" /> Advertise for free
-              </Link>
-            </section>
-          )}
 
           {/* Your ads running on other venues' screens */}
           {myCampaigns.length > 0 && (

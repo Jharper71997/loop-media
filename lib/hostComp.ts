@@ -5,9 +5,9 @@
 // live. They enter it at advertiser checkout — Stripe Checkout already sets
 // allow_promotion_codes, so no checkout change is needed.
 //
-// Abuse note: the code is readable (a business name) and not customer-locked, so
-// treat it as a shareable comp. If that ever matters, add max_redemptions or lock
-// it to the host's Stripe customer here.
+// The code is capped at 2 redemptions (the host's "2 free TVs"). It is readable
+// (a business name) and not customer-locked; if sharing ever matters, lock it to
+// the host's Stripe customer here.
 
 import { stripe } from '@/lib/stripe'
 
@@ -53,6 +53,10 @@ export async function createHostCompCode(businessName: string): Promise<string> 
       const promo = await s.promotionCodes.create({
         promotion: { type: 'coupon', coupon: HOST_COMP_COUPON_ID },
         code,
+        // Cap the host's free advertising: the code can be redeemed at most twice
+        // (their "2 free TVs"). NOTE: this caps checkout USES, not screens per
+        // checkout — a single order with 3 screens is one redemption.
+        max_redemptions: 2,
       })
       return promo.code
     } catch (e) {
