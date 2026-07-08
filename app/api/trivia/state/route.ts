@@ -129,6 +129,82 @@ export async function GET(req: Request) {
     you = { answered: !!thisRound, choiceIdx: thisRound?.choice_idx ?? null, score }
   }
 
+  // Businesses currently live on this venue's screens, so a player can browse them
+  // while they wait for the next question. Only computed for a joined player (the
+  // TV's own leaderboard poll skips this). Each links through /r/<ad>?t=<tv> so a
+  // tap is attributed like a scan. One card per advertiser; needs a website to
+  // visit + a live creative.
+  type Sponsor = { adId: string; tvId: string; name: string; what: string | null; url: string }
+  let sponsors: Sponsor[] = []
+  if (playerId) {
+    const { data: venueTvs } = await supabase.from('tvs').select('id').eq('venue_id', venueId)
+    const tvIds = ((venueTvs ?? []) as { id: string }[]).map((t) => t.id)
+    if (tvIds.length) {
+      const { data: pls } = await supabase
+        .from('ad_placements')
+        .select('tv_id, ad:ads(id, title, qr_target_url, category_id, owner_user_id, status, creative_url)')
+        .in('tv_id', tvIds)
+        .eq('status', 'active')
+      type PRow = {
+        tv_id: string
+        ad: {
+          id: string
+          title: string
+          qr_target_url: string | null
+          category_id: string | null
+          owner_user_id: string
+          status: string
+          creative_url: string | null
+        } | null
+      }
+      const rows = ((pls ?? []) as unknown as PRow[]).filter(
+        (p) => p.ad && p.ad.qr_target_url && p.ad.creative_url && ['approved', 'active'].includes(p.ad.status)
+      )
+      // Advertiser names + a category fallback (the ad may not carry one), then
+      // category labels for the "what they do" line.
+      const ownerIds = [...new Set(rows.map((p) => p.ad!.owner_user_id))]
+      const nameById = new Map<string, string>()
+      const ownerCat = new Map<string, string | null>()
+      if (ownerIds.length) {
+        const { data: profs } = await supabase
+          .from('profiles')
+          .select('id, full_name, category_id')
+          .in('id', ownerIds)
+        for (const pr of (profs ?? []) as { id: string; full_name: string | null; category_id: string | null }[]) {
+          if (pr.full_name) nameById.set(pr.id, pr.full_name)
+          ownerCat.set(pr.id, pr.category_id)
+        }
+      }
+      const catIds = [
+        ...new Set(
+          rows
+            .map((p) => p.ad!.category_id ?? ownerCat.get(p.ad!.owner_user_id) ?? null)
+            .filter((x): x is string => !!x)
+        ),
+      ]
+      const catName = new Map<string, string>()
+      if (catIds.length) {
+        const { data: cats } = await supabase.from('categories').select('id, name').in('id', catIds)
+        for (const c of (cats ?? []) as { id: string; name: string }[]) catName.set(c.id, c.name)
+      }
+      const seen = new Set<string>()
+      for (const p of rows) {
+        const ad = p.ad!
+        if (seen.has(ad.owner_user_id)) continue
+        seen.add(ad.owner_user_id)
+        const catId = ad.category_id ?? ownerCat.get(ad.owner_user_id) ?? null
+        sponsors.push({
+          adId: ad.id,
+          tvId: p.tv_id,
+          name: (ad.title || nameById.get(ad.owner_user_id) || 'Local business').trim(),
+          what: catId ? catName.get(catId) ?? null : null,
+          url: ad.qr_target_url as string,
+        })
+      }
+      sponsors = sponsors.slice(0, 8)
+    }
+  }
+
   return NextResponse.json({
     round,
     phase,
@@ -138,5 +214,6 @@ export async function GET(req: Request) {
     correctIdx: phase === 'results' ? q.correct_idx : null,
     leaderboard,
     you,
+    sponsors,
   })
 }

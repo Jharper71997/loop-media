@@ -13,6 +13,7 @@ type TriviaState = {
   correctIdx: number | null
   leaderboard: { name: string; score: number }[]
   you: { answered: boolean; choiceIdx: number | null; score: number } | null
+  sponsors?: { adId: string; tvId: string; name: string; what: string | null; url: string }[]
 }
 
 type Join = { player_id: string; venue_id: string; venue_name: string; token: string }
@@ -252,6 +253,33 @@ export function PlayClient({ code }: { code: string }) {
                   : `Press lock in · ${secs}s`
               : `Next question in ${secs}s`}
           </p>
+
+          {state.sponsors && state.sponsors.length > 0 && (
+            <div className="mt-8">
+              <p className="mb-2 text-xs uppercase tracking-widest text-muted-foreground">
+                On the screens here
+              </p>
+              <div className="grid gap-2">
+                {state.sponsors.map((s) => (
+                  <a
+                    key={s.adId}
+                    href={`/r/${s.adId}?t=${s.tvId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3 transition hover:border-primary"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate font-semibold text-foreground">{s.name}</span>
+                      {s.what && (
+                        <span className="block truncate text-xs text-muted-foreground">{s.what}</span>
+                      )}
+                    </span>
+                    <span className="shrink-0 text-xs font-medium text-primary">Visit →</span>
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
 
           {state.leaderboard.length > 0 && (
             <div className="mt-8">
