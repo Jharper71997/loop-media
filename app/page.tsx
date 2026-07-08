@@ -81,7 +81,7 @@ const GUIDE = [
   {
     icon: QrCode,
     title: 'Proof on every ad',
-    sub: 'A QR code on each ad ties the screen to real customer scans, so you see exactly what works.',
+    sub: 'A QR code on every ad, plus proof of every play, so you see exactly where and when your ad ran.',
   },
   {
     icon: Tag,
@@ -115,7 +115,7 @@ const STEPS = [
   {
     n: '3',
     title: 'Go live and see results',
-    sub: 'Your ad goes live once it clears a quick review, and a QR on it tracks every scan so you know it works.',
+    sub: 'Your ad goes live once it clears a quick review, and you see exactly where and when it plays.',
   },
 ]
 
@@ -147,9 +147,9 @@ export default async function Home() {
             <span className="text-gold-metallic">already watch.</span>
           </h1>
           <p className="mx-auto mt-4 max-w-md text-pretty text-base text-muted-foreground">
-            Loop Network puts your ad on the TVs in the busiest local bars, gyms, and shops, with a
-            QR code on every ad that tracks real scans. So you finally know which ads bring customers
-            in, and which don&apos;t.
+            Loop Network puts your ad on the TVs in the busiest local bars, gyms, and shops, and
+            shows you exactly where and when it plays. Every ad carries its own QR code, with scan
+            analytics coming soon.
           </p>
           <div className="mt-7 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
             <Link href="/signup" className={cn(buttonVariants({ size: 'lg' }), 'w-full sm:w-auto')}>
@@ -166,7 +166,7 @@ export default async function Home() {
             </Link>
           </div>
           <div className="mt-5 flex flex-wrap justify-center gap-x-5 gap-y-1.5 text-xs text-muted-foreground">
-            {['$50 / TV / month', 'Month to month', "We'll design your ad"].map((t) => (
+            {['From $50 / screen / month', 'Month to month', 'We can design your ad'].map((t) => (
               <span key={t} className="flex items-center gap-1.5">
                 <Check className="size-3.5 text-primary" /> {t}
               </span>
@@ -297,9 +297,8 @@ export default async function Home() {
               Stop guessing. Start knowing.
             </h2>
             <p className="text-pretty text-sm text-muted-foreground">
-              Become the local spot people keep seeing, and keep walking into, while the scans add up
-              in a dashboard that finally tells the truth about your marketing. That&apos;s what
-              advertising should feel like.
+              Become the local spot people keep seeing, and keep walking into, while you see exactly
+              where and when your ad plays. That&apos;s what advertising should feel like.
             </p>
             <Link href="/signup" className={cn(buttonVariants({ size: 'lg' }), 'mt-2')}>
               Start advertising <ArrowRight className="size-4" />
@@ -316,11 +315,13 @@ export default async function Home() {
               Simple, public pricing
             </p>
             <p className="font-heading text-4xl font-extrabold">
-              $50<span className="text-xl font-bold text-muted-foreground"> / TV / month</span>
+              <span className="text-xl font-bold text-muted-foreground">from </span>$50
+              <span className="text-xl font-bold text-muted-foreground"> / screen / month</span>
             </p>
             <p className="max-w-md text-sm text-muted-foreground">
-              Start from a $200/mo minimum, cancel anytime, and we&apos;ll design your ad for you. No
-              contracts, no hidden rates. You always see the price before you buy.
+              Pricing scales with each location&apos;s traffic, starting at $50/screen with a $200/mo
+              minimum. Cancel anytime, and we can design your ad if you need it. No long-term
+              contracts, and you always see the price before you buy.
             </p>
             <Link href="/signup" className={cn(buttonVariants({ size: 'lg' }))}>
               Start advertising
@@ -337,15 +338,15 @@ export default async function Home() {
             <div className="space-y-1">
               <h3 className="font-heading text-lg font-bold">Advertise on local screens</h3>
               <p className="text-sm text-muted-foreground">
-                Reach people where they already are, and prove it. QR scans tie every screen to a
-                real customer action, so you know exactly what&apos;s working.
+                Reach people where they already are, and see it. You get proof of every play, exactly
+                where and when your ad ran, with a QR code on every ad.
               </p>
             </div>
             <ul className="space-y-1.5 text-sm">
               {[
                 'Pick venues on a map, by the screen',
                 'Month to month, cancel anytime',
-                'Every scan tracked back to its venue',
+                'Proof of every play, by venue and time',
               ].map((t) => (
                 <li key={t} className="flex items-start gap-2">
                   <Check className="mt-0.5 size-4 shrink-0 text-primary" /> {t}
