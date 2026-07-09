@@ -5,7 +5,7 @@ import { BackLink } from '@/components/app/BackLink'
 import { RegisterVenueForm } from './RegisterVenueForm'
 
 export default async function RegisterVenuePage() {
-  await requireProfile()
+  const profile = await requireProfile()
   const supabase = await createClient()
 
   const { data: cats } = await supabase.from('categories').select('id, name').order('name')
@@ -26,7 +26,7 @@ export default async function RegisterVenuePage() {
 
       <Card>
         <CardContent className="p-6">
-          <RegisterVenueForm categories={categories} />
+          <RegisterVenueForm categories={categories} demo={profile.is_demo} />
         </CardContent>
       </Card>
     </div>

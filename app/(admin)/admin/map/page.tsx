@@ -20,6 +20,8 @@ export default async function MapPage() {
       'id, name, status, lat, lng, foot_traffic_estimate, median_daily_customers, category:categories(name), tvs(id, status, last_heartbeat_at, loop_length_seconds, slot_seconds)'
     )
     .in('status', ['active', 'inactive'])
+    // Demo venues never plot on the admin map.
+    .eq('is_demo', false)
   if (t) venueQ = venueQ.eq('territory_id', t)
   const { data: venueData } = await venueQ
   type VRow = {

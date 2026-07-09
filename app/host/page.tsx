@@ -30,6 +30,7 @@ type RunningPlacement = {
 
 export default async function HostHome() {
   const profile = await requireProfile()
+  const isDemo = profile.is_demo
   const supabase = await createClient()
 
   const { data: venuesData } = await supabase
@@ -73,7 +74,7 @@ export default async function HostHome() {
   // advertise from /host/advertise). Surfaced so they manage it without leaving.
   const { data: myCampaignsData } = await supabase
     .from('campaigns')
-    .select('id, status, ad:ads(title)')
+    .select('id, status, ad:ads(title, owner_kind)')
     .eq('advertiser_id', profile.id)
     .is('deleted_at', null)
     .order('created_at', { ascending: false })
@@ -81,9 +82,13 @@ export default async function HostHome() {
   type MyCampaign = {
     id: string
     status: string
-    ad: { title: string | null } | null
+    ad: { title: string | null; owner_kind: string } | null
   }
-  const myCampaigns = (myCampaignsData ?? []) as unknown as MyCampaign[]
+  // A host's free own-screen promos are also campaigns owned by them; keep those
+  // out of the "on other screens" list — they're managed on /host/promote.
+  const myCampaigns = ((myCampaignsData ?? []) as unknown as MyCampaign[]).filter(
+    (c) => c.ad?.owner_kind !== 'host'
+  )
 
   const allTvs = venues.flatMap((v) => v.tvs)
   const onlineCount = allTvs.filter((t) => isTvLive(t.last_heartbeat_at)).length
@@ -124,6 +129,25 @@ export default async function HostHome() {
     scans30 = scanRes.count ?? 0
     trivia30 = triviaRes.count ?? 0
     plays30 = playRes.count ?? 0
+  }
+
+  // Demo: the venue was just created this second, so real analytics are empty.
+  // Show believable sample activity + a few ads "now playing" so the dashboard
+  // reads as a live, earning screen for the walkthrough. All of it is confined to
+  // the demo account (is_demo) and never touches real numbers or real TVs.
+  if (isDemo) {
+    scans30 = 342
+    plays30 = 12480
+    trivia30 = 86
+    const demoVenue = venues[0]
+    if (demoVenue) {
+      const v = { id: demoVenue.id, name: demoVenue.name }
+      running = [
+        { id: 'demo-1', slot_position: 1, status: 'active', tv: { venue: v }, ad: { title: "Joe's Pizza — 2-for-Tuesday", creative_type: 'image', owner_kind: 'advertiser' } },
+        { id: 'demo-2', slot_position: 2, status: 'active', tv: { venue: v }, ad: { title: 'Elite Auto Detailing', creative_type: 'video', owner_kind: 'advertiser' } },
+        { id: 'demo-3', slot_position: 3, status: 'active', tv: { venue: v }, ad: { title: 'Northside Dental — New Patient Special', creative_type: 'image', owner_kind: 'advertiser' } },
+      ]
+    }
   }
 
   return (
@@ -282,6 +306,25 @@ export default async function HostHome() {
               </Card>
             ))}
           </section>
+
+          {/* Put your own promo on your own screen — free host perk */}
+          {venues.some((v) => v.status === 'active' && v.tvs.length > 0) && (
+            <section className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-primary/30 bg-primary/5 p-5">
+              <div className="flex items-start gap-3 text-sm">
+                <Megaphone className="mt-0.5 size-5 shrink-0 text-primary" />
+                <div>
+                  <p className="font-medium">Put your own promo on your screen — free</p>
+                  <p className="text-muted-foreground">
+                    Run your own image or video (happy hour, an event, a special) on your own TV. It
+                    plays in the loop within about 30 seconds — no charge.
+                  </p>
+                </div>
+              </div>
+              <Link href="/host/promote" className={cn(buttonVariants(), 'shrink-0')}>
+                <Plus className="size-4" /> Add a promo
+              </Link>
+            </section>
+          )}
 
           {/* Now playing */}
           <section className="space-y-3">

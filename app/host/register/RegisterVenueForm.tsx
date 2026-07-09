@@ -14,30 +14,35 @@ import {
   AGREEMENT_TITLE,
   AGREEMENT_VERSION,
 } from '@/lib/agreement'
+import { DEMO_HOST } from '@/lib/demoData'
 import { requestVenue } from './actions'
 
 const NO_CATEGORY = 'none'
 
 export function RegisterVenueForm({
   categories,
+  demo = false,
 }: {
   categories: { id: string; name: string }[]
+  // Demo walkthrough: prefill a believable sample venue so a prospect (or Jacob)
+  // can submit in one click and land on a live dashboard.
+  demo?: boolean
 }) {
   const router = useRouter()
-  const [name, setName] = useState('')
-  const [address, setAddress] = useState('')
-  const [city, setCity] = useState('')
-  const [stateVal, setStateVal] = useState('')
-  const [zip, setZip] = useState('')
+  const [name, setName] = useState(demo ? DEMO_HOST.venueName : '')
+  const [address, setAddress] = useState(demo ? DEMO_HOST.address : '')
+  const [city, setCity] = useState(demo ? DEMO_HOST.city : '')
+  const [stateVal, setStateVal] = useState(demo ? DEMO_HOST.state : '')
+  const [zip, setZip] = useState(demo ? DEMO_HOST.zip : '')
   const [categoryId, setCategoryId] = useState<string | null>(null)
-  const [venueType, setVenueType] = useState('')
-  const [dailyCustomers, setDailyCustomers] = useState('')
-  const [phone, setPhone] = useState('')
-  const [signerName, setSignerName] = useState('')
-  const [agreed, setAgreed] = useState(false)
+  const [venueType, setVenueType] = useState(demo ? DEMO_HOST.venueType : '')
+  const [dailyCustomers, setDailyCustomers] = useState(demo ? String(DEMO_HOST.dailyCustomers) : '')
+  const [phone, setPhone] = useState(demo ? DEMO_HOST.phone : '')
+  const [signerName, setSignerName] = useState(demo ? DEMO_HOST.fullName : '')
+  const [agreed, setAgreed] = useState(demo)
   const [networkType, setNetworkType] = useState<'wifi' | 'ethernet'>('wifi')
-  const [ssid, setSsid] = useState('')
-  const [wifiPassword, setWifiPassword] = useState('')
+  const [ssid, setSsid] = useState(demo ? DEMO_HOST.ssid : '')
+  const [wifiPassword, setWifiPassword] = useState(demo ? DEMO_HOST.wifiPassword : '')
   const [networkNote, setNetworkNote] = useState('')
   const [hours, setHours] = useState<BusinessHoursValue>({
     open: '10:00',
@@ -92,7 +97,11 @@ export function RegisterVenueForm({
         toast.error(res.error)
         return
       }
-      toast.success("Location submitted. Once it's approved, we'll reach out to schedule your Fire Stick setup.")
+      toast.success(
+        demo
+          ? "You're live. Here's your dashboard."
+          : "Location submitted. Once it's approved, we'll reach out to schedule your Fire Stick setup."
+      )
       router.push('/host')
     })
   }

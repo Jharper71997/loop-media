@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Check, MailCheck } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
+import { beginDemo } from '@/app/demo/actions'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -30,16 +31,27 @@ const OTHER = '__other__'
 export function SignupForm({
   role = 'advertiser',
   categories = [],
+  demo = false,
+  defaultCategoryId,
+  defaultFullName,
+  defaultEmail,
 }: {
   role?: 'advertiser' | 'host'
   categories?: { id: string; name: string }[]
+  // Demo mode: this form drives the guided sales walkthrough. Instead of a real
+  // signup it provisions a throwaway account (no email confirmation, no charge)
+  // and drops the visitor into the actual flow. Fields are prefilled for show.
+  demo?: boolean
+  defaultCategoryId?: string
+  defaultFullName?: string
+  defaultEmail?: string
 }) {
   const isHost = role === 'host'
-  const [categoryId, setCategoryId] = useState('')
+  const [categoryId, setCategoryId] = useState(defaultCategoryId ?? '')
   const [otherText, setOtherText] = useState('')
-  const [fullName, setFullName] = useState('')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+  const [fullName, setFullName] = useState(defaultFullName ?? '')
+  const [email, setEmail] = useState(defaultEmail ?? '')
+  const [password, setPassword] = useState(demo ? 'demo-account' : '')
   const [loading, setLoading] = useState(false)
   // Set once a confirm-email signup succeeds: swaps the form for a
   // check-your-email screen instead of stranding the user on a toast.
@@ -59,6 +71,25 @@ export function SignupForm({
         return
       }
     }
+
+    // Demo mode: no real account, no email confirmation, no charge. Provision a
+    // throwaway account server-side and go straight into the flow (the action
+    // redirects on success; only an error comes back).
+    if (demo) {
+      setLoading(true)
+      const res = await beginDemo({
+        role,
+        fullName,
+        categoryId: !isHost && !isOther ? categoryId || null : null,
+      })
+      // Reached only on error — a success redirects and never returns.
+      if (res?.error) {
+        toast.error(res.error)
+        setLoading(false)
+      }
+      return
+    }
+
     setLoading(true)
     const supabase = createClient()
     const { data, error } = await supabase.auth.signUp({
@@ -158,6 +189,12 @@ export function SignupForm({
 
   return (
     <Card>
+      {demo && (
+        <div className="mx-6 mt-6 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-primary">
+          Live demo — walk through exactly how a {isHost ? 'venue' : 'business'} gets set up.
+          Nothing here is real and no card is ever charged.
+        </div>
+      )}
       <CardHeader>
         <CardTitle>{isHost ? 'Host a screen' : 'Create your advertiser account'}</CardTitle>
         <CardDescription>
@@ -270,7 +307,15 @@ export function SignupForm({
         </CardContent>
         <CardFooter className="mt-6 flex-col gap-3">
           <Button type="submit" size="lg" className="h-12 w-full text-base" disabled={loading}>
-            {loading ? 'Creating…' : isHost ? 'Create host account' : 'Create account'}
+            {loading
+              ? demo
+                ? 'Starting…'
+                : 'Creating…'
+              : demo
+                ? 'Start the demo'
+                : isHost
+                  ? 'Create host account'
+                  : 'Create account'}
           </Button>
           <p className="text-center text-sm text-muted-foreground">
             Already have an account?{' '}

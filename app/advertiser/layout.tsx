@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { requireProfile, homeForRole } from '@/lib/auth'
 import { AppShell } from '@/components/app/AppShell'
 import { AdminPreviewBanner } from '@/components/AdminPreviewBanner'
+import { DemoBanner } from '@/components/DemoBanner'
 
 export default async function AdvertiserLayout({
   children,
@@ -19,6 +20,7 @@ export default async function AdvertiserLayout({
 
   return (
     <>
+      {profile.is_demo && <DemoBanner />}
       {profile.role === 'admin' && <AdminPreviewBanner surface="advertiser" />}
       <AppShell role="advertiser">{children}</AppShell>
     </>

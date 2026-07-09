@@ -65,6 +65,8 @@ export default async function VenuesPage({
   let vq = supabase
     .from('venues')
     .select('*, category:categories(name), territory:territories(name)')
+    // Demo venues never appear in the admin venue list.
+    .eq('is_demo', false)
     .order('name')
   if (t) vq = vq.eq('territory_id', t)
   if (q?.trim()) vq = vq.ilike('name', `%${q.trim()}%`)
@@ -74,7 +76,12 @@ export default async function VenuesPage({
   const [{ data: venues }, { data: categories }, { data: hostProfiles }] = await Promise.all([
     vq,
     supabase.from('categories').select('*').order('name'),
-    supabase.from('profiles').select('id, email, full_name').in('role', ['host', 'admin']).order('email'),
+    supabase
+      .from('profiles')
+      .select('id, email, full_name')
+      .in('role', ['host', 'admin'])
+      .eq('is_demo', false)
+      .order('email'),
   ])
 
   const rows = (venues ?? []) as VenueRow[]

@@ -122,6 +122,39 @@ export default async function CampaignDetail({
       })
     }
   }
+  // Demo: no real placements exist (a demo ad never airs). Populate "where it's
+  // running" from the screens the advertiser actually picked (campaign_targets),
+  // so the finish lands on a real map of their chosen venues.
+  if (c.is_demo && venueMap.size === 0) {
+    const { data: tgt } = await supabase
+      .from('campaign_targets')
+      .select('venue:venues(id, name, lat, lng, foot_traffic_estimate, median_daily_customers)')
+      .eq('campaign_id', id)
+    for (const row of (tgt ?? []) as unknown as {
+      venue: {
+        id: string
+        name: string
+        lat: number | null
+        lng: number | null
+        foot_traffic_estimate: number
+        median_daily_customers: number | null
+      } | null
+    }[]) {
+      const v = row.venue
+      if (!v || venueMap.has(v.id)) continue
+      venueMap.set(v.id, {
+        venueId: v.id,
+        name: v.name,
+        lat: v.lat,
+        lng: v.lng,
+        footTraffic: v.foot_traffic_estimate ?? 0,
+        medianDailyCustomers: v.median_daily_customers ?? null,
+        tvIds: [],
+        plays: 0,
+      })
+    }
+  }
+
   const venues = [...venueMap.values()]
   const runningTvIds = venues.flatMap((v) => v.tvIds)
 

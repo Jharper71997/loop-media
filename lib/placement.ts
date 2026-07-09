@@ -46,10 +46,13 @@ export async function placeCampaign(
 
   const { data: camp } = await admin
     .from('campaigns')
-    .select('id, advertiser_id, ad_id, package_id, territory_id, target_impressions, screen_cap_override, status')
+    .select('id, advertiser_id, ad_id, package_id, territory_id, target_impressions, screen_cap_override, status, is_demo')
     .eq('id', campaignId)
     .maybeSingle()
   if (!camp) return empty('Campaign not found')
+  // Hard backstop: a demo campaign is NEVER placed on a real screen, no matter
+  // who calls the engine.
+  if (camp.is_demo) return empty('Demo campaign — not placed', camp.target_impressions)
   if (camp.status !== 'active') return empty('Campaign is not active', camp.target_impressions)
   if (!camp.ad_id) return empty('Campaign has no ad', camp.target_impressions)
 

@@ -43,6 +43,9 @@ export interface Profile {
   // The advertiser's own line of business, captured once (browse Step 1) and
   // reused so we never re-ask on later campaigns. Null for hosts/admins.
   category_id: string | null
+  // Throwaway account minted by the guided sales demo (/demo/host, /demo/advertiser).
+  // Everything it creates is also flagged and hidden from real surfaces. See lib/demo.ts.
+  is_demo: boolean
   created_at: string
 }
 
@@ -92,6 +95,8 @@ export interface Venue {
   agreement_signed_at: string | null
   agreement_signer_name: string | null
   agreement_version: string | null
+  // Sample venue created by the guided demo; hidden from the real buy map + admin.
+  is_demo: boolean
   created_at: string
   updated_at: string
 }
@@ -144,6 +149,8 @@ export interface Ad {
   qr_size: number | null
   reviewed_by: string | null
   reviewed_at: string | null
+  // Ad created inside the guided demo; never placed on a real TV or shown in review.
+  is_demo: boolean
   created_at: string
   updated_at: string
 }
@@ -171,6 +178,9 @@ export interface Campaign {
   screen_cap_override: number | null
   monthly_total_cents: number | null
   status: CampaignStatus
+  // Campaign created inside the guided demo; the placement engine + cron skip it,
+  // so it is never assigned to a real screen. Excluded from admin + revenue.
+  is_demo: boolean
   deleted_at: string | null
   archived_at: string | null
   created_at: string

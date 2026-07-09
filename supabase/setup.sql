@@ -308,12 +308,12 @@ begin
     new.id,
     new.email,
     new.raw_user_meta_data ->> 'full_name',
-    -- Any @loopnetwork.org email is a global admin (territory_id defaults null).
-    -- Safe only while email confirmation is required for login. See migration 0049.
+    -- Signups never become admin automatically (email confirmation is OFF, so the
+    -- email domain can't be trusted). Role is clamped to host/advertiser; a signup
+    -- can't request 'admin'. Promote real staff by hand. See migration 0051.
     case
-      when lower(new.email) like '%@loopnetwork.org'
-        then 'admin'::user_role
-      else coalesce((new.raw_user_meta_data ->> 'role')::user_role, 'advertiser')
+      when (new.raw_user_meta_data ->> 'role') = 'host' then 'host'::user_role
+      else 'advertiser'::user_role
     end
   )
   on conflict (id) do nothing;

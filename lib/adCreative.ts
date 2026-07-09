@@ -4,10 +4,11 @@
 // preview and the exported PNG line up exactly. The export function touches the
 // DOM (canvas), so only call it client-side.
 
-// The exported creative is always rendered at 16:9 720p so the crop preview and
-// the offscreen-canvas export share one coordinate system (see computeDraw).
-export const EXPORT_W = 1280
-export const EXPORT_H = 720
+// The exported creative is always rendered at 16:9 1080p — crisp on big TVs.
+// exportImageBlob does a programmatic cover-crop (no editor); getCroppedImg bakes
+// the react-easy-crop selection. Both composite onto this same fixed frame.
+export const EXPORT_W = 1920
+export const EXPORT_H = 1080
 
 // Free-drag QR default — the QR CENTER as fractions of the frame. Roughly
 // bottom-right, matching the old 'bottom-right' corner so placements don't jump.
@@ -81,23 +82,7 @@ export function computeDraw(
   return { dx, dy, dw, dh }
 }
 
-// Keep the (zoomed) image fully covering the frame: pan is bounded by how much
-// the drawn image overhangs each edge (as a fraction of the frame).
-export function clampPan(
-  nat: { w: number; h: number },
-  zoom: number,
-  pan: { x: number; y: number },
-  W: number,
-  H: number
-) {
-  const base = Math.max(W / nat.w, H / nat.h)
-  const s = base * zoom
-  const maxX = Math.max(0, (nat.w * s - W) / (2 * W))
-  const maxY = Math.max(0, (nat.h * s - H) / (2 * H))
-  return { x: clamp(pan.x, -maxX, maxX), y: clamp(pan.y, -maxY, maxY) }
-}
-
-// Composite the cropped + filtered photo to a 1280x720 PNG. The QR is NEVER baked
+// Composite the cover-cropped + filtered photo to a 16:9 PNG. The QR is NEVER baked
 // in (the TV draws a tracked QR at play time) — only the photo is drawn. Client-
 // only (uses canvas). `filterStr` must be the SAME string used on the preview img.
 export async function exportImageBlob(
@@ -122,6 +107,78 @@ export async function exportImageBlob(
   const d = computeDraw(dims, opts.zoom, opts.pan, EXPORT_W, EXPORT_H)
   ctx.drawImage(img, d.dx, d.dy, d.dw, d.dh)
   const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'))
+  if (!blob) throw new Error('Could not render image.')
+  return blob
+}
+
+// ---- Editor-driven crop (react-easy-crop) ----
+// The Cropper reports the selected region as pixel coords in the (rotated) media's
+// own space. We rotate the source onto a bounding-box canvas, then draw the selected
+// region — scaled to the fixed 16:9 output and filtered — so the baked PNG matches
+// what the advertiser framed. QR stays a render-time overlay (never baked). Client-only.
+function createImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((res, rej) => {
+    const im = new window.Image()
+    im.onload = () => res(im)
+    im.onerror = () => rej(new Error('Could not read image.'))
+    im.src = src
+  })
+}
+
+const toRad = (deg: number) => (deg * Math.PI) / 180
+
+// Size of an image's bounding box once rotated by `deg`, so rotation never clips it.
+function rotatedBox(w: number, h: number, deg: number) {
+  const r = toRad(deg)
+  return {
+    w: Math.abs(Math.cos(r) * w) + Math.abs(Math.sin(r) * h),
+    h: Math.abs(Math.sin(r) * w) + Math.abs(Math.cos(r) * h),
+  }
+}
+
+export async function getCroppedImg(
+  src: string,
+  pixelCrop: { x: number; y: number; width: number; height: number },
+  rotation: number,
+  filterStr: string
+): Promise<Blob> {
+  const img = await createImage(src)
+  const nw = img.naturalWidth
+  const nh = img.naturalHeight
+
+  // Stage 1: draw the (rotated) full image onto a canvas sized to its bounding box.
+  const box = rotatedBox(nw, nh, rotation)
+  const stage = document.createElement('canvas')
+  stage.width = Math.round(box.w)
+  stage.height = Math.round(box.h)
+  const sctx = stage.getContext('2d')
+  if (!sctx) throw new Error('Canvas is not available.')
+  sctx.translate(stage.width / 2, stage.height / 2)
+  sctx.rotate(toRad(rotation))
+  sctx.drawImage(img, -nw / 2, -nh / 2)
+
+  // Stage 2: draw the cropped region, scaled to the fixed frame, with the filter.
+  const out = document.createElement('canvas')
+  out.width = EXPORT_W
+  out.height = EXPORT_H
+  const octx = out.getContext('2d')
+  if (!octx) throw new Error('Canvas is not available.')
+  octx.fillStyle = '#000000'
+  octx.fillRect(0, 0, EXPORT_W, EXPORT_H)
+  octx.filter = filterStr // same string as the preview media
+  octx.drawImage(
+    stage,
+    pixelCrop.x,
+    pixelCrop.y,
+    pixelCrop.width,
+    pixelCrop.height,
+    0,
+    0,
+    EXPORT_W,
+    EXPORT_H
+  )
+
+  const blob = await new Promise<Blob | null>((res) => out.toBlob(res, 'image/png'))
   if (!blob) throw new Error('Could not render image.')
   return blob
 }

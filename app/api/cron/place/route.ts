@@ -23,6 +23,8 @@ export async function GET(req: Request) {
     .from('campaigns')
     .select('id')
     .eq('status', 'active')
+    // Demo campaigns are never placed on a real screen.
+    .eq('is_demo', false)
 
   // Accumulate this month's placement snapshot as we go. Upsert-ignore means a
   // screen active on ANY day this month is recorded once, so the monthly report can

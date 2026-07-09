@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { requireProfile, homeForRole } from '@/lib/auth'
 import { AppShell } from '@/components/app/AppShell'
 import { AdminPreviewBanner } from '@/components/AdminPreviewBanner'
+import { DemoBanner } from '@/components/DemoBanner'
 
 export default async function HostLayout({
   children,
@@ -16,6 +17,7 @@ export default async function HostLayout({
 
   return (
     <>
+      {profile.is_demo && <DemoBanner />}
       {profile.role === 'admin' && <AdminPreviewBanner surface="host" />}
       {/* Advertising lives in its own host tab now (no cross-app jump). */}
       <AppShell role="host">{children}</AppShell>

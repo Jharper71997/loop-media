@@ -70,6 +70,7 @@ export default async function AdvertiserDashboard({
 }) {
   const { membership } = await searchParams
   const profile = await requireProfile()
+  const isDemo = profile.is_demo
   const supabase = await createClient()
   const [{ data }, { count: trashedCount }, { count: archivedCount }, ctx] = await Promise.all([
     supabase
@@ -181,10 +182,47 @@ export default async function AdvertiserDashboard({
   const allVenues = [...byVenue.values()]
 
   // The real, named places the ad is actually running (active campaigns) — live first.
-  const playingVenues = allVenues
+  let playingVenues = allVenues
     .filter((v) => v.hasActive)
     .sort((a, b) => Number(b.live) - Number(a.live) || b.footTraffic - a.footTraffic)
-  const liveCount = playingVenues.filter((v) => v.live).length
+
+  // Demo: we deliberately create no real placements, so "where it's playing" comes
+  // from the screens the advertiser actually picked (campaign_targets). Shows the
+  // real venue names they chose off the map, without ever airing on those TVs.
+  if (isDemo && campaigns.length) {
+    const { data: tgt } = await supabase
+      .from('campaign_targets')
+      .select('venue:venues(id, name, city, state, lat, lng, foot_traffic_estimate)')
+      .in('campaign_id', campaigns.map((c) => c.id))
+    const seen = new Map<string, VenueAgg>()
+    for (const row of (tgt ?? []) as unknown as {
+      venue: {
+        id: string
+        name: string
+        city: string | null
+        state: string | null
+        lat: number | null
+        lng: number | null
+        foot_traffic_estimate: number
+      } | null
+    }[]) {
+      const v = row.venue
+      if (!v || seen.has(v.id)) continue
+      seen.set(v.id, {
+        id: v.id,
+        name: v.name,
+        city: v.city,
+        state: v.state,
+        lat: v.lat,
+        lng: v.lng,
+        footTraffic: v.foot_traffic_estimate ?? 0,
+        live: true,
+        hasActive: true,
+        ads: [{ title: campaigns[0]?.ad?.title ?? 'Your ad', live: true }],
+      })
+    }
+    playingVenues = [...seen.values()].sort((a, b) => b.footTraffic - a.footTraffic)
+  }
 
   const monthlySpend = campaigns
     .filter((c) => c.status === 'active')
@@ -278,9 +316,6 @@ export default async function AdvertiserDashboard({
           <section className="space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="font-heading text-lg font-semibold">Where your ad is playing</h2>
-              {playingVenues.length > 0 && (
-                <span className="text-xs text-muted-foreground">{liveCount} live now</span>
-              )}
             </div>
             {playingVenues.length > 0 ? (
               <div className="space-y-3">
@@ -297,15 +332,6 @@ export default async function AdvertiserDashboard({
                             {[v.city, v.state].filter(Boolean).join(', ') || 'Local venue'}
                           </p>
                         </div>
-                        {v.live ? (
-                          <Badge variant="success" className="shrink-0 gap-1.5">
-                            <span className="size-1.5 rounded-full bg-success-foreground" /> Live now
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="shrink-0">
-                            Coming online
-                          </Badge>
-                        )}
                       </div>
                     ))}
                   </CardContent>

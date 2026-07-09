@@ -14,9 +14,10 @@ export type AdsMapVenue = {
   ads: { title: string; live: boolean }[]
 }
 
-// Where the advertiser's ads physically are. Green pin = at least one ad live
-// here, gray = placed but paused. CircleMarkers (vector) sidestep Leaflet's
-// default-icon asset issues in bundlers — same approach as the other maps.
+// Where the advertiser's ads physically are. Every pin reads the same — a
+// screen's live/offline state is operational noise we don't surface to
+// advertisers. CircleMarkers (vector) sidestep Leaflet's default-icon asset
+// issues in bundlers — same approach as the other maps.
 export default function AdsMapView({
   venues,
   center,
@@ -42,8 +43,7 @@ export default function AdsMapView({
       {venues
         .filter((v) => v.lat != null && v.lng != null)
         .map((v) => {
-          const live = v.ads.some((a) => a.live)
-          const color = live ? '#10b981' : '#9ca3af'
+          const color = '#10b981'
           return (
             <CircleMarker
               key={v.id}
@@ -56,7 +56,7 @@ export default function AdsMapView({
                 <br />
                 {v.ads.map((a, i) => (
                   <span key={i}>
-                    {a.live ? '🟢' : '⚪️'} {a.title}
+                    {a.title}
                     <br />
                   </span>
                 ))}

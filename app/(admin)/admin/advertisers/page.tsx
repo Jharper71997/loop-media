@@ -96,6 +96,8 @@ export default async function AdvertisersPage({
     .from('profiles')
     .select('*')
     .eq('role', 'advertiser')
+    // Demo accounts never appear in the admin roster.
+    .eq('is_demo', false)
     .order('created_at', { ascending: false })
   if (t) q = q.eq('territory_id', t)
   if (query?.trim()) q = q.or(`full_name.ilike.%${query.trim()}%,email.ilike.%${query.trim()}%`)

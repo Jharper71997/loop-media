@@ -59,6 +59,8 @@ export default async function BrowsePage({
       )
       .in('territory_id', marketIds)
       .eq('status', 'active')
+      // Demo venues never show on the real buy map.
+      .eq('is_demo', false)
       .order('foot_traffic_estimate', { ascending: false })
 
     type Row = {
@@ -147,7 +149,9 @@ export default async function BrowsePage({
 
     // Only surface venues with real data (known traffic + a map location).
     // Incomplete venues stay hidden from advertisers — no made-up numbers.
-    venues = venues.filter((v) => isVenueListable(v))
+    // Only real, registered screens matter to an advertiser — hide venues that
+    // don't have a screen set up yet.
+    venues = venues.filter((v) => isVenueListable(v) && v.screens > 0)
   }
 
   return (

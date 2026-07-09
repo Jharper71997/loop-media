@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useRef, useState, useTransition, type CSSProperties } from 'react'
+import { useEffect, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { RefreshCw, Upload, X, SlidersHorizontal, ChevronDown } from 'lucide-react'
+import Cropper, { type Area, type Point } from 'react-easy-crop'
+import { RefreshCw, Upload, X, SlidersHorizontal, ChevronDown, RotateCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -11,14 +12,10 @@ import { CreativeFitNotice } from '@/components/app/CreativeFitNotice'
 import { AD_CHANGE_NOTICE_DAYS } from '@/lib/fees'
 import { useBasePath } from '@/lib/useBasePath'
 import {
-  EXPORT_W,
-  EXPORT_H,
   QR_DEFAULT,
   FILTER_PRESETS,
-  clampPan,
   buildFilter,
-  computeDraw,
-  exportImageBlob,
+  getCroppedImg,
   validateCreativeFile,
   CREATIVE_ACCEPT,
   type FilterPreset,
@@ -26,7 +23,7 @@ import {
 import { replaceCreative } from './actions'
 
 // Swap the creative on an existing campaign — now with the SAME editor as the
-// new-campaign flow (crop / zoom / pan / filter + a WYSIWYG frame), so a swap
+// new-campaign flow (crop / zoom / rotation / filter + a WYSIWYG frame), so a swap
 // looks like what will actually air instead of a bare file input. The QR keeps
 // its existing on-ad position (shown here read-only) since the swap only changes
 // the artwork; members change free, everyone else pays the $10 fee at Checkout.
@@ -52,17 +49,17 @@ export function ReplaceCreative({
   const [pending, start] = useTransition()
   const [statusMsg, setStatusMsg] = useState<string | null>(null)
 
-  // Photo editor (images only) — mirrors CreativeStep.
-  const [nat, setNat] = useState<{ w: number; h: number } | null>(null)
+  // Photo editor (images only) — mirrors CreativeStep (react-easy-crop).
+  const [crop, setCrop] = useState<Point>({ x: 0, y: 0 })
   const [zoom, setZoom] = useState(1)
-  const [pan, setPan] = useState({ x: 0, y: 0 })
+  const [rotation, setRotation] = useState(0)
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null)
   const [brightness, setBrightness] = useState(100)
   const [contrast, setContrast] = useState(100)
   const [preset, setPreset] = useState<FilterPreset>('none')
   const [showAdjust, setShowAdjust] = useState(false)
+  const [dragActive, setDragActive] = useState(false)
 
-  const frameRef = useRef<HTMLDivElement>(null)
-  const panDragRef = useRef<{ px: number; py: number; panX: number; panY: number } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const isVideo = !!file && file.type.startsWith('video')
@@ -81,13 +78,14 @@ export function ReplaceCreative({
 
   // Object URL for the chosen file; resets the editor whenever the file changes.
   useEffect(() => {
+    setCrop({ x: 0, y: 0 })
     setZoom(1)
-    setPan({ x: 0, y: 0 })
+    setRotation(0)
+    setCroppedAreaPixels(null)
     setBrightness(100)
     setContrast(100)
     setPreset('none')
     setShowAdjust(false)
-    setNat(null)
     if (!file) {
       setFileUrl(null)
       return
@@ -116,59 +114,32 @@ export function ReplaceCreative({
     }
   }, [qrTargetUrl])
 
-  function onPanDown(e: React.PointerEvent) {
-    if (!nat) return
-    e.preventDefault()
-    e.currentTarget.setPointerCapture(e.pointerId)
-    panDragRef.current = { px: e.clientX, py: e.clientY, panX: pan.x, panY: pan.y }
+  // Quarter-turn for phone photos that come in sideways (stays within the slider's range).
+  function rotate90() {
+    setRotation((r) => {
+      const n = r + 90
+      return n > 180 ? n - 360 : n
+    })
   }
-  function onPanMove(e: React.PointerEvent) {
-    const d = panDragRef.current
-    if (!d || !nat) return
-    const frame = frameRef.current
-    if (!frame) return
-    const r = frame.getBoundingClientRect()
-    const nx = d.panX + (e.clientX - d.px) / r.width
-    const ny = d.panY + (e.clientY - d.py) / r.height
-    setPan(clampPan(nat, zoom, { x: nx, y: ny }, EXPORT_W, EXPORT_H))
-  }
-  function onPanUp(e: React.PointerEvent) {
-    panDragRef.current = null
-    try {
-      e.currentTarget.releasePointerCapture(e.pointerId)
-    } catch {}
-  }
-  function onZoomChange(z: number) {
-    setZoom(z)
-    if (nat) setPan((p) => clampPan(nat, z, p, EXPORT_W, EXPORT_H))
-  }
-
-  const draw = nat ? computeDraw(nat, zoom, pan, EXPORT_W, EXPORT_H) : null
-  const imgStyle: CSSProperties = draw
-    ? {
-        position: 'absolute',
-        left: `${(draw.dx / EXPORT_W) * 100}%`,
-        top: `${(draw.dy / EXPORT_H) * 100}%`,
-        width: `${(draw.dw / EXPORT_W) * 100}%`,
-        height: `${(draw.dh / EXPORT_H) * 100}%`,
-        maxWidth: 'none',
-        filter: filterStr,
-      }
-    : { position: 'absolute', inset: 0, width: '100%', height: '100%', filter: filterStr }
 
   function submit() {
     if (!file) return toast.error('Choose an image or video first.')
     start(async () => {
       setStatusMsg('Uploading your ad…')
       const supabase = createClient()
-      // Images are composited (crop + zoom + pan + filter) to a PNG; videos upload
+      // Images are composited (crop + zoom + rotation + filter) to a PNG; videos upload
       // raw. Same convention as the first upload in the new-campaign wizard.
       let blob: Blob = file
       let ext = file.name.split('.').pop() ?? 'bin'
       let contentType = file.type
       if (!isVideo && fileUrl) {
+        if (!croppedAreaPixels) {
+          setStatusMsg(null)
+          toast.error('Give the image a moment to finish loading, then try again.')
+          return
+        }
         try {
-          blob = await exportImageBlob(fileUrl, { zoom, pan, filterStr })
+          blob = await getCroppedImg(fileUrl, croppedAreaPixels, rotation, filterStr)
         } catch (e) {
           setStatusMsg(null)
           toast.error(e instanceof Error ? e.message : 'Could not process image.')
@@ -236,10 +207,31 @@ export function ReplaceCreative({
         week is free. We ask for {AD_CHANGE_NOTICE_DAYS} days notice on changes.
       </p>
 
-      <label className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-border bg-muted/30 px-4 py-6 text-center transition hover:border-primary/50">
+      <label
+        onDragOver={(e) => {
+          e.preventDefault()
+          setDragActive(true)
+        }}
+        onDragEnter={(e) => {
+          e.preventDefault()
+          setDragActive(true)
+        }}
+        onDragLeave={(e) => {
+          e.preventDefault()
+          setDragActive(false)
+        }}
+        onDrop={(e) => {
+          e.preventDefault()
+          setDragActive(false)
+          pickFile(e.dataTransfer.files?.[0] ?? null)
+        }}
+        className={`flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed px-4 py-6 text-center transition ${
+          dragActive ? 'border-primary bg-primary/10' : 'border-border bg-muted/30 hover:border-primary/50'
+        }`}
+      >
         <Upload className="size-5 text-muted-foreground" />
         <span className="text-sm text-muted-foreground">
-          {file ? file.name : 'Tap to upload an image or video'}
+          {file ? file.name : dragActive ? 'Drop to upload' : 'Tap to upload, or drag an image or video here'}
         </span>
         {file && (
           <span className="text-xs text-muted-foreground">
@@ -260,12 +252,9 @@ export function ReplaceCreative({
         <div className="space-y-3 pt-1">
           <p className="text-xs text-muted-foreground">
             Preview — this is how your ad will show on screen
-            {!isVideo ? '. Drag the photo to reposition it' : ''}.
+            {!isVideo ? '. Pinch or scroll to zoom and drag to reposition the photo' : ''}.
           </p>
-          <div
-            ref={frameRef}
-            className="relative aspect-video w-full touch-none overflow-hidden rounded-lg bg-black select-none"
-          >
+          <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-black select-none">
             {isVideo ? (
               <video
                 src={fileUrl}
@@ -276,25 +265,26 @@ export function ReplaceCreative({
                 playsInline
               />
             ) : (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={fileUrl}
-                alt="Ad preview"
-                draggable={false}
-                onLoad={(e) =>
-                  setNat({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })
-                }
-                onPointerDown={onPanDown}
-                onPointerMove={onPanMove}
-                onPointerUp={onPanUp}
-                onPointerCancel={onPanUp}
-                className="cursor-grab touch-none select-none active:cursor-grabbing"
-                style={imgStyle}
+              <Cropper
+                image={fileUrl}
+                crop={crop}
+                zoom={zoom}
+                rotation={rotation}
+                minZoom={1}
+                maxZoom={3}
+                aspect={16 / 9}
+                objectFit="cover"
+                showGrid={false}
+                onCropChange={setCrop}
+                onZoomChange={setZoom}
+                onRotationChange={setRotation}
+                onCropComplete={(_area, px) => setCroppedAreaPixels(px)}
+                style={{ mediaStyle: { filter: filterStr }, cropAreaStyle: { border: 0 } }}
               />
             )}
             {qrPreview && (
               <div
-                className="absolute rounded-md bg-white p-1 ring-2 ring-[#d4af37]"
+                className="pointer-events-none absolute z-10 rounded-md bg-white p-1 ring-2 ring-[#d4af37]"
                 style={{ left: `${qcx * 100}%`, top: `${qcy * 100}%`, transform: 'translate(-50%, -50%)' }}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -330,7 +320,31 @@ export function ReplaceCreative({
                       max={3}
                       step={0.01}
                       value={zoom}
-                      onChange={(e) => onZoomChange(Number(e.target.value))}
+                      onChange={(e) => setZoom(Number(e.target.value))}
+                      className="h-2 w-full cursor-pointer accent-primary"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <Label>Rotation</Label>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">{Math.round(rotation)}°</span>
+                        <button
+                          type="button"
+                          onClick={rotate90}
+                          className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium transition hover:border-primary/40"
+                        >
+                          <RotateCw className="size-3.5" /> 90°
+                        </button>
+                      </div>
+                    </div>
+                    <input
+                      type="range"
+                      min={-180}
+                      max={180}
+                      step={1}
+                      value={rotation}
+                      onChange={(e) => setRotation(Number(e.target.value))}
                       className="h-2 w-full cursor-pointer accent-primary"
                     />
                   </div>

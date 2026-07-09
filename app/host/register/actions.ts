@@ -6,6 +6,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { geocodeAddress } from '@/lib/geocode'
 import { genPairingCode, TV_PAIRING_CODE_LEN, DEFAULT_LOOP_SECONDS, DEFAULT_SLOT_SECONDS } from '@/lib/tv'
 import { AGREEMENT_VERSION } from '@/lib/agreement'
+import { DEMO_COMP_CODE } from '@/lib/demo'
 
 export interface RegisterVenueInput {
   name: string
@@ -106,6 +107,12 @@ export async function requestVenue(input: RegisterVenueInput) {
 
   const admin = createAdminClient()
 
+  // Demo accounts skip the real "pending review → schedule a Fire Stick" wait: the
+  // venue is created live and its screen is marked online, so the dashboard + comp
+  // code are immediately populated for the walkthrough. is_demo keeps it off the
+  // real buy map + admin + TVs (migration 0053).
+  const isDemo = profile.is_demo
+
   // One screen per location: reject if this host already registered a venue at
   // the same street address + ZIP. Compared with a normalizer (tiny per-host
   // list, so we filter in JS rather than in SQL).
@@ -150,7 +157,9 @@ export async function requestVenue(input: RegisterVenueInput) {
       contact_email: profile.email,
       contact_phone: input.contact_phone?.trim() || null,
       host_user_id: profile.id,
-      status: 'inactive',
+      status: isDemo ? 'active' : 'inactive',
+      is_demo: isDemo,
+      comp_promo_code: isDemo ? DEMO_COMP_CODE : null,
       agreement_signed_at: new Date().toISOString(),
       agreement_signer_name: input.agreement_signer_name.trim(),
       agreement_version: input.agreement_version || AGREEMENT_VERSION,
@@ -183,6 +192,16 @@ export async function requestVenue(input: RegisterVenueInput) {
     if (!/duplicate|unique/i.test(tvErr.message)) break
   }
   if (tvError) return { error: tvError }
+
+  // Demo: pretend the Fire Stick is already set up and checked in, so the host
+  // dashboard reads as live (screen online, comp code active) the moment they
+  // land — no waiting on a real pairing.
+  if (isDemo) {
+    await admin
+      .from('tvs')
+      .update({ device_id: 'demo-firestick', last_heartbeat_at: new Date().toISOString() })
+      .eq('venue_id', venue.id)
+  }
 
   // Network details for support (required at registration). Wired venues store
   // just the ethernet choice; WiFi venues store SSID + password.

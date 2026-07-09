@@ -5,7 +5,6 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { hasInsightsMembership } from '@/lib/membership'
 import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
 import { formatNumber, isTvLive } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -127,7 +126,6 @@ export default async function LocationsPage() {
         geoVenues.reduce((s, v) => s + (v.lng as number), 0) / geoVenues.length,
       ]
     : [34.7541, -77.4302]
-  const liveCount = venues.filter((v) => v.live).length
   // QR scan numbers are gated behind the Insights membership (coming soon).
   const showScans = await hasInsightsMembership(createAdminClient(), profile.id)
 
@@ -147,8 +145,7 @@ export default async function LocationsPage() {
               <MapPin className="size-6 text-primary" />
             </span>
             <p className="max-w-xs text-sm text-muted-foreground">
-              Once a campaign is live, every venue your ad plays at shows up here — by name, with its
-              live status.
+              Once a campaign is live, every venue your ad plays at shows up here by name.
             </p>
             <Link href="/advertiser/browse" className={cn(buttonVariants(), 'h-11')}>
               <Plus className="size-4" /> Pick screens
@@ -178,7 +175,6 @@ export default async function LocationsPage() {
               <h2 className="font-heading text-lg font-semibold">
                 {venues.length} location{venues.length === 1 ? '' : 's'}
               </h2>
-              <span className="text-xs text-muted-foreground">{liveCount} live now</span>
             </div>
             <Card className="py-0">
               <CardContent className="divide-y divide-border p-0">
@@ -196,15 +192,6 @@ export default async function LocationsPage() {
                         )}
                       </p>
                     </div>
-                    {v.live ? (
-                      <Badge className="shrink-0 gap-1.5 bg-emerald-600">
-                        <span className="size-1.5 rounded-full bg-white" /> Live now
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline" className="shrink-0">
-                        Coming online
-                      </Badge>
-                    )}
                   </div>
                 ))}
               </CardContent>

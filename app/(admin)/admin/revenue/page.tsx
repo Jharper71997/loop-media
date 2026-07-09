@@ -27,6 +27,7 @@ type SubRow = {
     id: string
     status: string
     monthly_total_cents: number | null
+    is_demo: boolean
     ad: { title: string } | null
   } | null
   package: { name: string } | null
@@ -41,12 +42,13 @@ export default async function RevenuePage() {
   let q = supabase
     .from('subscriptions')
     .select(
-      'id, status, territory_id, advertiser_id, campaign_id, package_id, campaign:campaigns(id, status, monthly_total_cents, ad:ads(title)), package:packages(name)'
+      'id, status, territory_id, advertiser_id, campaign_id, package_id, campaign:campaigns(id, status, monthly_total_cents, is_demo, ad:ads(title)), package:packages(name)'
     )
     .order('created_at', { ascending: false })
   if (t) q = q.eq('territory_id', t)
   const { data } = await q
-  const subs = (data ?? []) as unknown as SubRow[]
+  // Drop demo campaigns so they never inflate contracted MRR / pipeline counts.
+  const subs = ((data ?? []) as unknown as SubRow[]).filter((s) => !s.campaign?.is_demo)
 
   // Factual cash collected, from the Stripe payments ledger (webhook-written).
   // Empty until Stripe is connected, so this reads $0 rather than contracted value.

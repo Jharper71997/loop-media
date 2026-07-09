@@ -57,6 +57,11 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
     return { error: 'You are not able to create campaigns.' }
   }
   const isAdmin = profile.role === 'admin'
+  // Demo advertiser: everything runs for real up to payment, but no Stripe charge
+  // and — critically — the ad is NEVER placed on a real screen (see the branch at
+  // the end + the is_demo guard in the placement engine/cron). Flags on the ad +
+  // campaign keep it out of admin review, revenue, and the buy map.
+  const isDemo = profile.is_demo
   if (!input.title.trim()) return { error: 'Give your ad a title.' }
   if (!input.qr_target_url?.trim()) return { error: 'Add a scan link for your ad.' }
   if (!input.territory_id) return { error: 'Pick a market.' }
@@ -149,7 +154,9 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
       title: input.title.trim(),
       creative_type: input.creative_type ?? 'image',
       creative_url: input.creative_url,
-      status: 'pending',
+      // Demo ads are auto-approved (they're never reviewed and never air).
+      status: isDemo ? 'approved' : 'pending',
+      is_demo: isDemo,
       qr_target_url: input.qr_target_url.trim(),
       qr_x: input.qr_x ?? 0.9,
       qr_y: input.qr_y ?? 0.88,
@@ -168,6 +175,7 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
       territory_id: territoryId,
       monthly_total_cents: totalCents,
       status: 'draft',
+      is_demo: isDemo,
     })
     .select('id')
     .single()
@@ -223,12 +231,14 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
     .single()
 
   // Confirmation email — "your campaign is set up, here's what happens next".
-  // Fires for both the Stripe and demo paths since it sits before the branch.
   // Best-effort: a mail hiccup must never block campaign creation or checkout.
-  try {
-    await notifyCampaignCreated(campaign.id)
-  } catch {
-    /* swallow — never fail creation on a notification error */
+  // Skipped for demo (the address is synthetic and there's nothing to confirm).
+  if (!isDemo) {
+    try {
+      await notifyCampaignCreated(campaign.id)
+    } catch {
+      /* swallow — never fail creation on a notification error */
+    }
   }
 
   const screenLabel = `${quote.totalScreens} screen${quote.totalScreens === 1 ? '' : 's'}`
@@ -237,8 +247,8 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
   const pathPrefix = input.base_path === '/host/advertise' ? '/host/advertise' : '/advertiser'
   const homePath = pathPrefix === '/host/advertise' ? '/host' : '/advertiser'
 
-  // Real Stripe Checkout when configured; admins always skip live payment.
-  if (process.env.STRIPE_SECRET_KEY && !isAdmin) {
+  // Real Stripe Checkout when configured; admins + demo always skip live payment.
+  if (process.env.STRIPE_SECRET_KEY && !isAdmin && !isDemo) {
     try {
       const base = appUrl()
       const wantsCreative = !!input.creative_help_brief?.trim()
@@ -301,8 +311,14 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
     })
     .eq('id', sub?.id ?? '')
   await supabase.from('campaigns').update({ status: 'active' }).eq('id', campaign.id)
-  await activatePlacementsIfReady(campaign.id)
-  await activateExclusiveSlots(admin, campaign.id)
+  // The demo campaign shows as "active" and its picked screens render on the
+  // dashboard from campaign_targets — but we DELIBERATELY do not place it, so no
+  // ad ever airs on a real TV. (The placement engine + cron also refuse is_demo
+  // campaigns as a backstop.) A real admin test still places for QA.
+  if (!isDemo) {
+    await activatePlacementsIfReady(campaign.id)
+    await activateExclusiveSlots(admin, campaign.id)
+  }
   revalidatePath(homePath)
   return { campaignId: campaign.id, demo: true }
 }
