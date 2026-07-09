@@ -26,6 +26,7 @@ import { joinWaitlist, leaveWaitlist, requestCategory, rememberCategory } from '
 export type BrowseVenue = {
   id: string
   name: string
+  logoUrl: string | null
   venue_type: string | null
   category: string | null
   foot_traffic_estimate: number

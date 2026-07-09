@@ -95,6 +95,9 @@ export interface Venue {
   agreement_signed_at: string | null
   agreement_signer_name: string | null
   agreement_version: string | null
+  // Public URL of the host's uploaded business logo (venue-logos bucket), shown
+  // on the advertiser browse map as the pin + popup. Null → map falls back to a dot.
+  logo_url: string | null
   // Sample venue created by the guided demo; hidden from the real buy map + admin.
   is_demo: boolean
   created_at: string

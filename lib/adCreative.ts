@@ -58,6 +58,27 @@ export function validateCreativeFile(file: File): string | null {
   return null
 }
 
+// ---- Venue logo (host business logo on the browse map) ----
+// A logo is a square PNG (transparent background preserved) so it renders cleanly
+// as a round map pin and a small avatar in the popup. Images only — no video, and
+// no SVG (it can't be reliably raster-cropped to a canvas). 512px is plenty for a
+// pin/avatar and keeps the file small. Use LOGO_ACCEPT on the input and
+// validateLogoFile() on selection; getCroppedLogoImg() bakes the square crop.
+export const LOGO_SIZE = 512
+export const MAX_LOGO_MB = 5
+export const LOGO_ACCEPT = 'image/png,image/jpeg,image/webp'
+const OK_LOGO_TYPES = ['image/png', 'image/jpeg', 'image/webp']
+
+export function validateLogoFile(file: File): string | null {
+  if (file.size > MAX_LOGO_MB * 1_000_000) {
+    return `That image is ${(file.size / 1_000_000).toFixed(0)} MB. Keep your logo under ${MAX_LOGO_MB} MB.`
+  }
+  if (!OK_LOGO_TYPES.includes(file.type)) {
+    return 'Upload a PNG, JPG, or WebP image for your logo.'
+  }
+  return null
+}
+
 export function buildFilter(preset: FilterPreset, brightness: number, contrast: number): string {
   const base = FILTER_PRESETS.find((p) => p.value === preset)?.css ?? ''
   return `${base} brightness(${brightness}%) contrast(${contrast}%)`.trim()
@@ -176,6 +197,52 @@ export async function getCroppedImg(
     0,
     EXPORT_W,
     EXPORT_H
+  )
+
+  const blob = await new Promise<Blob | null>((res) => out.toBlob(res, 'image/png'))
+  if (!blob) throw new Error('Could not render image.')
+  return blob
+}
+
+// Bake a react-easy-crop selection into a SQUARE LOGO_SIZE PNG. Same two-stage
+// rotate-then-crop as getCroppedImg, but the output is square and the background
+// is left TRANSPARENT (no black fill) so a logo with transparency stays clean as
+// a round map pin. No filter — logos aren't color-graded. Client-only (canvas).
+export async function getCroppedLogoImg(
+  src: string,
+  pixelCrop: { x: number; y: number; width: number; height: number },
+  rotation: number
+): Promise<Blob> {
+  const img = await createImage(src)
+  const nw = img.naturalWidth
+  const nh = img.naturalHeight
+
+  const box = rotatedBox(nw, nh, rotation)
+  const stage = document.createElement('canvas')
+  stage.width = Math.round(box.w)
+  stage.height = Math.round(box.h)
+  const sctx = stage.getContext('2d')
+  if (!sctx) throw new Error('Canvas is not available.')
+  sctx.translate(stage.width / 2, stage.height / 2)
+  sctx.rotate(toRad(rotation))
+  sctx.drawImage(img, -nw / 2, -nh / 2)
+
+  const out = document.createElement('canvas')
+  out.width = LOGO_SIZE
+  out.height = LOGO_SIZE
+  const octx = out.getContext('2d')
+  if (!octx) throw new Error('Canvas is not available.')
+  // No fillRect — keep the background transparent for the round pin.
+  octx.drawImage(
+    stage,
+    pixelCrop.x,
+    pixelCrop.y,
+    pixelCrop.width,
+    pixelCrop.height,
+    0,
+    0,
+    LOGO_SIZE,
+    LOGO_SIZE
   )
 
   const blob = await new Promise<Blob | null>((res) => out.toBlob(res, 'image/png'))

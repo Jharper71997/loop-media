@@ -21,6 +21,7 @@ export default async function AdvertiserAccountPage() {
     <AccountScreen
       email={profile.email}
       role={profile.role}
+      profile={{ userId: profile.id, fullName: profile.full_name, phone: profile.phone }}
       links={[
         { href: '/advertiser/browse?pick=1', label: 'Change business category' },
         { href: '/advertiser/past', label: 'Past campaigns' },

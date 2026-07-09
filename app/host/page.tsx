@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Tv as TvIcon, MapPin, Megaphone, Percent, Plus } from 'lucide-react'
+import { Tv as TvIcon, MapPin, Megaphone, Percent, Plus, Pencil, Store } from 'lucide-react'
 import { requireProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -226,29 +226,48 @@ export default async function HostHome() {
             {venues.map((v) => (
               <Card key={v.id}>
                 <CardContent className="p-5">
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h2 className="font-medium">{v.name}</h2>
-                        {v.status !== 'active' && (
-                          <Badge variant="warning">Pending review</Badge>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="flex items-start gap-3">
+                      {/* Logo the host set — the same one advertisers see on the map. */}
+                      <div className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-full border border-border bg-muted/40">
+                        {v.logo_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={v.logo_url} alt="" className="size-full object-cover" />
+                        ) : (
+                          <Store className="size-5 text-muted-foreground" />
                         )}
                       </div>
-                      <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <MapPin className="size-3" /> {v.address ?? 'Address on file'}
-                        {v.category?.name && <span>· {v.category.name}</span>}
-                      </p>
-                      {v.status !== 'active' && (
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          We&apos;re reviewing your venue — we&apos;ll reach out to schedule your
-                          Fire Stick setup; paid ads start running once it&apos;s approved.
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h2 className="font-medium">{v.name}</h2>
+                          {v.status !== 'active' && (
+                            <Badge variant="warning">Pending review</Badge>
+                          )}
+                        </div>
+                        <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <MapPin className="size-3" /> {v.address ?? 'Address on file'}
+                          {v.category?.name && <span>· {v.category.name}</span>}
                         </p>
-                      )}
+                        {v.status !== 'active' && (
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            We&apos;re reviewing your venue — we&apos;ll reach out to schedule your
+                            Fire Stick setup; paid ads start running once it&apos;s approved.
+                          </p>
+                        )}
+                      </div>
                     </div>
-                    <RemoveLocationButton
-                      venueId={v.id}
-                      paidAdCount={paidAdsByVenue.get(v.id) ?? 0}
-                    />
+                    <div className="flex shrink-0 items-center gap-2">
+                      <Link
+                        href={`/host/venues/${v.id}/edit`}
+                        className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
+                      >
+                        <Pencil className="size-4" /> Edit details
+                      </Link>
+                      <RemoveLocationButton
+                        venueId={v.id}
+                        paidAdCount={paidAdsByVenue.get(v.id) ?? 0}
+                      />
+                    </div>
                   </div>
 
                   <div className="mt-4 space-y-2">

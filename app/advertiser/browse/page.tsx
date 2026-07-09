@@ -55,7 +55,7 @@ export default async function BrowsePage({
     const { data } = await supabase
       .from('venues')
       .select(
-        'id, name, venue_type, category_id, host_user_id, lat, lng, foot_traffic_estimate, price_tier, price_cents_override, category:categories(name), tvs(id, last_heartbeat_at, loop_length_seconds, slot_seconds)'
+        'id, name, logo_url, venue_type, category_id, host_user_id, lat, lng, foot_traffic_estimate, price_tier, price_cents_override, category:categories(name), tvs(id, last_heartbeat_at, loop_length_seconds, slot_seconds)'
       )
       .in('territory_id', marketIds)
       .eq('status', 'active')
@@ -66,6 +66,7 @@ export default async function BrowsePage({
     type Row = {
       id: string
       name: string
+      logo_url: string | null
       venue_type: string | null
       category_id: string | null
       host_user_id: string | null
@@ -130,6 +131,7 @@ export default async function BrowsePage({
       return {
         id: r.id,
         name: r.name,
+        logoUrl: r.logo_url,
         venue_type: r.venue_type,
         category: r.category?.name ?? null,
         foot_traffic_estimate: r.foot_traffic_estimate,

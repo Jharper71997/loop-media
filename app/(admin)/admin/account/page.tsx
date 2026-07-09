@@ -6,7 +6,11 @@ export default async function AdminAccountPage() {
   const profile = await requireAdmin()
   return (
     <div className="mx-auto max-w-md space-y-6 p-5 md:p-6">
-      <AccountScreen email={profile.email} role="admin" />
+      <AccountScreen
+        email={profile.email}
+        role="admin"
+        profile={{ userId: profile.id, fullName: profile.full_name, phone: profile.phone }}
+      />
 
       <div className="space-y-2 rounded-lg border border-border p-4">
         <p className="text-sm font-medium">Sales demo</p>

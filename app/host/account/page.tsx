@@ -20,6 +20,7 @@ export default async function HostAccountPage() {
     <AccountScreen
       email={profile.email}
       role={profile.role}
+      profile={{ userId: profile.id, fullName: profile.full_name, phone: profile.phone }}
       billing={{
         returnPath: '/host/account',
         membershipBasePath: '/host/advertise',

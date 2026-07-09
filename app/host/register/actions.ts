@@ -7,6 +7,7 @@ import { geocodeAddress } from '@/lib/geocode'
 import { genPairingCode, TV_PAIRING_CODE_LEN, DEFAULT_LOOP_SECONDS, DEFAULT_SLOT_SECONDS } from '@/lib/tv'
 import { AGREEMENT_VERSION } from '@/lib/agreement'
 import { DEMO_COMP_CODE } from '@/lib/demo'
+import { findOrCreateTerritory } from '@/lib/territory'
 
 export interface RegisterVenueInput {
   name: string
@@ -34,13 +35,6 @@ export interface RegisterVenueInput {
   network_note?: string | null
 }
 
-function slugify(s: string): string {
-  return s
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-}
-
 // Normalize an address/ZIP for duplicate comparison: lowercase, collapse
 // internal whitespace, trim, drop trailing punctuation. Used to enforce one
 // screen per location (a host can't register the same address twice).
@@ -50,30 +44,6 @@ function normAddr(s: string | null | undefined): string {
     .replace(/\s+/g, ' ')
     .trim()
     .replace(/[.,#\s]+$/g, '')
-}
-
-// A host can register a venue in ANY US city. The "market" (territory) is
-// derived from the city + state they entered and created on the fly if it's
-// new, so they're never limited to a pre-seeded list. Returns the territory id.
-async function findOrCreateTerritory(
-  admin: ReturnType<typeof createAdminClient>,
-  city: string,
-  state: string
-): Promise<string | null> {
-  const name = `${city.trim()}, ${state.trim().toUpperCase()}`
-  const slug = slugify(name)
-  const { data: existing } = await admin
-    .from('territories')
-    .select('id')
-    .eq('slug', slug)
-    .maybeSingle()
-  if (existing) return existing.id
-  const { data: created } = await admin
-    .from('territories')
-    .insert({ name, slug, is_holding: false, status: 'active' })
-    .select('id')
-    .maybeSingle()
-  return created?.id ?? null
 }
 
 // A host self-registers their venue. `venues` is admin-write under RLS, so this

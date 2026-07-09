@@ -1,6 +1,7 @@
 'use client'
 
-import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet'
+import { MapContainer, TileLayer, CircleMarker, Marker, Popup } from 'react-leaflet'
+import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { MAP_TILE_URL, MAP_TILE_ATTRIBUTION } from '@/lib/mapTiles'
 import { formatCents } from '@/lib/format'
@@ -21,7 +22,29 @@ const MARKER = {
   you: '#3b82f6', // blue — the advertiser's own location pin
 }
 
-// CircleMarkers (vector) avoid Leaflet's default-icon asset issues in bundlers.
+// A venue's logo as a round map pin: the logo image inside a status-colored ring.
+// divIcon renders our own HTML (not Leaflet's default marker image), so it sidesteps
+// the bundler asset issue that pushed the rest of the map to CircleMarkers. If the
+// image fails to load we fall back to a solid colored dot so a broken URL never
+// leaves an empty pin. className '' drops Leaflet's default white icon box.
+function buildLogoIcon(url: string, color: string, size: number) {
+  const safe = url.replace(/"/g, '&quot;')
+  const html =
+    `<div style="width:${size}px;height:${size}px;border-radius:9999px;border:3px solid ${color};` +
+    `background:#fff;box-shadow:0 1px 5px rgba(0,0,0,.45);overflow:hidden;">` +
+    `<img src="${safe}" alt="" style="width:100%;height:100%;object-fit:cover;display:block;" ` +
+    `onerror="this.style.display='none';this.parentNode.style.background='${color}';" /></div>`
+  return L.divIcon({
+    html,
+    className: '',
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+    popupAnchor: [0, -size / 2],
+  })
+}
+
+// CircleMarkers (vector) avoid Leaflet's default-icon asset issues in bundlers;
+// venues with a logo upgrade to a logo pin (buildLogoIcon) with the same ring color.
 export default function MapView({
   venues,
   cart,
@@ -102,10 +125,65 @@ export default function MapView({
               : v.open === 0
                 ? MARKER.full
                 : MARKER.open
-          return (
+          const center: [number, number] = [v.lat as number, v.lng as number]
+          // One popup, shared by the logo-pin and the plain-dot marker below.
+          const popup = (
+            <Popup minWidth={184}>
+              <div className="space-y-2">
+                <div className="flex items-start gap-2">
+                  {v.logoUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={v.logoUrl} alt="" className="size-9 shrink-0 rounded-md object-cover" />
+                  )}
+                  <div>
+                    <p className="font-heading text-sm font-semibold text-foreground">{v.name}</p>
+                    <p className="text-xs text-muted-foreground">{TIER_LABEL[v.tier]}</p>
+                  </div>
+                </div>
+                <p className="text-foreground">
+                  <span className="text-base font-bold">{formatCents(v.priceCents)}</span>
+                  <span className="text-xs text-muted-foreground">/mo</span>
+                </p>
+                {v.ownCategory ? (
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Same business — not available
+                  </p>
+                ) : v.open === 0 ? (
+                  // Screen is sold out — offer the waitlist so they hear when a slot frees.
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold text-destructive">Screen full</p>
+                    <Button
+                      size="sm"
+                      variant={waitlisted.has(v.id) ? 'secondary' : 'outline'}
+                      className="w-full"
+                      onClick={() => onNotify(v)}
+                    >
+                      {waitlisted.has(v.id) ? 'On waitlist' : 'Notify when a spot opens'}
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant={inCart ? 'secondary' : 'default'}
+                    className="w-full"
+                    onClick={() => onToggle(v.id)}
+                  >
+                    {inCart ? 'Added — remove' : 'Add to cart'}
+                  </Button>
+                )}
+              </div>
+            </Popup>
+          )
+          // A venue with a logo shows it as the pin (round image + status ring);
+          // everyone else keeps the vector dot. Same status color drives both.
+          return v.logoUrl ? (
+            <Marker key={v.id} position={center} icon={buildLogoIcon(v.logoUrl, color, inCart ? 48 : 40)}>
+              {popup}
+            </Marker>
+          ) : (
             <CircleMarker
               key={v.id}
-              center={[v.lat as number, v.lng as number]}
+              center={center}
               radius={inCart ? 13 : 11}
               pathOptions={{
                 color,
@@ -114,45 +192,7 @@ export default function MapView({
                 weight: inCart ? 3 : 2,
               }}
             >
-              <Popup minWidth={184}>
-                <div className="space-y-2">
-                  <div>
-                    <p className="font-heading text-sm font-semibold text-foreground">{v.name}</p>
-                    <p className="text-xs text-muted-foreground">{TIER_LABEL[v.tier]}</p>
-                  </div>
-                  <p className="text-foreground">
-                    <span className="text-base font-bold">{formatCents(v.priceCents)}</span>
-                    <span className="text-xs text-muted-foreground">/mo</span>
-                  </p>
-                  {v.ownCategory ? (
-                    <p className="text-xs font-medium text-muted-foreground">
-                      Same business — not available
-                    </p>
-                  ) : v.open === 0 ? (
-                    // Screen is sold out — offer the waitlist so they hear when a slot frees.
-                    <div className="space-y-2">
-                      <p className="text-xs font-semibold text-destructive">Screen full</p>
-                      <Button
-                        size="sm"
-                        variant={waitlisted.has(v.id) ? 'secondary' : 'outline'}
-                        className="w-full"
-                        onClick={() => onNotify(v)}
-                      >
-                        {waitlisted.has(v.id) ? 'On waitlist' : 'Notify when a spot opens'}
-                      </Button>
-                    </div>
-                  ) : (
-                    <Button
-                      size="sm"
-                      variant={inCart ? 'secondary' : 'default'}
-                      className="w-full"
-                      onClick={() => onToggle(v.id)}
-                    >
-                      {inCart ? 'Added — remove' : 'Add to cart'}
-                    </Button>
-                  )}
-                </div>
-              </Popup>
+              {popup}
             </CircleMarker>
           )
         })}

@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { LogOut, Mail } from 'lucide-react'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { AccountProfile } from '@/components/app/AccountProfile'
 import { AccountSecurity } from '@/components/app/AccountSecurity'
 import { AccountBilling } from '@/components/app/AccountBilling'
 import { BackLink } from '@/components/app/BackLink'
@@ -13,10 +14,14 @@ export function AccountScreen({
   role,
   links,
   billing,
+  profile,
 }: {
   email: string
   role: 'advertiser' | 'host' | 'admin'
   links?: { href: string; label: string }[]
+  // Editable name/phone from the user's profiles row. Optional so a surface can
+  // omit it, but every account page passes it.
+  profile?: { userId: string; fullName: string | null; phone: string | null }
   // When present, renders the billing card (manage payment + membership). Omitted
   // for surfaces with no billing (e.g. admin).
   billing?: {
@@ -46,6 +51,10 @@ export function AccountScreen({
           </div>
         </CardContent>
       </Card>
+
+      {profile && (
+        <AccountProfile userId={profile.userId} fullName={profile.fullName} phone={profile.phone} />
+      )}
 
       <AccountSecurity email={email} />
 
