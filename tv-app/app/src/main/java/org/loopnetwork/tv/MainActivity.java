@@ -2,8 +2,14 @@ package org.loopnetwork.tv;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.admin.DevicePolicyManager;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.DialogInterface;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.provider.Settings;
+import android.widget.Toast;
 import android.net.wifi.WifiManager;
 import android.os.Bundle;
 import android.os.Handler;
@@ -59,6 +65,15 @@ public class MainActivity extends Activity {
     private int menuTaps = 0;
     private long firstMenuTapAt = 0;
 
+    // Device-owner kiosk lock. Null-safe: on a stick that was NOT promoted with
+    // `adb shell dpm set-device-owner …`, all of this no-ops and the app just
+    // runs as a normal foreground player.
+    private DevicePolicyManager dpm;
+    private ComponentName adminComponent;
+    private boolean deviceOwner;
+    private static final String KIOSK_PREFS = "kiosk";
+    private static final String KEY_UNLOCKED = "unlocked";
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -68,6 +83,7 @@ public class MainActivity extends Activity {
         // no app can override that from inside.)
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
+        setupKiosk();
         acquireLocks();
 
         root = new FrameLayout(this);
@@ -216,6 +232,7 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         hideSystemBars();
+        enterKioskIfLocked();
         if (web != null) web.onResume();
     }
 
@@ -246,22 +263,132 @@ public class MainActivity extends Activity {
     }
 
     private void showAdminDialog() {
-        final String[] options = { "Reload screen", "Unpair this screen", "Exit app" };
+        final boolean locked = deviceOwner && !isUnlocked();
+        final String lockLabel = locked
+            ? "Unlock for maintenance (Wi-Fi, etc.)"
+            : (deviceOwner ? "Re-lock kiosk" : "Kiosk lock not enabled on this stick");
+        final String[] options = {
+            "Reload screen", lockLabel, "Open Wi-Fi / device settings", "Unpair this screen", "Exit app"
+        };
         new AlertDialog.Builder(this)
             .setTitle("Loop Network — screen admin")
             .setItems(options, new DialogInterface.OnClickListener() {
                 @Override public void onClick(DialogInterface dialog, int which) {
-                    if (which == 0) {
-                        if (web != null) web.loadUrl(TV_URL);
-                    } else if (which == 1) {
-                        unpair();
-                    } else {
-                        finish();
+                    switch (which) {
+                        case 0: if (web != null) web.loadUrl(TV_URL); break;
+                        case 1: toggleLock(); break;
+                        case 2: openSettingsForMaintenance(); break;
+                        case 3: unpair(); break;
+                        default: exitApp(); break;
                     }
                 }
             })
             .setNegativeButton("Cancel", null)
             .show();
+    }
+
+    // ---- Device-owner kiosk -------------------------------------------------
+
+    /** Wire up lock-task + become the launcher, but only if this stick was made
+     *  device owner. Everything here degrades to a no-op otherwise. */
+    private void setupKiosk() {
+        dpm = (DevicePolicyManager) getSystemService(Context.DEVICE_POLICY_SERVICE);
+        adminComponent = new ComponentName(this, KioskAdminReceiver.class);
+        deviceOwner = dpm != null && dpm.isDeviceOwnerApp(getPackageName());
+        if (!deviceOwner) return;
+        // Whitelist ourselves so startLockTask() pins silently (no "screen
+        // pinned" confirmation) and Home/Back/Recents can't leave.
+        try { dpm.setLockTaskPackages(adminComponent, new String[]{ getPackageName() }); } catch (Exception ignored) {}
+        // Device owner is exempt from Android's background-launch limits, so the
+        // BootReceiver's relaunch actually works on modern Fire OS.
+        setSelfAsHome(!isUnlocked());
+    }
+
+    /** Pin the app unless an admin has unlocked it for maintenance. */
+    private void enterKioskIfLocked() {
+        if (deviceOwner && !isUnlocked()) {
+            try { startLockTask(); } catch (Exception ignored) {}
+        }
+    }
+
+    /** Make (or stop making) this app the Fire TV home target, so the Home button
+     *  and wake-from-sleep return here. Released during maintenance so the admin
+     *  can reach Fire TV settings. */
+    private void setSelfAsHome(boolean enable) {
+        if (!deviceOwner) return;
+        try {
+            if (enable) {
+                IntentFilter f = new IntentFilter(Intent.ACTION_MAIN);
+                f.addCategory(Intent.CATEGORY_HOME);
+                f.addCategory(Intent.CATEGORY_DEFAULT);
+                dpm.addPersistentPreferredActivity(adminComponent, f,
+                    new ComponentName(this, MainActivity.class));
+            } else {
+                dpm.clearPackagePersistentPreferredActivities(adminComponent, getPackageName());
+            }
+        } catch (Exception ignored) {}
+    }
+
+    private boolean isUnlocked() {
+        return getSharedPreferences(KIOSK_PREFS, MODE_PRIVATE).getBoolean(KEY_UNLOCKED, false);
+    }
+
+    private void setUnlocked(boolean v) {
+        getSharedPreferences(KIOSK_PREFS, MODE_PRIVATE).edit().putBoolean(KEY_UNLOCKED, v).apply();
+    }
+
+    /** Hidden-menu toggle between locked kiosk and unlocked maintenance mode. */
+    private void toggleLock() {
+        if (!deviceOwner) {
+            Toast.makeText(this,
+                "This stick isn't a kiosk yet. Run the one-time adb set-device-owner step.",
+                Toast.LENGTH_LONG).show();
+            return;
+        }
+        if (isUnlocked()) {
+            setUnlocked(false);
+            setSelfAsHome(true);
+            try { startLockTask(); } catch (Exception ignored) {}
+            Toast.makeText(this, "Kiosk re-locked.", Toast.LENGTH_SHORT).show();
+        } else {
+            setUnlocked(true);
+            try { stopLockTask(); } catch (Exception ignored) {}
+            setSelfAsHome(false);
+            Toast.makeText(this,
+                "Unlocked. Press Home to reach Settings. Re-lock from this menu when done.",
+                Toast.LENGTH_LONG).show();
+        }
+    }
+
+    /** Drop the lock so we're allowed to leave, then jump straight to Wi-Fi. */
+    private void openSettingsForMaintenance() {
+        if (deviceOwner && !isUnlocked()) {
+            setUnlocked(true);
+            try { stopLockTask(); } catch (Exception ignored) {}
+            setSelfAsHome(false);
+        }
+        if (!launchAction(Settings.ACTION_WIFI_SETTINGS) && !launchAction(Settings.ACTION_SETTINGS)) {
+            Toast.makeText(this, "Couldn't open settings automatically. Press Home, then open Settings.",
+                Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private boolean launchAction(String action) {
+        try {
+            Intent i = new Intent(action);
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(i);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private void exitApp() {
+        setUnlocked(true);   // stay out; onResume won't re-pin
+        try { stopLockTask(); } catch (Exception ignored) {}
+        setSelfAsHome(false);
+        finish();
     }
 
     private void unpair() {

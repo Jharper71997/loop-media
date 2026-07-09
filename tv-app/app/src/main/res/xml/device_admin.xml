@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Empty policy set: device owner + lock-task need no specific uses-policies.
+     The element just has to exist for the admin receiver to be valid. -->
+<device-admin xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-policies>
+    </uses-policies>
+</device-admin>

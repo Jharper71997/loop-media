@@ -33,7 +33,29 @@
                 <category android:name="android.intent.category.LAUNCHER" />
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
+            <!-- HOME/DEFAULT lets the app be set as the Fire TV launcher (via
+                 device owner) so the Home button + wake-from-sleep return here.
+                 Ignored on sticks that aren't device owner. -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
         </activity>
+
+        <!-- Device-owner admin: lets `adb shell dpm set-device-owner` promote the
+             app so it can lock itself into kiosk (lock-task) mode. -->
+        <receiver
+            android:name=".KioskAdminReceiver"
+            android:exported="true"
+            android:permission="android.permission.BIND_DEVICE_ADMIN">
+            <meta-data
+                android:name="android.app.device_admin"
+                android:resource="@xml/device_admin" />
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+            </intent-filter>
+        </receiver>
 
         <!-- Relaunch the kiosk automatically after a reboot / OS update. -->
         <receiver

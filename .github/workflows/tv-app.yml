@@ -45,7 +45,11 @@ jobs:
           name: loop-network-tv-apk
           path: loop-network-tv.apk
 
+      # Only main updates the live download at loopnetwork.org/app. Branch builds
+      # and manual runs on a branch just upload the artifact above, so a
+      # spare-stick / test APK never changes what real hosts install.
       - name: Publish to stable release
+        if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: tv-app-latest
