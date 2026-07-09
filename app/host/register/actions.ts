@@ -169,7 +169,9 @@ export async function requestVenue(input: RegisterVenueInput) {
   if (isDemo) {
     await admin
       .from('tvs')
-      .update({ device_id: 'demo-firestick', last_heartbeat_at: new Date().toISOString() })
+      // device_id is UNIQUE, so it must be per-venue — a constant collides on the
+      // 2nd demo and leaves the screen "not paired". venue.id is a fresh UUID.
+      .update({ device_id: `demo-${venue.id}`, last_heartbeat_at: new Date().toISOString() })
       .eq('venue_id', venue.id)
   }
 
