@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { appUrl } from '@/lib/stripe'
 import { sendEmail } from '@/lib/email'
+import { resolveEmail } from '@/lib/emailSettings'
 import {
   buildCampaignReport,
   periodForMonth,
@@ -9,6 +10,7 @@ import {
   reportSubject,
   renderReportHtml,
 } from '@/lib/reports'
+import { buildHostReport, hostReportSubject, renderHostReportHtml } from '@/lib/hostReport'
 
 // Monthly ROI report emails. This is a DAILY cron (Vercel Hobby allows only
 // daily schedules; a sub-daily entry silently breaks all future deploys), so it
@@ -48,6 +50,13 @@ export async function GET(req: Request) {
   const admin = createAdminClient()
   const base = appUrl()
 
+  // Admin on/off + optional subject override for this email. Body stays the
+  // data-generated report table; only the subject is editable at /admin/email.
+  const emailCfg = await resolveEmail(admin, 'monthly_report', { month })
+  // The advertiser-report toggle gates only the advertiser loop; the host recap
+  // further down has its own toggle, so one can be off without disabling the other.
+  const runCampaigns = emailCfg.enabled || dry
+
   // Active campaigns (optionally a single one for testing).
   let q = admin.from('campaigns').select('id').eq('status', 'active')
   if (onlyCampaign) q = q.eq('id', onlyCampaign)
@@ -55,7 +64,7 @@ export async function GET(req: Request) {
 
   const results: Array<{ campaign: string; status: string; detail?: string }> = []
 
-  for (const c of campaigns ?? []) {
+  for (const c of runCampaigns ? campaigns ?? [] : []) {
     // Skip if we already logged a send for this campaign + period.
     const { data: existing } = await admin
       .from('report_log')
@@ -89,7 +98,8 @@ export async function GET(req: Request) {
 
     const send = await sendEmail({
       to: report.advertiserEmail,
-      subject: reportSubject(report),
+      // Use the admin's subject override when set, else the report's own subject.
+      subject: emailCfg.custom.subject ? emailCfg.subject : reportSubject(report),
       html: renderReportHtml(report, base),
     })
 
@@ -115,10 +125,94 @@ export async function GET(req: Request) {
     results.push({ campaign: c.id, status: logStatus, detail })
   }
 
+  // ── Monthly HOST recap ("what your screen did for you") ───────────────────
+  // Folded into this same daily cron (Hobby allows only daily schedules). Has its
+  // own on/off toggle; skipped entirely on a single-campaign spot check.
+  const hostCfg = await resolveEmail(admin, 'host_monthly_report', { month })
+  const hostResults: Array<{ host: string; status: string; detail?: string }> = []
+  if ((hostCfg.enabled || dry) && !onlyCampaign) {
+    // Every host with at least one active venue.
+    const { data: hostVenues } = await admin
+      .from('venues')
+      .select('host_user_id')
+      .eq('status', 'active')
+      .not('host_user_id', 'is', null)
+    const hostIds = [
+      ...new Set(((hostVenues ?? []) as { host_user_id: string }[]).map((v) => v.host_user_id)),
+    ]
+
+    for (const hostId of hostIds) {
+      // Exactly-once per (host, period).
+      const { data: existing } = await admin
+        .from('host_report_log')
+        .select('id')
+        .eq('host_user_id', hostId)
+        .eq('period_month', month)
+        .maybeSingle()
+      if (existing && !force) {
+        hostResults.push({ host: hostId, status: 'already-sent' })
+        continue
+      }
+
+      const report = await buildHostReport(admin, hostId, period)
+      if (!report) {
+        hostResults.push({ host: hostId, status: 'no-venue' })
+        continue
+      }
+      if (!report.hostEmail) {
+        hostResults.push({ host: hostId, status: 'no-email' })
+        continue
+      }
+      // Don't send an all-zeros recap (a live screen with nothing to report yet).
+      const noActivity =
+        report.adsShown === 0 &&
+        report.triviaPlayers === 0 &&
+        report.ownPromoPlays === 0 &&
+        report.ownPromoScans === 0
+      if (noActivity) {
+        hostResults.push({ host: hostId, status: 'no-activity' })
+        continue
+      }
+
+      if (dry) {
+        hostResults.push({
+          host: hostId,
+          status: 'dry',
+          detail: `${report.hostEmail} · ${report.adsShown} shown · ${report.advertiserCount} advertisers · ${report.triviaPlayers} players`,
+        })
+        continue
+      }
+
+      const send = await sendEmail({
+        to: report.hostEmail,
+        subject: hostCfg.custom.subject ? hostCfg.subject : hostReportSubject(report),
+        html: renderHostReportHtml(report, base),
+      })
+      const logStatus = send.ok ? 'sent' : send.skipped ? 'skipped' : 'error'
+      const detail = send.ok ? send.id : send.skipped ? send.reason : send.error
+      await admin.from('host_report_log').upsert(
+        {
+          host_user_id: hostId,
+          period_month: month,
+          sent_to: report.hostEmail,
+          status: logStatus,
+          detail,
+        },
+        { onConflict: 'host_user_id,period_month' }
+      )
+      hostResults.push({ host: hostId, status: logStatus, detail })
+    }
+  }
+
   return NextResponse.json({
     month,
     ran: results.length,
     sent: results.filter((r) => r.status === 'sent').length,
     results,
+    hosts: {
+      ran: hostResults.length,
+      sent: hostResults.filter((r) => r.status === 'sent').length,
+      results: hostResults,
+    },
   })
 }

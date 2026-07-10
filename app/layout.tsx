@@ -1,7 +1,11 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Sora } from "next/font/google";
+import { cookies } from "next/headers";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
+import { THEME_COOKIE, resolveTheme } from "@/lib/theme";
+import { GoogleAnalytics } from "@/components/analytics/GoogleAnalytics";
+import { NavClickTracker } from "@/components/analytics/NavClickTracker";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -36,19 +40,25 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Resolve the theme server-side from the cookie so the correct theme class is
+  // present on the very first paint — no client script, no flash of wrong theme.
+  const theme = resolveTheme((await cookies()).get(THEME_COOKIE)?.value);
+
   return (
     <html
       lang="en"
-      className={`dark ${geistSans.variable} ${geistMono.variable} ${sora.variable} antialiased`}
+      className={`${theme} ${geistSans.variable} ${geistMono.variable} ${sora.variable} antialiased`}
     >
       <body className="flex min-h-dvh flex-col bg-background text-foreground">
         {children}
         <Toaster />
+        <GoogleAnalytics />
+        <NavClickTracker />
       </body>
     </html>
   );

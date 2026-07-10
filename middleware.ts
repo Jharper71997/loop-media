@@ -60,8 +60,18 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
+  // Run ONLY on the authenticated app areas (same prefixes as isProtected above).
+  // Everything else — /tv and every /api/tv/* + /api/trivia/* poll, /play, the
+  // marketing pages, /login — no longer pays a Supabase getUser() round-trip on
+  // each hit. Each always-on TV polls those routes thousands of times a day, so
+  // running auth middleware there was the main driver of Edge Middleware
+  // invocations + Fluid CPU. Protected pages still refresh the session and bounce
+  // anonymous users; server actions post to these same page paths, so they stay
+  // covered. Unauthenticated device/cron/webhook routes don't need it.
   matcher: [
-    // Run on everything except static assets and image files.
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
+    '/admin/:path*',
+    '/advertiser/:path*',
+    '/host/:path*',
+    '/dashboard/:path*',
   ],
 }

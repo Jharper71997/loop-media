@@ -58,6 +58,8 @@ function AdThumbs({ ads }: { ads: AdRow[] }) {
               <img
                 src={ad.creative_url}
                 alt={ad.title ?? ''}
+                loading="lazy"
+                decoding="async"
                 className="h-full w-full object-contain"
               />
             )

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Search } from 'lucide-react'
 import { Input } from '@/components/ui/input'
+import { trackSearch, trackFilter } from '@/lib/gtag'
 
 // Reusable admin list search + optional status filter. Syncs `?q=` / `?status=`
 // into the URL (debounced) so the server component re-queries — no client-side
@@ -20,6 +21,8 @@ export function ListSearch({
   const pathname = usePathname()
   const params = useSearchParams()
   const [q, setQ] = useState(params.get('q') ?? '')
+  // Label analytics by the listing being searched (e.g. 'venues', 'advertisers').
+  const context = pathname.split('/').filter(Boolean).pop() ?? 'list'
 
   function push(next: URLSearchParams) {
     router.replace(next.toString() ? `${pathname}?${next.toString()}` : pathname)
@@ -32,13 +35,17 @@ export function ListSearch({
       const v = q.trim()
       if (v) next.set('q', v)
       else next.delete('q')
-      if ((params.get('q') ?? '') !== v) push(next)
+      if ((params.get('q') ?? '') !== v) {
+        trackSearch({ searchTerm: v, context })
+        push(next)
+      }
     }, 250)
     return () => clearTimeout(id)
   }, [q]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const status = params.get('status') ?? ''
   function setStatus(v: string) {
+    trackFilter({ filterType: 'status', filterValue: v || 'all', context })
     const next = new URLSearchParams(Array.from(params.entries()))
     if (v) next.set('status', v)
     else next.delete('status')

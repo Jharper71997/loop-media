@@ -232,7 +232,7 @@ export default async function HostHome() {
                       <div className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-full border border-border bg-muted/40">
                         {v.logo_url ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={v.logo_url} alt="" className="size-full object-cover" />
+                          <img src={v.logo_url} alt="" loading="lazy" decoding="async" className="size-full object-cover" />
                         ) : (
                           <Store className="size-5 text-muted-foreground" />
                         )}

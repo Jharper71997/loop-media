@@ -12,11 +12,14 @@ import { Card, CardContent } from '@/components/ui/card'
 import {
   QR_DEFAULT,
   QR_SIZE_DEFAULT,
-  buildFilter,
   exportImageBlob,
   validateCreativeFile,
   CREATIVE_ACCEPT,
 } from '@/lib/adCreative'
+import { CreativeImageEditor, type CreativeImageEditorHandle } from '@/components/app/CreativeImageEditor'
+import { QrChip } from '@/components/app/QrChip'
+import { CreativeVideo } from '@/components/app/CreativeVideo'
+import { ConfirmButton } from '@/components/app/ConfirmButton'
 import { submitOwnScreenPromo, deleteOwnScreenPromo } from './actions'
 
 export interface PromoVenue {
@@ -48,10 +51,11 @@ export function OwnPromoForm({
   const [qrUrl, setQrUrl] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [fileUrl, setFileUrl] = useState<string | null>(null)
+  const [qrPreview, setQrPreview] = useState<string | null>(null)
   const [pending, start] = useTransition()
-  const [removing, startRemove] = useTransition()
   const [statusMsg, setStatusMsg] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const editorRef = useRef<CreativeImageEditorHandle>(null)
 
   const isVideo = !!file && file.type.startsWith('video')
 
@@ -73,6 +77,25 @@ export function OwnPromoForm({
 
   const qrTarget = useMemo(() => qrUrl.trim(), [qrUrl])
 
+  // Render the scan QR client-side so the preview matches the TV exactly.
+  useEffect(() => {
+    const url = qrTarget
+    if (!url) {
+      setQrPreview(null)
+      return
+    }
+    let alive = true
+    import('qrcode')
+      .then(({ default: QR }) =>
+        QR.toDataURL(url, { margin: 1, width: 240, color: { dark: '#000000', light: '#ffffff' } })
+      )
+      .then((d) => alive && setQrPreview(d))
+      .catch(() => alive && setQrPreview(null))
+    return () => {
+      alive = false
+    }
+  }, [qrTarget])
+
   function onSubmit() {
     if (!venueId) return toast.error('Pick which screen this runs on.')
     if (!title.trim()) return toast.error('Give your promo a title.')
@@ -89,12 +112,14 @@ export function OwnPromoForm({
       let ext = file.name.split('.').pop() ?? 'bin'
       let contentType = file.type
       if (!isVideo && fileUrl) {
+        const params = editorRef.current?.getExportParams()
+        if (!params) {
+          setStatusMsg(null)
+          toast.error('Give the image a moment to finish loading, then try again.')
+          return
+        }
         try {
-          blob = await exportImageBlob(fileUrl, {
-            zoom: 1,
-            pan: { x: 0, y: 0 },
-            filterStr: buildFilter('none', 100, 100),
-          })
+          blob = await exportImageBlob(fileUrl, params)
         } catch (e) {
           setStatusMsg(null)
           toast.error(e instanceof Error ? e.message : 'Could not process image.')
@@ -139,16 +164,12 @@ export function OwnPromoForm({
     })
   }
 
-  function onRemove(campaignId: string) {
-    startRemove(async () => {
-      const res = await deleteOwnScreenPromo(campaignId)
-      if (res.error) {
-        toast.error(res.error)
-        return
-      }
-      toast.success('Promo removed.')
-      router.refresh()
-    })
+  // Returns the { error } shape so ConfirmButton toasts/keeps-open on failure and
+  // toasts success + closes on the happy path; refresh the list once it's gone.
+  async function onRemove(campaignId: string): Promise<{ error: string | null }> {
+    const res = await deleteOwnScreenPromo(campaignId)
+    if (!res.error) router.refresh()
+    return { error: res.error ?? null }
   }
 
   return (
@@ -172,14 +193,17 @@ export function OwnPromoForm({
                         <span className="text-muted-foreground"> · {p.venueName}</span>
                       </span>
                     </span>
-                    <Button
-                      size="sm"
+                    <ConfirmButton
                       variant="outline"
-                      disabled={removing}
-                      onClick={() => onRemove(p.campaignId)}
+                      size="sm"
+                      title="Remove this promo?"
+                      description="It comes off your screen right away. You can add a new one after."
+                      confirmText="Remove"
+                      successToast="Promo removed."
+                      onConfirm={() => onRemove(p.campaignId)}
                     >
                       <Trash2 className="size-4" /> Remove
-                    </Button>
+                    </ConfirmButton>
                   </li>
                 ))}
               </ul>
@@ -203,8 +227,9 @@ export function OwnPromoForm({
 
           {venues.length > 1 && (
             <div className="space-y-1.5">
-              <Label>Which screen</Label>
+              <Label htmlFor="promo-venue">Which screen</Label>
               <select
+                id="promo-venue"
                 value={venueId}
                 onChange={(e) => setVenueId(e.target.value)}
                 className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm"
@@ -219,8 +244,9 @@ export function OwnPromoForm({
           )}
 
           <div className="space-y-1.5">
-            <Label>Promo title</Label>
+            <Label htmlFor="promo-title">Promo title</Label>
             <Input
+              id="promo-title"
               className="h-11"
               placeholder="Happy hour 4–6pm"
               value={title}
@@ -229,8 +255,9 @@ export function OwnPromoForm({
           </div>
 
           <div className="space-y-1.5">
-            <Label>Link when scanned</Label>
+            <Label htmlFor="promo-link">Link when scanned</Label>
             <Input
+              id="promo-link"
               type="url"
               className="h-11"
               placeholder="https://your-site.com/offer"
@@ -243,7 +270,7 @@ export function OwnPromoForm({
           </div>
 
           <div className="space-y-2">
-            <Label>Your image or video</Label>
+            <Label htmlFor="promo-file">Your image or video</Label>
             <label className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-border bg-muted/30 px-4 py-6 text-center transition hover:border-primary/50">
               <Upload className="size-5 text-muted-foreground" />
               <span className="text-sm text-muted-foreground">
@@ -256,6 +283,7 @@ export function OwnPromoForm({
               </span>
               <input
                 ref={fileInputRef}
+                id="promo-file"
                 type="file"
                 accept={CREATIVE_ACCEPT}
                 className="hidden"
@@ -263,31 +291,20 @@ export function OwnPromoForm({
               />
             </label>
 
-            {file && fileUrl && (
-              <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-black">
-                {isVideo ? (
-                  <video
-                    src={fileUrl}
-                    className="h-full w-full object-contain"
-                    muted
-                    autoPlay
-                    loop
-                    playsInline
-                  />
-                ) : (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={fileUrl}
-                    alt="Promo preview"
-                    className="h-full w-full object-contain"
-                  />
-                )}
-                {/* Where the scan QR sits on screen (bottom-right). */}
-                <div className="absolute bottom-[8%] right-[8%] flex aspect-square w-[9%] items-center justify-center rounded-sm bg-white text-[6px] font-semibold text-black ring-2 ring-[#d4af37]">
-                  QR
+            {file &&
+              fileUrl &&
+              (isVideo ? (
+                <div className="relative aspect-video w-full select-none overflow-hidden rounded-lg">
+                  <CreativeVideo src={fileUrl} muted autoPlay loop playsInline />
+                  <QrChip src={qrPreview} x={QR_DEFAULT.x} y={QR_DEFAULT.y} size={QR_SIZE_DEFAULT} />
                 </div>
-              </div>
-            )}
+              ) : (
+                <CreativeImageEditor
+                  ref={editorRef}
+                  src={fileUrl}
+                  qr={{ src: qrPreview, x: QR_DEFAULT.x, y: QR_DEFAULT.y, size: QR_SIZE_DEFAULT }}
+                />
+              ))}
           </div>
 
           <Button className="h-11 w-full" disabled={pending} onClick={onSubmit}>

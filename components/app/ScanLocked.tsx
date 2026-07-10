@@ -1,8 +1,8 @@
 import { Lock } from 'lucide-react'
 
-// QR scan analytics are moving to a separate "Insights" membership, which is not
-// on sale yet. Until an advertiser holds that membership, every place a scan
-// number would appear shows this locked "coming soon" placeholder instead.
+// QR scan analytics live behind the paid "Insights" membership. Until an
+// advertiser holds it, every place a scan number would appear shows this locked
+// placeholder instead; pair it with <InsightsUpsell /> for a buy button.
 //   tile   — fits a dashboard stat-tile slot (home, results)
 //   stat   — fits a compact Stat cell (campaign detail, past campaigns)
 //   panel  — replaces a whole scan section (results chart + top locations)
@@ -17,7 +17,7 @@ export function ScanLocked({
   if (variant === 'inline') {
     return (
       <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-        <Lock className="size-3" /> Scans coming soon
+        <Lock className="size-3" /> Scans in Insights
       </span>
     )
   }
@@ -26,10 +26,10 @@ export function ScanLocked({
     return (
       <div className="space-y-0.5">
         <p className="flex items-center gap-1.5 font-heading text-2xl font-bold text-muted-foreground">
-          <Lock className="size-4" /> Soon
+          <Lock className="size-4" /> Insights
         </p>
         <p className="text-xs font-medium">{label}</p>
-        <p className="text-[0.7rem] text-muted-foreground">coming soon</p>
+        <p className="text-[0.7rem] text-muted-foreground">members only</p>
       </div>
     )
   }
@@ -42,8 +42,7 @@ export function ScanLocked({
         </div>
         <p className="text-sm font-semibold">QR scan analytics</p>
         <p className="mx-auto mt-1 max-w-xs text-xs text-muted-foreground">
-          Coming soon with Loop Insights. You&apos;ll see every scan your ad drives, by day and by
-          location.
+          Unlock Loop Insights to see every scan your ad drives, by day and by location.
         </p>
       </div>
     )
@@ -56,7 +55,7 @@ export function ScanLocked({
         {label}
       </div>
       <div className="mt-0.5 flex items-center gap-1.5 font-heading text-lg font-bold text-muted-foreground">
-        <Lock className="size-4" /> Coming soon
+        <Lock className="size-4" /> Insights
       </div>
     </div>
   )

@@ -5,10 +5,22 @@
 // DOM (canvas), so only call it client-side.
 
 // The exported creative is always rendered at 16:9 1080p — crisp on big TVs.
-// exportImageBlob does a programmatic cover-crop (no editor); getCroppedImg bakes
-// the react-easy-crop selection. Both composite onto this same fixed frame.
+// exportImageBlob bakes the editor's transform (drawCreative) onto this fixed frame;
+// getCroppedLogoImg bakes the react-easy-crop logo selection to a square.
 export const EXPORT_W = 1920
 export const EXPORT_H = 1080
+
+// Editor zoom bounds. ZOOM_MIN < 1 lets the user shrink the image BELOW the
+// auto-fit so the whole photo sits inside the 16:9 frame with black bars (not
+// just zoom in to crop); ZOOM_MAX caps how far they can zoom/crop in.
+export const ZOOM_MIN = 0.1
+export const ZOOM_MAX = 4
+
+// The scan QR is framed in fixed gold on the TV, which always renders dark. The
+// advertiser/host editor app can be in LIGHT mode, where the `--primary` theme
+// token resolves to bronze — so the shared QR chip uses this fixed value instead
+// of the token, keeping the previewed frame color identical to what airs.
+export const QR_GOLD = '#d4af37'
 
 // Free-drag QR default — the QR CENTER as fractions of the frame. Roughly
 // bottom-right, matching the old 'bottom-right' corner so placements don't jump.
@@ -58,6 +70,23 @@ export function validateCreativeFile(file: File): string | null {
   return null
 }
 
+// Guard: a creative MUST be a file we host in the `creatives` bucket, in the
+// uploader's own folder — never an arbitrary external URL. Uploads write to the
+// path `<userId>/<uuid>.<ext>`, so the public URL is
+// `<SUPABASE_URL>/storage/v1/object/public/creatives/<userId>/…`. Without this
+// check an advertiser could get a clean file approved and then swap the file on
+// their OWN server, so unreviewed content airs — a bait-and-switch straight past
+// ad review. Enforcing our-storage-only means the only way to change what plays
+// is to upload a new file, which re-enters review ('pending'). Pure string
+// compare, safe to call on the server (NEXT_PUBLIC_SUPABASE_URL is defined both
+// places). Pass an empty/whitespace userId and it always fails closed.
+export function isOwnCreativeUrl(url: string | null | undefined, userId: string): boolean {
+  if (!url || !userId.trim()) return false
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (!supabaseUrl) return false
+  return url.startsWith(`${supabaseUrl}/storage/v1/object/public/creatives/${userId}/`)
+}
+
 // ---- Venue logo (host business logo on the browse map) ----
 // A logo is a square PNG (transparent background preserved) so it renders cleanly
 // as a round map pin and a small avatar in the popup. Images only — no video, and
@@ -84,17 +113,19 @@ export function buildFilter(preset: FilterPreset, brightness: number, contrast: 
   return `${base} brightness(${brightness}%) contrast(${contrast}%)`.trim()
 }
 
-// Cover-fit the natural image into the WxH frame, then zoom about center and pan.
-// Returns the draw rect in frame pixels — used for BOTH the CSS preview (as % of
-// the frame) and the canvas export, so they line up exactly.
+// Fit the natural image into the WxH frame, then zoom about center and pan.
+// `fit`: 'cover' fills the frame (crops overflow); 'contain' fits the whole image
+// inside it (black bars around). Returns the draw rect in frame pixels — used for
+// BOTH the CSS preview (as % of the frame) and the canvas export, so they line up.
 export function computeDraw(
   nat: { w: number; h: number },
   zoom: number,
   pan: { x: number; y: number },
   W: number,
-  H: number
+  H: number,
+  fit: 'cover' | 'contain' = 'cover'
 ) {
-  const base = Math.max(W / nat.w, H / nat.h) // cover
+  const base = fit === 'contain' ? Math.min(W / nat.w, H / nat.h) : Math.max(W / nat.w, H / nat.h)
   const s = base * zoom
   const dw = nat.w * s
   const dh = nat.h * s
@@ -103,30 +134,83 @@ export function computeDraw(
   return { dx, dy, dw, dh }
 }
 
-// Composite the cover-cropped + filtered photo to a 16:9 PNG. The QR is NEVER baked
-// in (the TV draws a tracked QR at play time) — only the photo is drawn. Client-
-// only (uses canvas). `filterStr` must be the SAME string used on the preview img.
-export async function exportImageBlob(
-  src: string,
-  opts: { zoom: number; pan: { x: number; y: number }; filterStr: string }
-): Promise<Blob> {
-  const img = await new Promise<HTMLImageElement>((res, rej) => {
-    const im = new window.Image()
-    im.onload = () => res(im)
-    im.onerror = () => rej(new Error('Could not read image.'))
-    im.src = src
-  })
-  const dims = { w: img.naturalWidth, h: img.naturalHeight }
+// The transform an editor applies to a creative. `pan` is a FRACTION of the frame
+// (so it's resolution-independent), `rotation` is in degrees about center, `fit`
+// is the base sizing, `filterStr` the CSS filter string (identical in preview + bake).
+export interface CreativeTransform {
+  zoom: number
+  pan: { x: number; y: number }
+  rotation?: number
+  fit?: 'cover' | 'contain'
+  filterStr?: string
+}
+
+// THE shared render routine: black fill, then the filtered/rotated/scaled image.
+// Used by BOTH the live editor preview (drawn at frame size) and the exported PNG
+// (drawn at 1920x1080) — so what the user frames is exactly what airs. The QR is
+// NEVER drawn here (the TV overlays a tracked QR at play time). Client-only (canvas).
+// Resolution-independent: fit derives from W/H and pan is fractional, so a 640px
+// preview and a 1920px bake produce the identical framing (incl. the black bars).
+export function drawCreative(
+  ctx: CanvasRenderingContext2D,
+  img: CanvasImageSource,
+  t: CreativeTransform,
+  W: number,
+  H: number
+): void {
+  const nw = (img as HTMLImageElement).naturalWidth || (img as HTMLVideoElement).videoWidth || (img as HTMLCanvasElement).width
+  const nh = (img as HTMLImageElement).naturalHeight || (img as HTMLVideoElement).videoHeight || (img as HTMLCanvasElement).height
+  const rotation = t.rotation ?? 0
+  const fit = t.fit ?? 'cover'
+  // Fit on the ROTATED bounding box so a rotated image still fits inside the frame.
+  const box = rotatedBox(nw, nh, rotation)
+  const base = fit === 'contain' ? Math.min(W / box.w, H / box.h) : Math.max(W / box.w, H / box.h)
+  const s = base * t.zoom
+  const cx = W / 2 + t.pan.x * W
+  const cy = H / 2 + t.pan.y * H
+
+  ctx.fillStyle = '#000000'
+  ctx.fillRect(0, 0, W, H)
+  ctx.save()
+  ctx.filter = t.filterStr || 'none'
+  ctx.translate(cx, cy)
+  ctx.rotate(toRad(rotation))
+  ctx.drawImage(img, (-nw * s) / 2, (-nh * s) / 2, nw * s, nh * s)
+  ctx.restore()
+}
+
+// The creative's axis-aligned bounding box within the frame, in [0,1] FRACTIONS.
+// Drives the editor's resize handles (they sit on this box) and any CSS overlay.
+// Mirrors drawCreative's fit/zoom/pan/rotation math exactly.
+export function creativeRect(
+  nat: { w: number; h: number },
+  t: CreativeTransform
+): { x: number; y: number; w: number; h: number } {
+  // Fit against the 16:9 frame (EXPORT_W:EXPORT_H) — the fractions are aspect-
+  // relative, so this must use the frame's real aspect, not a unit square. Mirrors
+  // computeDraw/drawCreative exactly: w/h are the box's pixel size / frame size.
+  const box = rotatedBox(nat.w, nat.h, t.rotation ?? 0)
+  const fit = t.fit ?? 'cover'
+  const base =
+    fit === 'contain'
+      ? Math.min(EXPORT_W / box.w, EXPORT_H / box.h)
+      : Math.max(EXPORT_W / box.w, EXPORT_H / box.h)
+  const s = base * t.zoom
+  const w = (box.w * s) / EXPORT_W
+  const h = (box.h * s) / EXPORT_H
+  return { x: (1 - w) / 2 + t.pan.x, y: (1 - h) / 2 + t.pan.y, w, h }
+}
+
+// Composite a transformed + filtered photo to a fixed 16:9 1920x1080 PNG via the
+// shared drawCreative routine. QR is never baked in. Client-only (uses canvas).
+export async function exportImageBlob(src: string, t: CreativeTransform): Promise<Blob> {
+  const img = await createImage(src)
   const canvas = document.createElement('canvas')
   canvas.width = EXPORT_W
   canvas.height = EXPORT_H
   const ctx = canvas.getContext('2d')
   if (!ctx) throw new Error('Canvas is not available.')
-  ctx.fillStyle = '#000000'
-  ctx.fillRect(0, 0, EXPORT_W, EXPORT_H)
-  ctx.filter = opts.filterStr // same string as the preview img
-  const d = computeDraw(dims, opts.zoom, opts.pan, EXPORT_W, EXPORT_H)
-  ctx.drawImage(img, d.dx, d.dy, d.dw, d.dh)
+  drawCreative(ctx, img, t, EXPORT_W, EXPORT_H)
   const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'))
   if (!blob) throw new Error('Could not render image.')
   return blob
@@ -157,55 +241,9 @@ function rotatedBox(w: number, h: number, deg: number) {
   }
 }
 
-export async function getCroppedImg(
-  src: string,
-  pixelCrop: { x: number; y: number; width: number; height: number },
-  rotation: number,
-  filterStr: string
-): Promise<Blob> {
-  const img = await createImage(src)
-  const nw = img.naturalWidth
-  const nh = img.naturalHeight
-
-  // Stage 1: draw the (rotated) full image onto a canvas sized to its bounding box.
-  const box = rotatedBox(nw, nh, rotation)
-  const stage = document.createElement('canvas')
-  stage.width = Math.round(box.w)
-  stage.height = Math.round(box.h)
-  const sctx = stage.getContext('2d')
-  if (!sctx) throw new Error('Canvas is not available.')
-  sctx.translate(stage.width / 2, stage.height / 2)
-  sctx.rotate(toRad(rotation))
-  sctx.drawImage(img, -nw / 2, -nh / 2)
-
-  // Stage 2: draw the cropped region, scaled to the fixed frame, with the filter.
-  const out = document.createElement('canvas')
-  out.width = EXPORT_W
-  out.height = EXPORT_H
-  const octx = out.getContext('2d')
-  if (!octx) throw new Error('Canvas is not available.')
-  octx.fillStyle = '#000000'
-  octx.fillRect(0, 0, EXPORT_W, EXPORT_H)
-  octx.filter = filterStr // same string as the preview media
-  octx.drawImage(
-    stage,
-    pixelCrop.x,
-    pixelCrop.y,
-    pixelCrop.width,
-    pixelCrop.height,
-    0,
-    0,
-    EXPORT_W,
-    EXPORT_H
-  )
-
-  const blob = await new Promise<Blob | null>((res) => out.toBlob(res, 'image/png'))
-  if (!blob) throw new Error('Could not render image.')
-  return blob
-}
-
-// Bake a react-easy-crop selection into a SQUARE LOGO_SIZE PNG. Same two-stage
-// rotate-then-crop as getCroppedImg, but the output is square and the background
+// Bake a react-easy-crop selection into a SQUARE LOGO_SIZE PNG (the logo editor
+// still uses react-easy-crop). Two-stage rotate-then-crop; the output is square and
+// the background
 // is left TRANSPARENT (no black fill) so a logo with transparency stays clean as
 // a round map pin. No filter — logos aren't color-graded. Client-only (canvas).
 export async function getCroppedLogoImg(

@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation'
 import { LogOut, ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { ThemeToggle } from '@/components/ThemeToggle'
 import { BottomNav, type AppRole } from './BottomNav'
 
 // Responsive shell for the advertiser + host apps: a branded top bar, a content
@@ -43,7 +44,10 @@ export function AppShell({
 
   return (
     <div className="flex min-h-dvh flex-col">
-      <header className="sticky top-0 z-40 border-b border-border bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70 pt-[env(safe-area-inset-top)]">
+      <header
+        data-ga-nav="app_header"
+        className="sticky top-0 z-40 border-b border-border bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70 pt-[env(safe-area-inset-top)]"
+      >
         <div className={cn('mx-auto flex h-14 w-full items-center justify-between px-4 sm:px-6 lg:px-8', WIDE)}>
           <Link href={role === 'host' ? '/host' : '/advertiser'} className="flex items-center gap-2">
             <Image
@@ -80,6 +84,7 @@ export function AppShell({
                 {crossLink.label}
               </Link>
             )}
+            <ThemeToggle />
             <form action="/auth/signout" method="post">
               <Button type="submit" variant="ghost" size="icon-sm" aria-label="Sign out">
                 <LogOut className="size-4" />

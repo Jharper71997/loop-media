@@ -32,12 +32,10 @@ export function CreativeFitNotice({ file }: { file: File | null }) {
       }
       const w = img.naturalWidth
       const h = img.naturalHeight
-      const off = Math.abs(w / h - 16 / 9) / (16 / 9)
-      if (off > 0.12) {
-        setInstant(
-          `This image is ${w}×${h}. TVs are 16:9, so it'll show black bars or look stretched. Export at 1920×1080 for a flush fit.`
-        )
-      } else if (w < 1280 || h < 720) {
+      // No longer warn about non-16:9 — the editor now shows the exact framing
+      // (whole image with black bars) and the user can zoom/crop to fill. Only flag
+      // low-res, which genuinely looks soft on a big screen.
+      if (w < 1280 || h < 720) {
         setInstant(
           `This image is only ${w}×${h} and may look soft on a big screen. Use at least 1280×720 (1920×1080 is ideal).`
         )

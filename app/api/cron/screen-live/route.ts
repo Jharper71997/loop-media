@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { appUrl } from '@/lib/stripe'
 import { sendEmail } from '@/lib/email'
+import { resolveEmail, escapeHtml } from '@/lib/emailSettings'
 
 // "A new screen just went live near you" advertiser email.
 //
@@ -23,17 +24,21 @@ import { sendEmail } from '@/lib/email'
 //   ...&venue=<id>   limit to one venue
 export const dynamic = 'force-dynamic'
 
-function renderHtml(venue: { name: string; city: string | null }, base: string): string {
-  const where = venue.city ? ` in ${venue.city}` : ''
+// Heading + body come from email_settings (admin-editable); CTA and footer stay
+// code-owned. Body paragraphs arrive as plain text and are escaped before render.
+function renderHtml(base: string, heading: string, bodyParas: string[]): string {
   const browse = `${base.replace(/\/$/, '')}/advertiser/browse`
+  const paras = bodyParas
+    .map(
+      (p) =>
+        `<p style="font-size:16px;line-height:1.5;color:#cfcfcf;margin:0 0 24px">${escapeHtml(p)}</p>`
+    )
+    .join('')
   return `<!doctype html><html><body style="margin:0;background:#0a0a0b;font-family:Arial,Helvetica,sans-serif;color:#fff">
   <div style="max-width:520px;margin:0 auto;padding:32px 24px">
     <div style="font-size:13px;letter-spacing:2px;color:#d4af37;text-transform:uppercase">Loop Network</div>
-    <h1 style="font-size:24px;margin:16px 0 8px">A new screen is live${where}.</h1>
-    <p style="font-size:16px;line-height:1.5;color:#cfcfcf;margin:0 0 24px">
-      <strong style="color:#fff">${venue.name}</strong> is now showing the loop. It's on the map if
-      you'd like to take a look.
-    </p>
+    <h1 style="font-size:24px;margin:16px 0 8px">${escapeHtml(heading)}</h1>
+    ${paras}
     <a href="${browse}" style="display:inline-block;background:#d4af37;color:#000;font-weight:bold;text-decoration:none;padding:12px 22px;border-radius:10px">
       See it on the map
     </a>
@@ -54,6 +59,11 @@ export async function GET(req: Request) {
 
   const admin = createAdminClient()
   const base = appUrl()
+
+  // Admin on/off gate for this email.
+  if (!dry && !(await resolveEmail(admin, 'screen_live', {})).enabled) {
+    return NextResponse.json({ ran: 0, sent: 0, skipped: 'screen_live disabled' })
+  }
 
   // Venue ids whose screen has ever checked in (so it's real + live).
   const { data: liveTvs } = await admin
@@ -109,8 +119,12 @@ export async function GET(req: Request) {
     }
 
     let sent = 0
-    const html = renderHtml(venue, base)
-    const subject = `A new screen just went live${venue.city ? ` in ${venue.city}` : ''}`
+    const resolved = await resolveEmail(admin, 'screen_live', {
+      venue: venue.name,
+      city: venue.city || 'your area',
+    })
+    const html = renderHtml(base, resolved.heading, resolved.body)
+    const subject = resolved.subject
     for (const to of emails) {
       const res = await sendEmail({ to, subject, html })
       if (res.ok) sent++

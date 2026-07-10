@@ -17,6 +17,7 @@ import {
   Newspaper,
   Palette,
   Gamepad2,
+  Mail,
   Menu,
   LogOut,
   UserCircle,
@@ -24,6 +25,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { ThemeToggle } from '@/components/ThemeToggle'
 import {
   Select,
   SelectContent,
@@ -64,6 +66,7 @@ const GROUPS: NavGroup[] = [
     items: [
       { href: '/admin/advertisers', label: 'Advertisers', icon: Users },
       { href: '/admin/revenue', label: 'Revenue', icon: DollarSign },
+      { href: '/admin/email', label: 'Emails', icon: Mail },
     ],
   },
 ]
@@ -199,7 +202,7 @@ function SidebarBody({
   onNavigate?: () => void
 }) {
   return (
-    <div className="flex h-full flex-col gap-5 p-4">
+    <div data-ga-nav="admin_sidebar" className="flex h-full flex-col gap-5 p-4">
       <Wordmark />
 
       <div className="space-y-1.5">
@@ -212,7 +215,10 @@ function SidebarBody({
       </div>
 
       <div className="border-t border-border pt-4">
-        <p className="truncate px-2 text-xs text-muted-foreground">{profile.email}</p>
+        <div className="flex items-center justify-between gap-2 px-2">
+          <p className="truncate text-xs text-muted-foreground">{profile.email}</p>
+          <ThemeToggle className="-mr-1 shrink-0" />
+        </div>
         <Link
           href="/admin/account"
           onClick={onNavigate}

@@ -2,7 +2,16 @@
 
 import { useEffect, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import Cropper, { type Area, type Point } from 'react-easy-crop'
+import dynamic from 'next/dynamic'
+import { type Area, type Point } from 'react-easy-crop'
+// react-easy-crop only mounts once the user opens the image editor, so load it
+// on demand (client-only) to keep it out of this route's initial JS bundle.
+// Cast back to react-easy-crop's own class type so JSX keeps honoring its
+// defaultProps — CropperProps marks defaulted props (cropShape, zoomSpeed, …)
+// as required, which dynamic() would otherwise force onto every call site.
+const Cropper = dynamic(() => import('react-easy-crop'), {
+  ssr: false,
+}) as unknown as (typeof import('react-easy-crop'))['default']
 import { Upload, X, Trash2, RotateCw, ImageIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
@@ -177,12 +186,13 @@ export function LogoUploader({
               crop={crop}
               zoom={zoom}
               rotation={rotation}
-              minZoom={1}
+              minZoom={0.5}
               maxZoom={3}
               aspect={1}
               cropShape="round"
-              objectFit="cover"
-              showGrid={false}
+              objectFit="contain"
+              showGrid={true}
+              restrictPosition={false}
               onCropChange={setCrop}
               onZoomChange={setZoom}
               onRotationChange={setRotation}
@@ -202,7 +212,7 @@ export function LogoUploader({
             </div>
             <input
               type="range"
-              min={1}
+              min={0.5}
               max={3}
               step={0.01}
               value={zoom}

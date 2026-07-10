@@ -2,18 +2,22 @@
 
 import { useState } from 'react'
 import { Check, Copy } from 'lucide-react'
+import { trackCopy } from '@/lib/gtag'
 
 // Small monospace value + copy button. Used for things a provisioner copies onto
 // a Pi (kiosk URL, WiFi). `display` lets a long value show compactly while the
-// full `value` is what gets copied.
+// full `value` is what gets copied. `context` only labels the copy_to_clipboard
+// analytics event (e.g. 'screen_pairing') — it never affects what is copied.
 export function CopyField({
   value,
   display,
   label = 'Copy',
+  context = 'code_sample',
 }: {
   value: string
   display?: string
   label?: string
+  context?: string
 }) {
   const [copied, setCopied] = useState(false)
   return (
@@ -26,6 +30,7 @@ export function CopyField({
         onClick={() =>
           navigator.clipboard?.writeText(value).then(() => {
             setCopied(true)
+            trackCopy({ label, context })
             setTimeout(() => setCopied(false), 1500)
           })
         }

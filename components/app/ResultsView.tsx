@@ -8,6 +8,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { buttonVariants } from '@/components/ui/button'
 import { MoneyStat } from '@/components/app/MoneyStat'
 import { ScanLocked } from '@/components/app/ScanLocked'
+import { InsightsUpsell } from '@/components/app/InsightsUpsell'
 import { formatCents, formatNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import {
@@ -192,7 +193,7 @@ export async function ResultsView({ browseHref }: { browseHref: string }) {
               </section>
             </>
           ) : (
-            <ScanLocked variant="panel" />
+            <InsightsUpsell />
           )}
         </>
       )}

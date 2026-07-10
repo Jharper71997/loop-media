@@ -411,6 +411,8 @@ export default async function AdvertiserDashboard({
                             <img
                               src={c.ad.creative_url}
                               alt={c.ad.title}
+                              loading="lazy"
+                              decoding="async"
                               className="h-full w-full object-contain"
                             />
                           )

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ScrollDepth } from "@/components/analytics/ScrollDepth";
 
 export const metadata: Metadata = {
   title: "Privacy Policy | Loop Network",
@@ -27,6 +28,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 export default function PrivacyPage() {
   return (
     <main className="mx-auto w-full max-w-2xl px-6 py-16">
+      <ScrollDepth page="privacy" />
       <h1 className="font-heading text-3xl font-bold text-foreground">Privacy Policy</h1>
       <p className="mt-2 text-sm text-muted-foreground">Effective {EFFECTIVE_DATE}</p>
 

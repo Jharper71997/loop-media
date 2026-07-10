@@ -183,7 +183,7 @@ export function QueueBoard({ ads, nowMs }: { ads: QueueItem[]; nowMs: number }) 
                       <video src={ad.creativeUrl} className="h-full w-full object-contain" controls muted playsInline />
                     ) : (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={ad.creativeUrl} alt={ad.title} className="h-full w-full object-contain" />
+                      <img src={ad.creativeUrl} alt={ad.title} loading="lazy" decoding="async" className="h-full w-full object-contain" />
                     )
                   ) : (
                     <div className="flex flex-col items-center gap-1 text-muted-foreground">

@@ -10,6 +10,12 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: projectRoot,
   },
+  images: {
+    // Serve AVIF first (≈20-30% smaller than WebP) and fall back to WebP for
+    // browsers that lack AVIF. Applies to every next/image surface — the brand
+    // lockups on login/signup, the /tv house ads, and the trivia phone page.
+    formats: ["image/avif", "image/webp"],
+  },
 };
 
 export default nextConfig;

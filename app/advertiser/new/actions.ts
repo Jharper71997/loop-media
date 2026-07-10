@@ -20,7 +20,7 @@ import {
 } from '@/lib/exclusivity'
 import { notifyCampaignCreated } from '@/lib/notifyAdvertiser'
 import { CREATIVE_SETUP_FEE_CENTS, CREATIVE_REFRESH_CENTS } from '@/lib/fees'
-import { QR_SIZE_DEFAULT } from '@/lib/adCreative'
+import { QR_SIZE_DEFAULT, isOwnCreativeUrl } from '@/lib/adCreative'
 
 export interface NewCampaignInput {
   territory_id: string
@@ -65,6 +65,12 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
   if (!input.title.trim()) return { error: 'Give your ad a title.' }
   if (!input.qr_target_url?.trim()) return { error: 'Add a scan link for your ad.' }
   if (!input.territory_id) return { error: 'Pick a market.' }
+  // A creative (when provided — the "make it for me" path submits none) must be a
+  // file we host in the buyer's own storage folder, never an external URL that
+  // could be swapped after review. See isOwnCreativeUrl.
+  if (input.creative_url && !isOwnCreativeUrl(input.creative_url, profile.id)) {
+    return { error: 'We could not verify that creative. Upload your image or video again.' }
+  }
 
   let venueIds = [...new Set((input.venue_ids ?? []).filter(Boolean))]
   if (!venueIds.length) return { error: 'Your cart is empty. Pick at least one screen.' }

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Check, MailCheck } from 'lucide-react'
+import { Check } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { beginDemo } from '@/app/demo/actions'
@@ -53,10 +53,6 @@ export function SignupForm({
   const [email, setEmail] = useState(defaultEmail ?? '')
   const [password, setPassword] = useState(demo ? 'demo-account' : '')
   const [loading, setLoading] = useState(false)
-  // Set once a confirm-email signup succeeds: swaps the form for a
-  // check-your-email screen instead of stranding the user on a toast.
-  const [awaitingConfirm, setAwaitingConfirm] = useState(false)
-  const [resending, setResending] = useState(false)
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -106,85 +102,48 @@ export function SignupForm({
         },
       },
     })
-    setLoading(false)
     if (error) {
+      setLoading(false)
       toast.error(error.message)
       return
     }
-    // With a session (no email confirmation) record an advertiser's choice now. A
-    // real pick saves to the profile so the buy flow never asks again; an "Other"
-    // files a review request for an admin to approve. Hosts skip this entirely.
-    if (data.session && !isHost) {
+    // Email confirmation is OFF, so signUp returns a session and we drop the user
+    // straight into the app. If a session ever doesn't come back, sign in with the
+    // same credentials right away rather than stranding them on a dead
+    // "check your email" screen.
+    if (!data.session) {
+      const { data: signIn, error: signInErr } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+      if (signInErr || !signIn.session) {
+        setLoading(false)
+        toast.error(signInErr?.message ?? 'Your account is ready — please log in to continue.')
+        window.location.assign('/login')
+        return
+      }
+    }
+    // Record an advertiser's category now that we have a session: a real pick saves
+    // to the profile so the buy flow never re-asks; an "Other" files a review
+    // request for an admin. Hosts skip this entirely.
+    if (!isHost) {
       try {
         if (isOther) await requestCategory(otherText.trim())
         else if (categoryId) await rememberCategory(categoryId)
       } catch {}
     }
-    if (data.session) {
-      if (isHost) {
-        // A fresh host has an account but no venue yet — send them straight into
-        // venue registration (they now pass the host gate on that route).
-        window.location.assign('/host/register')
-      } else {
-        // Flag a fresh sign-up so the dashboard shows the first-run walkthrough once.
-        try {
-          localStorage.setItem('loop.signup', '1')
-          sessionStorage.setItem('loop.signup', '1')
-        } catch {}
-        window.location.assign('/advertiser')
-      }
+    if (isHost) {
+      // A fresh host has an account but no venue yet — send them straight into
+      // venue registration (they now pass the host gate on that route).
+      window.location.assign('/host/register')
     } else {
-      // Email confirmation is on: show the check-your-email screen.
-      setAwaitingConfirm(true)
+      // Flag a fresh sign-up so the dashboard shows the first-run walkthrough once.
+      try {
+        localStorage.setItem('loop.signup', '1')
+        sessionStorage.setItem('loop.signup', '1')
+      } catch {}
+      window.location.assign('/advertiser')
     }
-  }
-
-  async function resend() {
-    setResending(true)
-    const supabase = createClient()
-    const { error } = await supabase.auth.resend({ type: 'signup', email })
-    setResending(false)
-    if (error) toast.error(error.message)
-    else toast.success('Confirmation email sent again.')
-  }
-
-  if (awaitingConfirm) {
-    return (
-      <Card>
-        <CardHeader className="items-center text-center">
-          <span className="mb-2 grid size-12 place-items-center rounded-full bg-primary/15 text-primary">
-            <MailCheck className="size-6" />
-          </span>
-          <CardTitle>Check your email</CardTitle>
-          <CardDescription>
-            We sent a confirmation link to <span className="font-medium text-foreground">{email}</span>.
-            Open it to finish setting up your account.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <a href="https://mail.google.com" target="_blank" rel="noreferrer" className="block">
-            <Button type="button" size="lg" className="h-12 w-full text-base">
-              Open email
-            </Button>
-          </a>
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full"
-            disabled={resending}
-            onClick={resend}
-          >
-            {resending ? 'Sending…' : "Didn't get it? Resend"}
-          </Button>
-          <p className="text-center text-sm text-muted-foreground">
-            Already confirmed?{' '}
-            <Link href="/login" className="text-primary hover:underline">
-              Log in
-            </Link>
-          </p>
-        </CardContent>
-      </Card>
-    )
   }
 
   return (

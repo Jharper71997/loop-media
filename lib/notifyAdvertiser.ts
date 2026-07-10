@@ -2,21 +2,19 @@
 // the moments that matter (ad reviewed, payment received). Service/metrics only —
 // never a sell or a goal push (Jacob's rule). Best-effort: every send is wrapped
 // so a mail failure never blocks the action that triggered it. Server-only.
+//
+// Copy + on/off live in email_settings (see lib/emailSettings + /admin/email).
+// Each send resolves its row first: if the email is disabled it silently no-ops;
+// otherwise the admin's subject/heading/body (or the code default) is used, with
+// the greeting, branded shell, CTA button, and footer still owned here.
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendEmail } from '@/lib/email'
+import { resolveEmail, escapeHtml } from '@/lib/emailSettings'
 import { appUrl } from '@/lib/stripe'
 import { formatCents } from '@/lib/format'
 
 type Admin = ReturnType<typeof createAdminClient>
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-}
 
 const greet = (name: string | null) => (name ? `Hi ${escapeHtml(name.split(' ')[0])},` : 'Hi,')
 
@@ -54,6 +52,12 @@ function shell(opts: {
     </table>
   </td></tr></table>
 </body></html>`
+}
+
+// Turn resolved plain-text body paragraphs into HTML-safe lines, with the
+// personalized greeting first.
+function bodyWithGreeting(name: string | null, paras: string[]): string[] {
+  return [greet(name), ...paras.map((p) => escapeHtml(p))]
 }
 
 async function ownerEmail(
@@ -101,35 +105,21 @@ export async function notifyAdReviewed(
   const dashUrl = campaignId ? `${base}/advertiser/campaigns/${campaignId}` : `${base}/advertiser`
   const title = (ad.title as string) || 'Your ad'
 
-  const html = outcome.approved
-    ? shell({
-        eyebrow: 'Ad review',
-        heading: `${title} is approved`,
-        body: [
-          greet(who.full_name),
-          `Good news. Your ad cleared review and is set to run on the screens in your campaign. If the campaign is paid and active, it is on the loop now.`,
-        ],
-        ctaText: 'View your campaign',
-        ctaUrl: dashUrl,
-      })
-    : shell({
-        eyebrow: 'Ad review',
-        heading: `${title} needs a change`,
-        body: [
-          greet(who.full_name),
-          `Your ad was not approved to run yet.`,
-          `Reason: ${escapeHtml(outcome.reason || 'not specified')}.`,
-          `Swap the creative from your campaign page and we will review it again.`,
-        ],
-        ctaText: 'Update your ad',
-        ctaUrl: dashUrl,
-      })
-
-  await sendEmail({
-    to: who.email,
-    subject: outcome.approved ? `${title} is approved` : `${title} needs a change`,
-    html,
+  const resolved = await resolveEmail(admin, outcome.approved ? 'ad_approved' : 'ad_rejected', {
+    title,
+    reason: outcome.reason || 'not specified',
   })
+  if (!resolved.enabled) return
+
+  const html = shell({
+    eyebrow: 'Ad review',
+    heading: resolved.heading,
+    body: bodyWithGreeting(who.full_name, resolved.body),
+    ctaText: outcome.approved ? 'View your campaign' : 'Update your ad',
+    ctaUrl: dashUrl,
+  })
+
+  await sendEmail({ to: who.email, subject: resolved.subject, html })
 }
 
 // Payment received (the charge that activates a campaign). A plain service receipt.
@@ -153,26 +143,24 @@ export async function notifyPaymentReceived(admin: Admin, campaignId: string): P
     if (ad?.title) title = ad.title as string
   }
   const amount = campaign.monthly_total_cents
-    ? formatCents(campaign.monthly_total_cents as number)
+    ? `${formatCents(campaign.monthly_total_cents as number)}/mo`
     : null
   const base = appUrl().replace(/\/$/, '')
   const dashUrl = `${base}/advertiser/campaigns/${campaign.id}`
 
+  const resolved = await resolveEmail(admin, 'payment_received', { title, amount })
+  if (!resolved.enabled) return
+
   const html = shell({
     eyebrow: 'Payment received',
-    heading: "You're all set",
-    body: [
-      greet(who.full_name),
-      `We received your payment${amount ? ` of ${amount} per month` : ''} for ${escapeHtml(
-        title
-      )}. Your campaign is active and starts showing on screens as soon as your ad is approved.`,
-    ],
+    heading: resolved.heading,
+    body: bodyWithGreeting(who.full_name, resolved.body),
     ctaText: 'View your campaign',
     ctaUrl: dashUrl,
     foot: 'You can manage or cancel anytime from your dashboard.',
   })
 
-  await sendEmail({ to: who.email, subject: `Payment received for ${title}`, html })
+  await sendEmail({ to: who.email, subject: resolved.subject, html })
 }
 
 // Payment failed (a renewal charge Stripe couldn't collect). We pause the ad until
@@ -199,20 +187,19 @@ export async function notifyPaymentFailed(admin: Admin, campaignId: string): Pro
   const base = appUrl().replace(/\/$/, '')
   const dashUrl = `${base}/advertiser/campaigns/${campaign.id}`
 
+  const resolved = await resolveEmail(admin, 'payment_failed', { title })
+  if (!resolved.enabled) return
+
   const html = shell({
     eyebrow: 'Payment issue',
-    heading: 'We could not process your payment',
-    body: [
-      greet(who.full_name),
-      `Your latest payment for ${escapeHtml(title)} did not go through, so the ad is paused for now.`,
-      `Update your payment method and the ad starts running again automatically as soon as the charge clears.`,
-    ],
+    heading: resolved.heading,
+    body: bodyWithGreeting(who.full_name, resolved.body),
     ctaText: 'View your campaign',
     ctaUrl: dashUrl,
     foot: 'If you think this is a mistake, reply to this email and we will help.',
   })
 
-  await sendEmail({ to: who.email, subject: `Payment issue for ${title}`, html })
+  await sendEmail({ to: who.email, subject: resolved.subject, html })
 }
 
 // Campaign created — a confirmation the moment an advertiser sets up a campaign,
@@ -255,18 +242,17 @@ export async function notifyCampaignCreated(campaignId: string): Promise<void> {
   const base = appUrl().replace(/\/$/, '')
   const dashUrl = `${base}/advertiser/campaigns/${campaign.id}`
 
+  const resolved = await resolveEmail(admin, 'campaign_created', { title, recap })
+  if (!resolved.enabled) return
+
   const html = shell({
     eyebrow: 'Campaign created',
-    heading: `${escapeHtml(title)} is set up`,
-    body: [
-      greet(who.full_name),
-      `Thanks for setting up your campaign${recap ? ` (${escapeHtml(recap)})` : ''}.`,
-      `Here is what happens next: once your payment is confirmed and your ad clears our quick review, it starts running on your screens. We will email you at each step.`,
-    ],
+    heading: resolved.heading,
+    body: bodyWithGreeting(who.full_name, resolved.body),
     ctaText: 'View your campaign',
     ctaUrl: dashUrl,
     foot: 'You can manage or cancel anytime from your dashboard.',
   })
 
-  await sendEmail({ to: who.email, subject: `Your campaign is set up: ${title}`, html })
+  await sendEmail({ to: who.email, subject: resolved.subject, html })
 }

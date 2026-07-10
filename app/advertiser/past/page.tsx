@@ -135,7 +135,7 @@ export default async function PastCampaignsPage() {
                           <video src={c.ad.creative_url} className="h-full w-full rounded-lg object-contain" muted />
                         ) : (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={c.ad.creative_url} alt={c.ad.title} className="h-full w-full rounded-lg object-contain" />
+                          <img src={c.ad.creative_url} alt={c.ad.title} loading="lazy" decoding="async" className="h-full w-full rounded-lg object-contain" />
                         )
                       ) : (
                         <ImageOff className="size-6 text-muted-foreground" />

@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Image from 'next/image'
 import { QR_SIZE_DEFAULT } from '@/lib/adCreative'
+import { QrChip } from '@/components/app/QrChip'
+import { CreativeVideo } from '@/components/app/CreativeVideo'
 
 const DEVICE_KEY = 'lm_device'
 const DEVICE_SECRET_KEY = 'lm_device_secret'
@@ -102,11 +104,11 @@ function buildPlaylist(m: Manifest): Slide[] {
   // only trivia now. Belt-and-suspenders: never render a trivia filler card even
   // if one lingers in the data.
   const cards = (m.filler ?? []).filter((c) => c.type !== 'trivia')
-  // Filler pool rotated between ads (and used to fill empty screens): the live
-  // trivia teaser, then any authored cards. May be empty (no trivia, no cards).
-  const fillerPool: Slide[] = []
-  if (m.trivia) fillerPool.push({ kind: 'trivia' })
-  for (const card of cards) fillerPool.push({ kind: 'filler', card })
+  // Between-ad filler pool: AUTHORED cards only, cycled after ads. The live trivia
+  // teaser is deliberately NOT in this pool — it's inserted ONCE per loop (below).
+  // Otherwise a single-item pool (just trivia, the common case) put a trivia slide
+  // after EVERY ad — "ad, trivia, ad, trivia". Trivia should show once per cycle.
+  const fillerPool: Slide[] = cards.map((card) => ({ kind: 'filler' as const, card }))
   let fi = 0
   const nextFiller = (): Slide | null =>
     fillerPool.length ? fillerPool[fi++ % fillerPool.length] : null
@@ -114,20 +116,27 @@ function buildPlaylist(m: Manifest): Slide[] {
   // The Jville Brew Loop house ad plays on EVERY screen (only when the manifest
   // carries it). It leads the loop so a screen opens with real content.
   const brewloop: Slide[] = m.brewloop ? [{ kind: 'brewloop' }] : []
+  // The live trivia teaser — shown ONCE per loop cycle when the venue has trivia
+  // on, not repeated between ads.
+  const triviaOnce: Slide[] = m.trivia ? [{ kind: 'trivia' as const }] : []
 
   if (!m.items.length) {
-    // No ads sold yet: lead with the Brew Loop ad, rotate the filler pool
-    // (trivia, authored cards), then the "advertise on this screen" house slide
+    // No ads sold yet: lead with the Brew Loop ad, then the single trivia teaser,
+    // then any authored cards, then the "advertise on this screen" house slide
     // LAST — a new screen shouldn't open by begging for advertisers.
-    return [...brewloop, ...fillerPool, { kind: 'promo' }]
+    return [...brewloop, ...triviaOnce, ...fillerPool, { kind: 'promo' }]
   }
   const out: Slide[] = [...brewloop]
-  m.items.forEach((it) => {
+  m.items.forEach((it, i) => {
     out.push({ ...it, kind: 'ad', duration: it.duration || slot })
-    // Drop a filler card after each ad (cycling trivia → authored cards) when the
-    // pool has anything; otherwise ads just run back to back.
-    const f = nextFiller()
-    if (f) out.push(f)
+    // Trivia teaser goes in ONCE, after the first ad. Every other gap draws an
+    // authored filler card if there is one; otherwise ads just run back to back.
+    if (i === 0 && triviaOnce.length) {
+      out.push(triviaOnce[0])
+    } else {
+      const f = nextFiller()
+      if (f) out.push(f)
+    }
   })
   out.push({ kind: 'promo' })
   return out
@@ -731,18 +740,12 @@ function Player({
           gold-framed code in the corner — no card, no caption. The white padding
           is the QR's required quiet zone so it still scans cleanly. */}
       {slide.kind === 'ad' && slide.qr_image && (
-        <div
-          className="absolute rounded-xl bg-white p-1.5 ring-2 ring-primary"
-          style={{
-            left: `${(slide.qr_x ?? 0.9) * 100}%`,
-            top: `${(slide.qr_y ?? 0.88) * 100}%`,
-            width: `${(slide.qr_size ?? QR_SIZE_DEFAULT) * 100}%`,
-            transform: 'translate(-50%, -50%)',
-          }}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={slide.qr_image} alt="Scan" className="block w-full rounded-sm" />
-        </div>
+        <QrChip
+          src={slide.qr_image}
+          x={slide.qr_x ?? 0.9}
+          y={slide.qr_y ?? 0.88}
+          size={slide.qr_size ?? QR_SIZE_DEFAULT}
+        />
       )}
 
       {/* Anti-sleep: a barely-visible element kept in constant motion so TVs
@@ -867,16 +870,7 @@ function VideoAdSlide({ src, onDone }: { src: string; onDone: () => void }) {
       el.removeEventListener('error', finish)
     }
   }, [src])
-  return (
-    <video
-      ref={ref}
-      src={src}
-      className="lm-fade h-full w-full object-contain"
-      autoPlay
-      muted
-      playsInline
-    />
-  )
+  return <CreativeVideo ref={ref} src={src} className="lm-fade" autoPlay muted playsInline />
 }
 
 // A fixed 1920x1080 design canvas scaled to fit the device's viewport as a whole. The

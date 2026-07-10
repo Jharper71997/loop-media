@@ -18,6 +18,7 @@ import { getProfile, homeForRole } from '@/lib/auth'
 import { buttonVariants } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
+import { ScrollDepth } from '@/components/analytics/ScrollDepth'
 
 function Wordmark({ className }: { className?: string }) {
   return (
@@ -127,8 +128,12 @@ export default async function Home() {
 
   return (
     <main className="flex flex-1 flex-col">
+      <ScrollDepth page="marketing_home" />
       {/* Top bar */}
-      <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-5">
+      <header
+        data-ga-nav="marketing_header"
+        className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-5"
+      >
         <Wordmark className="text-base" />
         <Link href="/login" className="text-sm text-muted-foreground hover:text-foreground">
           Log in
@@ -402,7 +407,13 @@ export default async function Home() {
       <footer className="mt-auto border-t border-border">
         <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-4 px-6 py-8 sm:flex-row">
           <Wordmark className="text-sm" />
-          <nav className="flex items-center gap-5 text-sm text-muted-foreground">
+          <nav
+            data-ga-nav="marketing_footer"
+            className="flex items-center gap-5 text-sm text-muted-foreground"
+          >
+            <Link href="/changelog" className="hover:text-foreground">
+              What&apos;s New
+            </Link>
             <Link href="/privacy" className="hover:text-foreground">
               Privacy
             </Link>

@@ -1,17 +1,22 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { QR_SIZE_DEFAULT } from '@/lib/adCreative'
 import { cn } from '@/lib/utils'
+import { QrChip } from './QrChip'
+import { CreativeVideo } from './CreativeVideo'
 
-// The ad exactly as it appears on a TV: creative in a 16:9 frame, letterboxed,
-// with the scan QR at its free-drag spot — qrX/qrY are the QR's CENTER as
-// fractions of the frame, the same overlay math the TV player renders.
+// The ad exactly as it appears on a TV: the creative in a 16:9 frame (letterboxed
+// on black for images, blurred-backdrop for off-ratio video, matching TvPlayer),
+// with the scan QR at its free-drag spot — qrX/qrY are the QR's CENTER and qrSize
+// its WIDTH, all fractions of the frame, the same overlay math the TV renders.
 export function AdScreenPreview({
   creativeUrl,
   creativeType,
   qrUrl,
   qrX = 0.9,
   qrY = 0.88,
+  qrSize = QR_SIZE_DEFAULT,
   className,
 }: {
   creativeUrl: string | null
@@ -19,6 +24,7 @@ export function AdScreenPreview({
   qrUrl?: string | null
   qrX?: number
   qrY?: number
+  qrSize?: number
   className?: string
 }) {
   const [qr, setQr] = useState<string | null>(null)
@@ -53,14 +59,7 @@ export function AdScreenPreview({
     >
       {creativeUrl ? (
         creativeType === 'video' ? (
-          <video
-            src={creativeUrl}
-            className="h-full w-full object-contain"
-            muted
-            autoPlay
-            loop
-            playsInline
-          />
+          <CreativeVideo src={creativeUrl} muted autoPlay loop playsInline />
         ) : (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={creativeUrl} alt="Your ad" className="h-full w-full object-contain" />
@@ -70,19 +69,7 @@ export function AdScreenPreview({
           Creative in production
         </div>
       )}
-      {qrUrl && qrUrl.trim() && (
-        <div
-          className="absolute rounded-md bg-white p-1 ring-2 ring-[#d4af37]"
-          style={{ left: `${qrX * 100}%`, top: `${qrY * 100}%`, transform: 'translate(-50%, -50%)' }}
-        >
-          {qr ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={qr} alt="Scan" className="size-10 rounded-sm sm:size-12" />
-          ) : (
-            <div className="size-10 rounded-sm bg-muted sm:size-12" />
-          )}
-        </div>
-      )}
+      {qrUrl && qrUrl.trim() && <QrChip src={qr} x={qrX} y={qrY} size={qrSize} />}
     </div>
   )
 }

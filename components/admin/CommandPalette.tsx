@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Search, CornerDownLeft } from 'lucide-react'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { adminSearch, type AdminSearchHit } from '@/app/(admin)/admin/search-actions'
+import { trackSearch, trackNavClick } from '@/lib/gtag'
 
 // ⌘K / Ctrl+K palette to jump to any venue, advertiser, or screen by name —
 // navigate-then-scroll doesn't scale once there are hundreds of venues.
@@ -54,11 +55,13 @@ export function CommandPalette() {
       setHits(res)
       setActive(0)
       setLoading(false)
+      trackSearch({ searchTerm: q, context: 'command_palette' })
     }, 200)
     return () => clearTimeout(id)
   }, [query])
 
   function go(hit: AdminSearchHit) {
+    trackNavClick({ linkText: hit.label, linkUrl: hit.href, navRegion: 'command_palette_result' })
     setOpen(false)
     router.push(hit.href)
   }

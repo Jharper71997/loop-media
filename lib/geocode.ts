@@ -15,6 +15,24 @@ export interface AddressParts {
 const NOMINATIM = 'https://nominatim.openstreetmap.org/search'
 const HEADERS = { 'User-Agent': 'LoopNetwork/1.0 (venue geocoding)' }
 
+// Nominatim resolves building-level addresses, not unit numbers. A street line
+// carrying a suite/unit/site tag ("1250 Western Blvd site 6", "3430 Richlands
+// Hwy Suite E") or a lettered house number ("3430D Richlands Hwy") misses the
+// structured lookup AND the freeform pass, then silently falls through to the
+// city-center locality pin — which is why several venues stacked on one point
+// off in the wrong spot. Strip the unit portion before geocoding. The raw line
+// is still stored verbatim on the venue for display; only the lookup is cleaned.
+export function cleanStreet(street: string): string {
+  return street
+    // trailing "suite/ste/unit/site/apt/no/#" + its value ("Suite E", "site 6")
+    .replace(/[,\s]+(?:suite|ste|unit|site|apt|apartment|rm|room|no|#)\.?\s*\w+\s*$/i, '')
+    // lettered house number glued to the digits ("3430D" -> "3430"); the letter
+    // must touch the number so directionals like "100 N Main" are left alone.
+    .replace(/^(\d+)[a-z]\b/i, '$1')
+    .replace(/[,\s]+$/, '')
+    .trim()
+}
+
 type NominatimRow = { lat: string; lon: string; address?: { country_code?: string } }
 
 function pickUs(rows: NominatimRow[]): { lat: number; lng: number } | null {
@@ -53,11 +71,13 @@ async function structuredSearch(
 export async function geocodeAddress(
   parts: AddressParts
 ): Promise<{ lat: number; lng: number } | null> {
-  const street = (parts.street ?? '').trim()
+  const rawStreet = (parts.street ?? '').trim()
   const city = (parts.city ?? '').trim()
   const state = (parts.state ?? '').trim()
   const zip = (parts.zip ?? '').trim()
-  if (!street && !city && !zip) return null
+  if (!rawStreet && !city && !zip) return null
+  // Strip suite/unit tags so the building-level lookup can hit (see cleanStreet).
+  const street = cleanStreet(rawStreet)
 
   // 1) Structured US search — the accurate path when we have city/state/zip.
   const structured = await structuredSearch({ street, city, state, zip })

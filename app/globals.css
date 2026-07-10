@@ -4,6 +4,15 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* ---------------------------------------------------------------------------
+ * SEMANTIC TOKEN CONTRACT
+ * ---------------------------------------------------------------------------
+ * This block maps Tailwind color utilities (bg-*, text-*, border-*) onto the
+ * semantic CSS variables defined per-theme below. It is THEME-AGNOSTIC: adding
+ * a new theme never touches this block or any component — you only add a new
+ * class block in the THEMES section further down. Components always consume the
+ * semantic name (bg-background, text-primary, border-input), never a raw color.
+ * ------------------------------------------------------------------------- */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -27,6 +36,7 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
   --color-success: var(--success);
   --color-success-foreground: var(--success-foreground);
   --color-warning: var(--warning);
@@ -52,86 +62,162 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-:root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --success: oklch(0.55 0.14 158);
-  --success-foreground: oklch(0.99 0 0);
-  --warning: oklch(0.72 0.15 75);
-  --warning-foreground: oklch(0.16 0.004 80);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-}
+/* ===========================================================================
+ * THEMES
+ * ===========================================================================
+ * Naming convention (semantic, not literal — never name a token after a hue):
+ *   --{role}              a SURFACE / fill        e.g. --card, --primary
+ *   --{role}-foreground   text/icons ON that role e.g. --card-foreground
+ * Roles: background (page), card, popover, primary (brand action), secondary,
+ * muted (low-emphasis), accent (hover tint), destructive/success/warning
+ * (status), border/input (edges), ring (focus), sidebar-*, chart-* (data viz).
+ *
+ * Every foreground/background pairing below is verified to meet WCAG 2.1 AA:
+ * 4.5:1 for text, 3:1 for UI boundaries (focus ring, input borders). The
+ * `--border` token is intentionally subtle (decorative dividers / card edges,
+ * which sit against a differing surface and are exempt under WCAG 1.4.11).
+ * Contrast was checked by converting each OKLCH value to sRGB luminance.
+ *
+ * The theme is chosen by a class on <html>, rendered server-side from a cookie
+ * (see lib/theme.ts + app/layout.tsx) so the first paint is themed with no JS.
+ *
+ * >>> TO ADD A THEME (e.g. a high-contrast or a per-brand skin): copy one block
+ *     below, rename the selector to `.theme-<name>`, retune the values, and add
+ *     the name to THEMES in lib/theme.ts. Nothing else changes. <<<
+ * ------------------------------------------------------------------------- */
 
+/* ---- DARK (brand default) --------------------------------------------------
+ * Also assigned to :root so any un-classed render (e.g. a static error page)
+ * stays on-brand and readable instead of flashing white. */
+:root,
 .dark {
-  /* Loop Network brand: near-black canvas, gold accent, silver/off-white text. */
-  /* Tell the browser this surface is dark so NATIVE controls (the business-type
-     dropdown / mobile picker, scrollbars, autofill) render dark instead of a
-     jarring white. Without this the OS draws them light even on a dark page. */
   color-scheme: dark;
-  --background: oklch(0.155 0.004 80);
-  --foreground: oklch(0.93 0.004 80);
+  --background: oklch(0.155 0.004 80); /* near-black, faintly warm */
+  --foreground: oklch(0.93 0.004 80); /* off-white — 15.9:1 on bg */
   --card: oklch(0.205 0.005 80);
-  --card-foreground: oklch(0.93 0.004 80);
+  --card-foreground: oklch(0.93 0.004 80); /* 14.6:1 on card */
   --popover: oklch(0.2 0.005 80);
   --popover-foreground: oklch(0.93 0.004 80);
-  --primary: oklch(0.78 0.125 88); /* gold #d4af37 */
-  --primary-foreground: oklch(0.16 0.004 80); /* near-black on gold */
+  --primary: oklch(0.8 0.13 90); /* gold */
+  --primary-foreground: oklch(0.16 0.004 80); /* near-black on gold — 10.4:1 */
   --secondary: oklch(0.27 0.006 80);
   --secondary-foreground: oklch(0.92 0.005 85);
   --muted: oklch(0.26 0.005 80);
-  --muted-foreground: oklch(0.72 0.012 85); /* silver-gray */
+  --muted-foreground: oklch(0.74 0.012 85); /* silver — 8.5:1 on bg */
   --accent: oklch(0.3 0.02 88); /* subtle gold-tinted hover */
   --accent-foreground: oklch(0.95 0.02 90);
-  --destructive: oklch(0.62 0.2 25);
-  --success: oklch(0.62 0.14 158); /* emerald, for Live/Active */
-  --success-foreground: oklch(0.99 0 0);
-  --warning: oklch(0.78 0.15 75); /* amber, distinct from gold primary */
+  --destructive: oklch(0.55 0.21 27);
+  --destructive-foreground: oklch(0.99 0 0); /* 5.2:1 */
+  --success: oklch(0.68 0.15 158); /* emerald — Live/Active */
+  --success-foreground: oklch(0.16 0.02 158);
+  --warning: oklch(0.8 0.15 80); /* amber, distinct from gold primary */
   --warning-foreground: oklch(0.16 0.004 80);
-  --border: oklch(1 0 0 / 9%);
-  --input: oklch(1 0 0 / 13%);
-  --ring: oklch(0.78 0.125 88); /* gold focus ring */
+  --border: oklch(1 0 0 / 12%); /* decorative divider/card edge */
+  --input: oklch(0.52 0.006 80); /* field boundary — 3.5:1 on bg (AA UI) */
+  --ring: oklch(0.8 0.13 90); /* gold focus ring — 10.4:1 */
+  --radius: 0.625rem;
   --chart-1: oklch(0.8 0.13 90);
   --chart-2: oklch(0.7 0.12 75);
   --chart-3: oklch(0.6 0.1 65);
   --chart-4: oklch(0.5 0.08 60);
-  --chart-5: oklch(0.4 0.06 55);
+  --chart-5: oklch(0.72 0.05 158);
   --sidebar: oklch(0.18 0.004 80);
-  --sidebar-foreground: oklch(0.92 0.004 80);
-  --sidebar-primary: oklch(0.78 0.125 88); /* gold */
+  --sidebar-foreground: oklch(0.93 0.004 80);
+  --sidebar-primary: oklch(0.8 0.13 90);
   --sidebar-primary-foreground: oklch(0.16 0.004 80);
   --sidebar-accent: oklch(0.27 0.006 80);
   --sidebar-accent-foreground: oklch(0.93 0.004 80);
   --sidebar-border: oklch(1 0 0 / 9%);
-  --sidebar-ring: oklch(0.78 0.125 88);
+  --sidebar-ring: oklch(0.8 0.13 90);
+}
+
+/* ---- LIGHT -----------------------------------------------------------------
+ * The brand gold is too light to carry text on white, so `--primary` shifts to
+ * a deep bronze (same hue family) that clears AA as both a fill and a link. */
+.light {
+  color-scheme: light;
+  --background: oklch(0.99 0.004 85); /* warm off-white */
+  --foreground: oklch(0.205 0.006 80); /* near-black — 17.4:1 on bg */
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.205 0.006 80); /* 17.9:1 on card */
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.205 0.006 80);
+  --primary: oklch(0.47 0.095 72); /* deep bronze — 6.8:1 fill, AA link */
+  --primary-foreground: oklch(0.99 0.01 90);
+  --secondary: oklch(0.96 0.006 85);
+  --secondary-foreground: oklch(0.28 0.006 80);
+  --muted: oklch(0.965 0.005 85);
+  --muted-foreground: oklch(0.47 0.01 80); /* 6.6:1 on bg */
+  --accent: oklch(0.95 0.025 85); /* faint gold hover tint */
+  --accent-foreground: oklch(0.3 0.03 75);
+  --destructive: oklch(0.53 0.21 27);
+  --destructive-foreground: oklch(0.99 0 0); /* 5.7:1 */
+  --success: oklch(0.52 0.13 155);
+  --success-foreground: oklch(0.99 0 0);
+  --warning: oklch(0.52 0.11 70); /* darkened so white label clears AA */
+  --warning-foreground: oklch(0.99 0.01 90);
+  --border: oklch(0.9 0.004 85); /* decorative divider/card edge */
+  --input: oklch(0.64 0.006 85); /* field boundary — 3.3:1 on bg (AA UI) */
+  --ring: oklch(0.47 0.095 72); /* bronze focus ring — 6.8:1 */
+  --radius: 0.625rem;
+  --chart-1: oklch(0.55 0.11 72);
+  --chart-2: oklch(0.6 0.1 55);
+  --chart-3: oklch(0.5 0.09 45);
+  --chart-4: oklch(0.55 0.12 155);
+  --chart-5: oklch(0.45 0.08 260);
+  --sidebar: oklch(0.985 0.003 85);
+  --sidebar-foreground: oklch(0.205 0.006 80);
+  --sidebar-primary: oklch(0.47 0.095 72);
+  --sidebar-primary-foreground: oklch(0.99 0.01 90);
+  --sidebar-accent: oklch(0.95 0.025 85);
+  --sidebar-accent-foreground: oklch(0.3 0.03 75);
+  --sidebar-border: oklch(0.9 0.004 85);
+  --sidebar-ring: oklch(0.47 0.095 72);
+}
+
+/* Follow the OS when the visitor has no saved choice AND no class was rendered
+ * (belt-and-suspenders: the server normally always sets a class). Pure CSS, no
+ * JS. Keep these values in sync with the .light block above. */
+@media (prefers-color-scheme: light) {
+  :root:not(.dark):not(.light) {
+    color-scheme: light;
+    --background: oklch(0.99 0.004 85);
+    --foreground: oklch(0.205 0.006 80);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.205 0.006 80);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.205 0.006 80);
+    --primary: oklch(0.47 0.095 72);
+    --primary-foreground: oklch(0.99 0.01 90);
+    --secondary: oklch(0.96 0.006 85);
+    --secondary-foreground: oklch(0.28 0.006 80);
+    --muted: oklch(0.965 0.005 85);
+    --muted-foreground: oklch(0.47 0.01 80);
+    --accent: oklch(0.95 0.025 85);
+    --accent-foreground: oklch(0.3 0.03 75);
+    --destructive: oklch(0.53 0.21 27);
+    --destructive-foreground: oklch(0.99 0 0);
+    --success: oklch(0.52 0.13 155);
+    --success-foreground: oklch(0.99 0 0);
+    --warning: oklch(0.52 0.11 70);
+    --warning-foreground: oklch(0.99 0.01 90);
+    --border: oklch(0.9 0.004 85);
+    --input: oklch(0.64 0.006 85);
+    --ring: oklch(0.47 0.095 72);
+    --chart-1: oklch(0.55 0.11 72);
+    --chart-2: oklch(0.6 0.1 55);
+    --chart-3: oklch(0.5 0.09 45);
+    --chart-4: oklch(0.55 0.12 155);
+    --chart-5: oklch(0.45 0.08 260);
+    --sidebar: oklch(0.985 0.003 85);
+    --sidebar-foreground: oklch(0.205 0.006 80);
+    --sidebar-primary: oklch(0.47 0.095 72);
+    --sidebar-primary-foreground: oklch(0.99 0.01 90);
+    --sidebar-accent: oklch(0.95 0.025 85);
+    --sidebar-accent-foreground: oklch(0.3 0.03 75);
+    --sidebar-border: oklch(0.9 0.004 85);
+    --sidebar-ring: oklch(0.47 0.095 72);
+  }
 }
 
 @layer base {
@@ -144,10 +230,11 @@
   html {
     @apply font-sans;
   }
-  /* Native <select> popups: force the option list dark so it stays readable on
-     the dark canvas. `color-scheme: dark` alone isn't honored for the dropdown
+  /* Native <select> popups on the dark surface: force the option list dark so it
+     stays readable. `color-scheme: dark` alone isn't honored for the dropdown
      list on every browser (notably Chrome on Windows), where the options would
-     otherwise render near-white text on a white list. Set explicit colors too. */
+     otherwise render near-white text on a white list. Set explicit colors too.
+     The light theme uses the browser's native (light) list, which is correct. */
   .dark select option,
   .dark select optgroup {
     background-color: var(--popover);
@@ -177,6 +264,7 @@
  * Leaflet theme overrides. Kept UNLAYERED (outside @layer) on purpose: Leaflet's
  * own stylesheet is unlayered, so layered rules would always lose to it. The
  * extra `.leaflet-popup` ancestor also lifts specificity above Leaflet's defaults.
+ * These all read theme tokens, so the map follows light/dark automatically.
  */
 .leaflet-container {
   background: var(--card) !important; /* tile gaps match the theme, no white flash */

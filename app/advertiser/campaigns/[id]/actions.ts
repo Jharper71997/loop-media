@@ -6,12 +6,14 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { requireProfile } from '@/lib/auth'
 import { stripe, appUrl } from '@/lib/stripe'
 import { activatePlacementsIfReady } from '@/lib/placement'
-import { hasUnlimitedChanges } from '@/lib/membership'
+import { hasUnlimitedChanges, hasInsightsMembership } from '@/lib/membership'
 import { applyAdChange } from '@/lib/adChanges'
+import { isOwnCreativeUrl } from '@/lib/adCreative'
 import {
   AD_CHANGE_FEE_CENTS,
   AD_CHANGE_FREE_EVERY_DAYS,
   UNLIMITED_CHANGES_CENTS,
+  INSIGHTS_CENTS,
   CREATIVE_REFRESH_CENTS,
 } from '@/lib/fees'
 import {
@@ -376,6 +378,14 @@ export async function replaceCreative(
 
   const admin = createAdminClient()
   const profile = await requireProfile()
+  // The swapped-in creative must be a file we host in this advertiser's own
+  // storage folder — never an external URL. This is what makes "even when
+  // swapped, re-review it" airtight: applyAdChange already flips the ad back to
+  // 'pending', and forcing our-storage-only means the file itself can't be
+  // silently changed afterward to dodge that review. See isOwnCreativeUrl.
+  if (!isOwnCreativeUrl(creativeUrl, profile.id)) {
+    return { error: 'We could not verify that creative. Upload your file again.' }
+  }
   // Fee policy: members (unlimited-changes membership) and demo/no-Stripe setups
   // are always free. Everyone else gets ONE free change per rolling 7 days; a
   // further change in that window pays the $10 fee at Checkout. "Used" = a change
@@ -503,6 +513,63 @@ export async function startMembershipCheckout(basePath?: string): Promise<{
       metadata: { membership_id: membership.id, advertiser_id: profile.id },
       success_url: `${base}${basePath === '/host/advertise' ? '/host' : '/advertiser'}?membership=success`,
       cancel_url: `${base}${basePath === '/host/advertise' ? '/host' : '/advertiser'}?membership=canceled`,
+    })
+    return { checkoutUrl: session.url ?? undefined }
+  } catch (e) {
+    await admin.from('memberships').update({ status: 'canceled' }).eq('id', membership.id)
+    return { error: e instanceof Error ? e.message : 'Could not start checkout.' }
+  }
+}
+
+// Start the Insights membership ($X/mo) — the tier that unlocks QR scan analytics
+// across the advertiser's dashboard, results, and monthly report. Mirrors the
+// unlimited-changes flow: create a draft membership row + a subscription Checkout;
+// the webhook (membership_id metadata) activates it on payment and refuses a
+// duplicate active membership. The moment it's active, hasInsightsMembership() is
+// true and every gated scan number lights up — no other wiring needed.
+export async function startInsightsCheckout(basePath?: string): Promise<{
+  error?: string
+  checkoutUrl?: string
+}> {
+  const profile = await requireProfile()
+  const admin = createAdminClient()
+
+  // Already a member? Nothing to buy.
+  if (await hasInsightsMembership(admin, profile.id)) {
+    return { error: 'You already have Loop Insights.' }
+  }
+  if (!process.env.STRIPE_SECRET_KEY) {
+    return { error: 'Payments are not configured.' }
+  }
+
+  const { data: membership, error: insErr } = await admin
+    .from('memberships')
+    .insert({ advertiser_id: profile.id, kind: 'insights', status: 'incomplete' })
+    .select('id')
+    .single()
+  if (insErr || !membership) return { error: 'Could not start Insights. Try again.' }
+
+  try {
+    const base = appUrl()
+    const home = basePath === '/host/advertise' ? '/host' : '/advertiser'
+    const session = await stripe().checkout.sessions.create({
+      mode: 'subscription',
+      allow_promotion_codes: true,
+      customer_email: profile.email,
+      line_items: [
+        {
+          quantity: 1,
+          price_data: {
+            currency: 'usd',
+            unit_amount: INSIGHTS_CENTS,
+            recurring: { interval: 'month' },
+            product_data: { name: 'Loop Network — Insights' },
+          },
+        },
+      ],
+      metadata: { membership_id: membership.id, advertiser_id: profile.id },
+      success_url: `${base}${home}/results?insights=success`,
+      cancel_url: `${base}${home}/results?insights=canceled`,
     })
     return { checkoutUrl: session.url ?? undefined }
   } catch (e) {

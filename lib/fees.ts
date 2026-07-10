@@ -16,3 +16,9 @@ export const AD_CHANGE_NOTICE_DAYS = 30 // notice we ask advertisers to give
 // Monthly price of the unlimited-changes membership. Inline price (the app uses
 // price_data everywhere, no dashboard Price IDs), so adjust here to reprice.
 export const UNLIMITED_CHANGES_CENTS = 2900 // $29 / month
+
+// Monthly price of the Insights membership — the tier that unlocks QR scan
+// analytics (who scanned, when, and at which screen) across the dashboard,
+// results, and the monthly report. Inline price like the rest, so change this one
+// constant to reprice. NOTE: confirm the price with Jacob before launch.
+export const INSIGHTS_CENTS = 2900 // $29 / month

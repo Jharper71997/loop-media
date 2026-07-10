@@ -39,7 +39,10 @@ export function BottomNav({ role }: { role: AppRole }) {
   const tabs = TABS[role]
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 backdrop-blur pb-[env(safe-area-inset-bottom)]">
+    <nav
+      data-ga-nav="app_bottom_nav"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 backdrop-blur pb-[env(safe-area-inset-bottom)]"
+    >
       <div
         className={cn(
           'mx-auto grid w-full max-w-md',
