@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { appUrl } from '@/lib/stripe'
 import { sendEmail } from '@/lib/email'
+import { resolveEmail, escapeHtml } from '@/lib/emailSettings'
 import { isWithinOpenHours } from '@/lib/openHours'
 
 // Host offline-screen alerts. Closes the detect->act gap: the platform knows a
@@ -23,18 +24,28 @@ const OFFLINE_AFTER_MS = 30 * 60 * 1000
 // At most one alert per screen per this window, so an ongoing outage emails once.
 const COOLDOWN_MS = 12 * 60 * 60 * 1000
 
-function renderHtml(venueName: string, base: string, hostName: string | null): string {
-  const greeting = hostName ? `Hi ${hostName.split(' ')[0]},` : 'Hi,'
+// Heading + body come from email_settings (admin-editable); greeting, CTA, and
+// footer stay code-owned here. Body paragraphs arrive as plain text and are
+// escaped before rendering.
+function renderHtml(
+  base: string,
+  hostName: string | null,
+  heading: string,
+  bodyParas: string[]
+): string {
+  const greeting = hostName ? `Hi ${escapeHtml(hostName.split(' ')[0])},` : 'Hi,'
   const dash = `${base.replace(/\/$/, '')}/host`
+  const paras = [greeting, ...bodyParas.map((p) => escapeHtml(p))]
+    .map(
+      (p) =>
+        `<p style="font-size:16px;line-height:1.5;color:#cfcfcf;margin:0 0 20px">${p}</p>`
+    )
+    .join('')
   return `<!doctype html><html><body style="margin:0;background:#0a0a0b;font-family:Arial,Helvetica,sans-serif;color:#fff">
   <div style="max-width:520px;margin:0 auto;padding:32px 24px">
     <div style="font-size:13px;letter-spacing:2px;color:#d4af37;text-transform:uppercase">Loop Network</div>
-    <h1 style="font-size:22px;margin:16px 0 8px">Your screen looks offline</h1>
-    <p style="font-size:16px;line-height:1.5;color:#cfcfcf;margin:0 0 20px">
-      ${greeting}<br/>The Loop screen at <strong style="color:#fff">${venueName}</strong> has not
-      checked in for a little while during your open hours. It is usually a quick fix: unplug the
-      Fire Stick, wait a few seconds, plug it back in, and make sure the TV input is on Loop.
-    </p>
+    <h1 style="font-size:22px;margin:16px 0 8px">${escapeHtml(heading)}</h1>
+    ${paras}
     <a href="${dash}" style="display:inline-block;background:#d4af37;color:#000;font-weight:bold;text-decoration:none;padding:12px 22px;border-radius:10px">
       Open your dashboard
     </a>
@@ -49,6 +60,7 @@ type VenueRow = {
   business_open: string | null
   business_close: string | null
   business_days: number[] | null
+  business_hours: Record<string, { open: string; close: string }> | null
   tvs: { id: string; last_heartbeat_at: string | null }[]
 }
 
@@ -67,10 +79,15 @@ export async function GET(req: Request) {
   const base = appUrl()
   const now = Date.now()
 
+  // Admin on/off gate for this email.
+  if (!dry && !(await resolveEmail(admin, 'screen_offline', {})).enabled) {
+    return NextResponse.json({ ran: 0, sent: 0, skipped: 'screen_offline disabled' })
+  }
+
   let vq = admin
     .from('venues')
     .select(
-      'id, name, host_user_id, business_open, business_close, business_days, tvs(id, last_heartbeat_at)'
+      'id, name, host_user_id, business_open, business_close, business_days, business_hours, tvs(id, last_heartbeat_at)'
     )
     .eq('status', 'active')
     .not('host_user_id', 'is', null)
@@ -85,6 +102,7 @@ export async function GET(req: Request) {
       business_open: v.business_open,
       business_close: v.business_close,
       business_days: v.business_days,
+      business_hours: v.business_hours,
     }
     // Only alert while the venue is actually open — a dark screen when closed is fine.
     if (!isWithinOpenHours(new Date(now).toISOString(), hours)) continue
@@ -129,10 +147,11 @@ export async function GET(req: Request) {
         continue
       }
 
+      const resolved = await resolveEmail(admin, 'screen_offline', { venue: v.name })
       const send = await sendEmail({
         to: host.email,
-        subject: `Your Loop screen at ${v.name} looks offline`,
-        html: renderHtml(v.name, base, host.full_name),
+        subject: resolved.subject,
+        html: renderHtml(base, host.full_name, resolved.heading, resolved.body),
       })
       await admin.from('tv_alerts').insert({ tv_id: tv.id, kind: 'offline', sent_to: host.email })
       results.push({ tv: tv.id, venue: v.id, status: send.ok ? 'sent' : 'email-skipped' })

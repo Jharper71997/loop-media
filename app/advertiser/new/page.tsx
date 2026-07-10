@@ -10,6 +10,7 @@ import {
   getPricingConfig,
 } from '@/lib/pricing.server'
 import { availableExclusiveVenueIds } from '@/lib/exclusivity'
+import { formatOpenHours } from '@/lib/openHours'
 import { ReviewStep } from './ReviewStep'
 import type { CartVenue } from './types'
 
@@ -24,7 +25,7 @@ export default async function ReviewPage() {
     supabase
       .from('venues')
       .select(
-        'id, territory_id, name, category_id, foot_traffic_estimate, price_tier, price_cents_override, exclusivity_price_cents'
+        'id, territory_id, name, category_id, foot_traffic_estimate, price_tier, price_cents_override, exclusivity_price_cents, business_open, business_close, business_days, business_hours'
       )
       .eq('status', 'active'),
     resolveAdvertiserContext(profile.id),
@@ -40,6 +41,10 @@ export default async function ReviewPage() {
     price_tier: PriceTier | null
     price_cents_override: number | null
     exclusivity_price_cents: number | null
+    business_open: string | null
+    business_close: string | null
+    business_days: number[] | null
+    business_hours: Record<string, { open: string; close: string }> | null
   }
   const rows = (venueRows ?? []) as VRow[]
 
@@ -67,6 +72,7 @@ export default async function ReviewPage() {
       footTraffic: r.foot_traffic_estimate,
       tier,
       priceCents: venuePriceCents(r.price_cents_override, tier, pricingConfig),
+      openHours: formatOpenHours(r),
       exclusivityCents: venueExclusivityCents(r.exclusivity_price_cents, pricingConfig),
       exclusivityAvailable: availableExcl.has(r.id),
     }

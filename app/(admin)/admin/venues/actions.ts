@@ -13,6 +13,7 @@ import {
 } from '@/lib/tv'
 import { createHostCompCode } from '@/lib/hostComp'
 import type { PriceTier } from '@/lib/db.types'
+import type { PerDayHours } from '@/lib/openHours'
 
 export interface VenueInput {
   id?: string
@@ -44,6 +45,9 @@ export interface VenueInput {
   business_open: string
   business_close: string
   business_days: number[]
+  // Per-day open windows (authoritative); the single-window fields above are the
+  // coarse fallback. Null keeps the venue on legacy single-window hours.
+  business_hours: PerDayHours | null
   // New venues only: also stand up the first screen with a pairing code, so a
   // location isn't created then left with "no screen yet" as a separate step.
   create_screen?: boolean
@@ -78,6 +82,8 @@ export async function saveVenue(input: VenueInput) {
     business_open: rest.business_open || null,
     business_close: rest.business_close || null,
     business_days: rest.business_days?.length ? rest.business_days : null,
+    business_hours:
+      rest.business_hours && Object.keys(rest.business_hours).length ? rest.business_hours : null,
     ...(geo ? { lat: geo.lat, lng: geo.lng } : {}),
   }
 

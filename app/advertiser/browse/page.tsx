@@ -9,6 +9,7 @@ import {
 } from '@/lib/pricing.server'
 import { isVenueListable } from '@/lib/venue'
 import { isTvLive } from '@/lib/format'
+import { formatOpenHours } from '@/lib/openHours'
 import { BrowseClient, type BrowseVenue } from './BrowseClient'
 
 export default async function BrowsePage({
@@ -55,7 +56,7 @@ export default async function BrowsePage({
     const { data } = await supabase
       .from('venues')
       .select(
-        'id, name, logo_url, venue_type, category_id, host_user_id, lat, lng, foot_traffic_estimate, price_tier, price_cents_override, category:categories(name), tvs(id, last_heartbeat_at, loop_length_seconds, slot_seconds)'
+        'id, name, logo_url, venue_type, category_id, host_user_id, lat, lng, foot_traffic_estimate, price_tier, price_cents_override, business_open, business_close, business_days, business_hours, category:categories(name), tvs(id, last_heartbeat_at, loop_length_seconds, slot_seconds)'
       )
       .in('territory_id', marketIds)
       .eq('status', 'active')
@@ -75,6 +76,10 @@ export default async function BrowsePage({
       foot_traffic_estimate: number
       price_tier: PriceTier | null
       price_cents_override: number | null
+      business_open: string | null
+      business_close: string | null
+      business_days: number[] | null
+      business_hours: Record<string, { open: string; close: string }> | null
       category: { name: string } | null
       tvs: { id: string; last_heartbeat_at: string | null; loop_length_seconds: number; slot_seconds: number }[]
     }
@@ -142,6 +147,7 @@ export default async function BrowsePage({
         screens: r.tvs.length,
         capacity,
         open,
+        openHours: formatOpenHours(r),
         comingSoon,
         categoryFull,
         ownCategory,

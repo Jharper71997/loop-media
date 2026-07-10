@@ -21,6 +21,7 @@ import {
   type PricingConfig,
 } from '@/lib/pricing'
 import { useBasePath, homeFor } from '@/lib/useBasePath'
+import { trackSearch, trackFilter } from '@/lib/gtag'
 import { joinWaitlist, leaveWaitlist, requestCategory, rememberCategory } from './actions'
 
 export type BrowseVenue = {
@@ -37,6 +38,9 @@ export type BrowseVenue = {
   screens: number
   capacity: number
   open: number
+  // Human "Mon–Fri, 10 AM–10 PM" line so advertisers see when the venue is open
+  // (and thus when their ad actually plays) before buying. Null if unknown.
+  openHours: string | null
   comingSoon: boolean
   categoryFull: boolean
   ownCategory: boolean
@@ -119,6 +123,18 @@ export function BrowseClient({
     } catch {}
   }, [cart])
 
+  // Debounced analytics for the business-type search box (does not touch the
+  // live, synchronous filtering below — purely a settled-query signal).
+  useEffect(() => {
+    const t = catQuery.trim()
+    if (!t) return
+    const id = setTimeout(
+      () => trackSearch({ searchTerm: t, context: 'advertiser_browse_category' }),
+      400
+    )
+    return () => clearTimeout(id)
+  }, [catQuery])
+
   const byId = useMemo(() => new Map(venues.map((v) => [v.id, v])), [venues])
   const cartVenues = useMemo(
     () => cart.map((id) => byId.get(id)).filter(Boolean) as BrowseVenue[],
@@ -164,6 +180,13 @@ export function BrowseClient({
   }
 
   const go = (next: { cat?: string | null }) => {
+    if (next.cat !== undefined) {
+      trackFilter({
+        filterType: 'category',
+        filterValue: categories.find((c) => c.id === next.cat)?.name ?? next.cat ?? 'all',
+        context: 'advertiser_browse',
+      })
+    }
     const c = next.cat === undefined ? activeCat : next.cat
     const navigate = () => {
       const params = new URLSearchParams()

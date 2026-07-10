@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Check } from 'lucide-react'
+import { Check, Clock } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -11,7 +11,13 @@ import { formatCents } from '@/lib/format'
 import { useBasePath } from '@/lib/useBasePath'
 import { addScreensToCampaign } from '../actions'
 
-type V = { id: string; name: string; city: string | null; state: string | null }
+type V = {
+  id: string
+  name: string
+  city: string | null
+  state: string | null
+  openHours: string | null
+}
 
 export function AddScreensClient({ campaignId, venues }: { campaignId: string; venues: V[] }) {
   const router = useRouter()
@@ -81,6 +87,12 @@ export function AddScreensClient({ campaignId, venues }: { campaignId: string; v
                   <p className="truncate text-xs text-muted-foreground">
                     {[v.city, v.state].filter(Boolean).join(', ') || 'Local venue'}
                   </p>
+                  {v.openHours && (
+                    <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+                      <Clock className="size-3 shrink-0" />
+                      <span className="truncate">{v.openHours}</span>
+                    </p>
+                  )}
                 </div>
                 <span
                   className={cn(

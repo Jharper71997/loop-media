@@ -1,6 +1,6 @@
 'use client'
 
-import { Plus, Check, Bell, BellRing, MapPin } from 'lucide-react'
+import { Plus, Check, Bell, BellRing, MapPin, Clock } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -20,6 +20,9 @@ export type VenueCardData = {
   ownCategory: boolean
   open: number
   comingSoon: boolean
+  // When the venue is open (e.g. "Mon–Fri, 10 AM–10 PM") — when the ad actually
+  // plays. Optional/null so non-browse callers can omit it.
+  openHours?: string | null
   // Miles from the advertiser (browse map only). Undefined when we don't know
   // their location; drives the "X mi away" hint on nearby recommendations.
   distanceMi?: number | null
@@ -75,6 +78,12 @@ export function VenueCard({
             </span>
           )}
         </div>
+        {venue.openHours && (
+          <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+            <Clock className="size-3 shrink-0" />
+            <span className="truncate">{venue.openHours}</span>
+          </p>
+        )}
         {!venue.ownCategory && venue.open > 0 && (
           <p className="mt-0.5 text-xs text-muted-foreground">
             <span className="font-medium text-foreground tabular-nums">{venue.open}</span> ad spot

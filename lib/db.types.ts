@@ -89,6 +89,9 @@ export interface Venue {
   business_open: string | null
   business_close: string | null
   business_days: number[] | null
+  // Per-day open windows (migration 0057), authoritative over the single-window
+  // columns above when set. Keys '0'..'6' (0=Sun); missing day = closed.
+  business_hours: Record<string, { open: string; close: string }> | null
   trivia_enabled: boolean
   median_daily_customers: number | null
   comp_promo_code: string | null

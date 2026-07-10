@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Combobox, type ComboboxOption } from '@/components/ui/combobox'
 import { BusinessHoursPicker, type BusinessHoursValue } from '@/components/app/BusinessHoursPicker'
+import { hoursValueFromVenue, hoursValueToFields, type PerDayHours } from '@/lib/openHours'
 import { saveHostVenue, saveHostWifi } from '../actions'
 
 const NO_CATEGORY = 'none'
@@ -26,6 +27,7 @@ export type EditVenueInitial = {
   business_open: string
   business_close: string
   business_days: number[]
+  business_hours: PerDayHours | null
   network_type: 'wifi' | 'ethernet'
   wifi_ssid: string
   network_note: string
@@ -52,11 +54,7 @@ export function EditVenueForm({
     venue.median_daily_customers ? String(venue.median_daily_customers) : ''
   )
   const [phone, setPhone] = useState(venue.contact_phone)
-  const [hours, setHours] = useState<BusinessHoursValue>({
-    open: venue.business_open || '10:00',
-    close: venue.business_close || '22:00',
-    days: venue.business_days?.length ? venue.business_days : [0, 1, 2, 3, 4, 5, 6],
-  })
+  const [hours, setHours] = useState<BusinessHoursValue>(() => hoursValueFromVenue(venue))
   const [savingVenue, startVenue] = useTransition()
 
   // Network details (WiFi password is never sent back to the page)
@@ -80,6 +78,7 @@ export function EditVenueForm({
     if (!dailyCustomers.trim() || Number(dailyCustomers) <= 0)
       return toast.error('Enter your typical traffic per day.')
     if (!phone.trim()) return toast.error('Enter a contact phone.')
+    if (!hours.days.some((d) => d.isOpen)) return toast.error('Pick at least one day you’re open.')
     startVenue(async () => {
       const res = await saveHostVenue({
         id: venue.id,
@@ -92,9 +91,7 @@ export function EditVenueForm({
         venue_type: venueType,
         median_daily_customers: dailyCustomers ? Number(dailyCustomers) : null,
         contact_phone: phone,
-        business_open: hours.open,
-        business_close: hours.close,
-        business_days: hours.days,
+        ...hoursValueToFields(hours),
       })
       if (res.error) {
         toast.error(res.error)

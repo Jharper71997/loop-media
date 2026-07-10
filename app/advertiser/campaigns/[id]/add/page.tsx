@@ -4,6 +4,7 @@ import { ArrowLeft } from 'lucide-react'
 import { requireProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { isVenueListable } from '@/lib/venue'
+import { formatOpenHours } from '@/lib/openHours'
 import { AddScreensClient } from './AddScreensClient'
 
 // Pick more venues to add to an existing active campaign. Scoped to the
@@ -35,7 +36,9 @@ export async function renderAddScreens(id: string, basePath: string) {
 
   const { data: vRows } = await supabase
     .from('venues')
-    .select('id, name, city, state, lat, lng, category_id, host_user_id')
+    .select(
+      'id, name, city, state, lat, lng, category_id, host_user_id, business_open, business_close, business_days, business_hours'
+    )
     .eq('territory_id', camp.territory_id as string)
     .eq('status', 'active')
     .order('name')
@@ -48,12 +51,22 @@ export async function renderAddScreens(id: string, basePath: string) {
     lng: number | null
     category_id: string | null
     host_user_id: string | null
+    business_open: string | null
+    business_close: string | null
+    business_days: number[] | null
+    business_hours: Record<string, { open: string; close: string }> | null
   }
   const available = ((vRows ?? []) as VR[])
     .filter((v) => isVenueListable(v))
     .filter((v) => !existingSet.has(v.id))
     .filter((v) => !(adCategory && v.category_id === adCategory && v.host_user_id !== profile.id))
-    .map((v) => ({ id: v.id, name: v.name, city: v.city, state: v.state }))
+    .map((v) => ({
+      id: v.id,
+      name: v.name,
+      city: v.city,
+      state: v.state,
+      openHours: formatOpenHours(v),
+    }))
 
   return (
     <div className="space-y-5">

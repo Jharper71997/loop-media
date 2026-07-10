@@ -3,6 +3,7 @@
 import { MapContainer, TileLayer, CircleMarker, Marker, Popup } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import { Clock } from 'lucide-react'
 import { MAP_TILE_URL, MAP_TILE_ATTRIBUTION } from '@/lib/mapTiles'
 import { formatCents } from '@/lib/format'
 import { TIER_LABEL } from '@/lib/pricing'
@@ -133,7 +134,7 @@ export default function MapView({
                 <div className="flex items-start gap-2">
                   {v.logoUrl && (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={v.logoUrl} alt="" className="size-9 shrink-0 rounded-md object-cover" />
+                    <img src={v.logoUrl} alt="" loading="lazy" decoding="async" className="size-9 shrink-0 rounded-md object-cover" />
                   )}
                   <div>
                     <p className="font-heading text-sm font-semibold text-foreground">{v.name}</p>
@@ -144,6 +145,12 @@ export default function MapView({
                   <span className="text-base font-bold">{formatCents(v.priceCents)}</span>
                   <span className="text-xs text-muted-foreground">/mo</span>
                 </p>
+                {v.openHours && (
+                  <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <Clock className="size-3 shrink-0" />
+                    {v.openHours}
+                  </p>
+                )}
                 {v.ownCategory ? (
                   <p className="text-xs font-medium text-muted-foreground">
                     Same business — not available

@@ -34,6 +34,7 @@ type VenueRow = {
   business_open: string | null
   business_close: string | null
   business_days: number[] | null
+  business_hours: Record<string, { open: string; close: string }> | null
 }
 
 async function readPricingConfig(admin: Admin): Promise<PricingConfig> {
@@ -140,7 +141,7 @@ export async function GET(req: Request) {
       const { data: tvRow } = await admin
         .from('tvs')
         .select(
-          'id, venue:venues(id, price_tier, price_cents_override, foot_traffic_estimate, business_open, business_close, business_days)'
+          'id, venue:venues(id, price_tier, price_cents_override, foot_traffic_estimate, business_open, business_close, business_days, business_hours)'
         )
         .eq('id', p.tv_id)
         .maybeSingle()

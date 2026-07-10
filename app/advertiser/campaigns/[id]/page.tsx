@@ -66,7 +66,7 @@ export default async function CampaignDetail({
   const { data: placementsData } = await supabase
     .from('ad_placements')
     .select(
-      'id, tv:tvs(id, venue:venues(id, name, lat, lng, foot_traffic_estimate, median_daily_customers, business_open, business_close, business_days))'
+      'id, tv:tvs(id, venue:venues(id, name, lat, lng, foot_traffic_estimate, median_daily_customers, business_open, business_close, business_days, business_hours))'
     )
     .eq('campaign_id', id)
     .neq('status', 'ended')
@@ -84,6 +84,7 @@ export default async function CampaignDetail({
         business_open: string | null
         business_close: string | null
         business_days: number[] | null
+        business_hours: Record<string, { open: string; close: string }> | null
       } | null
     } | null
   }
@@ -95,7 +96,12 @@ export default async function CampaignDetail({
   // Per-tv open-hours (for filtering ad_plays exactly like the admin TV page).
   const tvOpenHours = new Map<
     string,
-    { business_open: string | null; business_close: string | null; business_days: number[] | null }
+    {
+      business_open: string | null
+      business_close: string | null
+      business_days: number[] | null
+      business_hours: Record<string, { open: string; close: string }> | null
+    }
   >()
   for (const p of placements) {
     const v = p.tv?.venue
@@ -106,6 +112,7 @@ export default async function CampaignDetail({
       business_open: v.business_open,
       business_close: v.business_close,
       business_days: v.business_days,
+      business_hours: v.business_hours,
     })
     const existing = venueMap.get(v.id)
     if (existing) existing.tvIds.push(tvId)
@@ -301,6 +308,7 @@ export default async function CampaignDetail({
                 qrTargetUrl={c.ad?.qr_target_url}
                 qrX={c.ad?.qr_x}
                 qrY={c.ad?.qr_y}
+                qrSize={c.ad?.qr_size}
               />
             )}
             {showUpsell && <MembershipUpsell />}

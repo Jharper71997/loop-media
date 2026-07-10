@@ -8,6 +8,7 @@ import { genPairingCode, TV_PAIRING_CODE_LEN, DEFAULT_LOOP_SECONDS, DEFAULT_SLOT
 import { AGREEMENT_VERSION } from '@/lib/agreement'
 import { DEMO_COMP_CODE } from '@/lib/demo'
 import { findOrCreateTerritory } from '@/lib/territory'
+import type { PerDayHours } from '@/lib/openHours'
 
 export interface RegisterVenueInput {
   name: string
@@ -24,6 +25,8 @@ export interface RegisterVenueInput {
   business_open?: string
   business_close?: string
   business_days?: number[]
+  // Per-day open windows (authoritative); the fields above are the coarse fallback.
+  business_hours?: PerDayHours | null
   // Typed signature + version of the Advertising Service Agreement the host
   // accepts at registration (see lib/agreement.ts).
   agreement_signer_name: string
@@ -137,6 +140,8 @@ export async function requestVenue(input: RegisterVenueInput) {
       business_close: input.business_close || '22:00',
       business_days:
         input.business_days && input.business_days.length ? input.business_days : [0, 1, 2, 3, 4, 5, 6],
+      business_hours:
+        input.business_hours && Object.keys(input.business_hours).length ? input.business_hours : null,
     })
     .select('id')
     .single()

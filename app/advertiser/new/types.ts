@@ -13,6 +13,9 @@ export type CartVenue = {
   footTraffic: number
   tier: PriceTier
   priceCents: number
+  // When the venue is open (e.g. "Mon–Fri, 10 AM–10 PM") — when the ad plays.
+  // Shown on the review step; optional since the creative step doesn't display it.
+  openHours?: string | null
   // Monthly upcharge to own this venue's category (shown on the exclusivity toggle).
   exclusivityCents: number
   // Whether exclusivity is buyable here right now (no competitor active, not taken).

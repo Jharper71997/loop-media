@@ -11,7 +11,7 @@ import { DeleteButton } from '@/components/admin/DeleteButton'
 import { buttonVariants } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { formatDateTime, timeAgo, formatNumber } from '@/lib/format'
-import { isWithinOpenHours, localDate } from '@/lib/openHours'
+import { isWithinOpenHours, localDate, formatOpenHours } from '@/lib/openHours'
 import { LiveStatus } from '@/components/app/LiveStatus'
 import { CopyField } from '@/components/app/CopyField'
 import { AutoRefresh } from '@/components/app/AutoRefresh'
@@ -30,6 +30,10 @@ import {
 } from './TvControls'
 
 type TvFull = Tv & {
+  // The generated Tv type predates the per-device secret (migration 0036), so the
+  // "Watch screen" preview link (which must carry ?secret= to read the loop) names
+  // it explicitly here.
+  device_secret: string | null
   venue: {
     id: string
     name: string
@@ -38,6 +42,7 @@ type TvFull = Tv & {
     business_open: string | null
     business_close: string | null
     business_days: number[] | null
+    business_hours: Record<string, { open: string; close: string }> | null
   } | null
 }
 
@@ -69,7 +74,7 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
 
   const { data: tvData } = await supabase
     .from('tvs')
-    .select('*, venue:venues(id, name, territory_id, trivia_enabled, business_open, business_close, business_days)')
+    .select('*, venue:venues(id, name, territory_id, trivia_enabled, business_open, business_close, business_days, business_hours)')
     .eq('id', id)
     .maybeSingle()
   if (!tvData) notFound()
@@ -188,6 +193,7 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
     business_open: tv.venue?.business_open ?? null,
     business_close: tv.venue?.business_close ?? null,
     business_days: tv.venue?.business_days ?? null,
+    business_hours: tv.venue?.business_hours ?? null,
   }
   const todayLocal = localDate(new Date())
   const monthLocalPrefix = todayLocal.slice(0, 7)
@@ -236,7 +242,13 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
           <div className="flex gap-1">
             {tv.device_id && (
               <a
-                href={`${kioskUrl(origin, tv.device_id)}&preview=1`}
+                // Preview must present the screen's device secret or /api/tv/loop
+                // 403s and the player falls back to the pairing prompt. Read-only:
+                // preview skips heartbeat + play logging, so it never disturbs the
+                // live device. Omitted for legacy null-secret screens (grandfathered).
+                href={`${kioskUrl(origin, tv.device_id)}&preview=1${
+                  tv.device_secret ? `&secret=${encodeURIComponent(tv.device_secret)}` : ''
+                }`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className={buttonVariants({ variant: 'outline', size: 'sm' })}
@@ -420,8 +432,8 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
             <div>
               <p className="text-sm font-medium">Times shown per ad</p>
               <p className="text-xs text-muted-foreground">
-                Counted only while the venue is open ({tv.venue?.business_open ?? '10:00'}–
-                {tv.venue?.business_close ?? '22:00'}), so it reflects real impressions.
+                Counted only while the venue is open ({formatOpenHours(venueHours) ?? 'set hours'}),
+                so it reflects real impressions.
               </p>
             </div>
             {playList.length === 0 ? (
@@ -495,7 +507,7 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
                         <video src={p.ad.creative_url} className="h-full w-full object-contain" muted />
                       ) : (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={p.ad.creative_url} alt={p.ad.title} className="h-full w-full object-contain" />
+                        <img src={p.ad.creative_url} alt={p.ad.title} loading="lazy" decoding="async" className="h-full w-full object-contain" />
                       )
                     ) : (
                       <ImageOff className="size-4 text-muted-foreground" />

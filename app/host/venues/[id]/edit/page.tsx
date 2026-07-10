@@ -17,7 +17,7 @@ export default async function EditVenuePage({ params }: { params: Promise<{ id: 
   const { data: venue } = await admin
     .from('venues')
     .select(
-      'id, name, address, city, state, postal_code, category_id, venue_type, median_daily_customers, contact_phone, business_open, business_close, business_days, logo_url, host_user_id'
+      'id, name, address, city, state, postal_code, category_id, venue_type, median_daily_customers, contact_phone, business_open, business_close, business_days, business_hours, logo_url, host_user_id'
     )
     .eq('id', id)
     .maybeSingle()
@@ -49,6 +49,7 @@ export default async function EditVenuePage({ params }: { params: Promise<{ id: 
     business_open: venue.business_open ?? '10:00',
     business_close: venue.business_close ?? '22:00',
     business_days: venue.business_days ?? [0, 1, 2, 3, 4, 5, 6],
+    business_hours: venue.business_hours ?? null,
     network_type: prov?.network_type === 'ethernet' ? 'ethernet' : 'wifi',
     wifi_ssid: prov?.wifi_ssid ?? '',
     network_note: prov?.network_note ?? '',

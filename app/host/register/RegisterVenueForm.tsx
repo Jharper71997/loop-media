@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Combobox, type ComboboxOption } from '@/components/ui/combobox'
 import { BusinessHoursPicker, type BusinessHoursValue } from '@/components/app/BusinessHoursPicker'
+import { defaultHoursValue, hoursValueToFields } from '@/lib/openHours'
 import {
   AGREEMENT_INTRO,
   AGREEMENT_SECTIONS,
@@ -44,11 +45,7 @@ export function RegisterVenueForm({
   const [ssid, setSsid] = useState(demo ? DEMO_HOST.ssid : '')
   const [wifiPassword, setWifiPassword] = useState(demo ? DEMO_HOST.wifiPassword : '')
   const [networkNote, setNetworkNote] = useState('')
-  const [hours, setHours] = useState<BusinessHoursValue>({
-    open: '10:00',
-    close: '22:00',
-    days: [0, 1, 2, 3, 4, 5, 6],
-  })
+  const [hours, setHours] = useState<BusinessHoursValue>(defaultHoursValue())
   const [pending, start] = useTransition()
 
   const categoryOptions: ComboboxOption[] = [
@@ -69,6 +66,8 @@ export function RegisterVenueForm({
       return toast.error('Enter your WiFi network name.')
     if (networkType === 'wifi' && !wifiPassword.trim())
       return toast.error('Enter your WiFi password.')
+    if (!hours.days.some((d) => d.isOpen))
+      return toast.error('Pick at least one day you’re open.')
     if (!agreed) return toast.error('Please accept the Advertising Service Agreement.')
     if (!signerName.trim()) return toast.error('Type your name to sign the agreement.')
     start(async () => {
@@ -85,9 +84,7 @@ export function RegisterVenueForm({
         contact_phone: phone || null,
         agreement_signer_name: signerName,
         agreement_version: AGREEMENT_VERSION,
-        business_open: hours.open,
-        business_close: hours.close,
-        business_days: hours.days,
+        ...hoursValueToFields(hours),
         network_type: networkType,
         wifi_ssid: ssid || null,
         wifi_password: wifiPassword || null,
@@ -109,23 +106,24 @@ export function RegisterVenueForm({
   return (
     <form onSubmit={onSubmit} className="space-y-5">
       <div className="space-y-1.5">
-        <Label>Venue name</Label>
-        <Input value={name} onChange={(e) => setName(e.target.value)} required />
+        <Label htmlFor="reg-name">Venue name</Label>
+        <Input id="reg-name" value={name} onChange={(e) => setName(e.target.value)} required />
       </div>
 
       <div className="space-y-1.5">
-        <Label>Street address</Label>
-        <Input value={address} onChange={(e) => setAddress(e.target.value)} required />
+        <Label htmlFor="reg-address">Street address</Label>
+        <Input id="reg-address" value={address} onChange={(e) => setAddress(e.target.value)} required />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-[2fr_1fr_1fr]">
         <div className="space-y-1.5">
-          <Label>City</Label>
-          <Input value={city} onChange={(e) => setCity(e.target.value)} required />
+          <Label htmlFor="reg-city">City</Label>
+          <Input id="reg-city" value={city} onChange={(e) => setCity(e.target.value)} required />
         </div>
         <div className="space-y-1.5">
-          <Label>State</Label>
+          <Label htmlFor="reg-state">State</Label>
           <Input
+            id="reg-state"
             value={stateVal}
             onChange={(e) => setStateVal(e.target.value.toUpperCase())}
             maxLength={2}
@@ -133,8 +131,8 @@ export function RegisterVenueForm({
           />
         </div>
         <div className="space-y-1.5">
-          <Label>ZIP</Label>
-          <Input value={zip} onChange={(e) => setZip(e.target.value)} required />
+          <Label htmlFor="reg-zip">ZIP</Label>
+          <Input id="reg-zip" value={zip} onChange={(e) => setZip(e.target.value)} required />
         </div>
       </div>
 
@@ -152,8 +150,9 @@ export function RegisterVenueForm({
         </div>
 
         <div className="space-y-1.5">
-          <Label>Specific type (optional)</Label>
+          <Label htmlFor="reg-venue-type">Specific type (optional)</Label>
           <Input
+            id="reg-venue-type"
             value={venueType}
             onChange={(e) => setVenueType(e.target.value)}
             placeholder="e.g. Sports bar, CrossFit gym"
@@ -162,8 +161,9 @@ export function RegisterVenueForm({
       </div>
 
       <div className="space-y-1.5">
-        <Label>Typical traffic per day</Label>
+        <Label htmlFor="reg-daily">Typical traffic per day</Label>
         <Input
+          id="reg-daily"
           type="number"
           inputMode="numeric"
           min={1}
@@ -178,8 +178,9 @@ export function RegisterVenueForm({
       </div>
 
       <div className="space-y-1.5">
-        <Label>Contact phone</Label>
+        <Label htmlFor="reg-phone">Contact phone</Label>
         <Input
+          id="reg-phone"
           type="tel"
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
@@ -220,8 +221,9 @@ export function RegisterVenueForm({
         {networkType === 'wifi' && (
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label>WiFi network name (SSID)</Label>
+              <Label htmlFor="reg-ssid">WiFi network name (SSID)</Label>
               <Input
+                id="reg-ssid"
                 value={ssid}
                 onChange={(e) => setSsid(e.target.value)}
                 placeholder="MyVenue-WiFi"
@@ -229,8 +231,9 @@ export function RegisterVenueForm({
               />
             </div>
             <div className="space-y-1.5">
-              <Label>WiFi password</Label>
+              <Label htmlFor="reg-wifi-pass">WiFi password</Label>
               <Input
+                id="reg-wifi-pass"
                 value={wifiPassword}
                 onChange={(e) => setWifiPassword(e.target.value)}
                 placeholder="Network password"
@@ -240,8 +243,9 @@ export function RegisterVenueForm({
           </div>
         )}
         <div className="space-y-1.5">
-          <Label>Anything we should know? (optional)</Label>
+          <Label htmlFor="reg-note">Anything we should know? (optional)</Label>
           <Input
+            id="reg-note"
             value={networkNote}
             onChange={(e) => setNetworkNote(e.target.value)}
             placeholder="e.g. guest network, where the TV is, login portal"
@@ -276,8 +280,9 @@ export function RegisterVenueForm({
           ))}
         </div>
         <div className="space-y-1.5">
-          <Label>Signature (type your full name)</Label>
+          <Label htmlFor="reg-signer">Signature (type your full name)</Label>
           <Input
+            id="reg-signer"
             value={signerName}
             onChange={(e) => setSignerName(e.target.value)}
             placeholder="Your full name"

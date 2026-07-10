@@ -26,6 +26,7 @@ type VenueRow = {
   business_open: string | null
   business_close: string | null
   business_days: number[] | null
+  business_hours: Record<string, { open: string; close: string }> | null
   tvs: { id: string; device_id: string | null; last_heartbeat_at: string | null }[]
 }
 
@@ -38,7 +39,7 @@ export default async function UptimePage() {
   let venueQ = supabase
     .from('venues')
     .select(
-      'id, name, business_open, business_close, business_days, tvs(id, device_id, last_heartbeat_at)'
+      'id, name, business_open, business_close, business_days, business_hours, tvs(id, device_id, last_heartbeat_at)'
     )
     .order('name')
   if (t) venueQ = venueQ.eq('territory_id', t)

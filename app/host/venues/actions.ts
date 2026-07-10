@@ -5,6 +5,7 @@ import { requireProfile } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { geocodeAddress } from '@/lib/geocode'
 import { findOrCreateTerritory } from '@/lib/territory'
+import type { PerDayHours } from '@/lib/openHours'
 
 // Host self-service editing of THEIR OWN venue. `venues` / `venue_provisioning`
 // are admin-write under RLS, so every write here runs with the service-role admin
@@ -27,6 +28,7 @@ export interface HostVenueInput {
   business_open: string
   business_close: string
   business_days: number[]
+  business_hours: PerDayHours | null
 }
 
 // Load a venue and confirm the caller owns it (or is an admin). Returns the venue
@@ -99,6 +101,8 @@ export async function saveHostVenue(input: HostVenueInput) {
     business_open: input.business_open || null,
     business_close: input.business_close || null,
     business_days: input.business_days?.length ? input.business_days : null,
+    business_hours:
+      input.business_hours && Object.keys(input.business_hours).length ? input.business_hours : null,
     ...(territoryId ? { territory_id: territoryId } : {}),
     ...(geo ? { lat: geo.lat, lng: geo.lng } : {}),
   }

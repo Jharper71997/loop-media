@@ -6,6 +6,8 @@
 //
 // Pure functions (no DB) so they're usable on server and client.
 
+import { formatPerDayHours, type PerDayHours } from '@/lib/openHours'
+
 export const UPTIME_SLA = 0.8 // 80% of business hours
 export const UPTIME_WINDOW_DAYS = 30
 
@@ -13,6 +15,9 @@ export type BusinessHours = {
   open: string // 'HH:MM'
   close: string // 'HH:MM'
   days: number[] // 0=Sun .. 6=Sat
+  // Per-weekday windows (migration 0057), authoritative when non-empty. Keys
+  // '0'..'6'; a missing key means closed that day. See lib/openHours.ts.
+  perDay?: PerDayHours | null
 }
 
 export const DEFAULT_BUSINESS_HOURS: BusinessHours = {
@@ -32,9 +37,13 @@ function minutesOfDay(hhmm: string): number {
 // the venue is closed. Overnight windows (close <= open) wrap past midnight.
 export function expectedSecondsForDate(bh: BusinessHours, date: Date): number {
   const dow = date.getUTCDay()
-  if (!bh.days.includes(dow)) return 0
-  const open = minutesOfDay(bh.open)
-  let close = minutesOfDay(bh.close)
+  // Per-day hours win: that weekday's window, or closed (0) if it has no entry.
+  const win = bh.perDay ? bh.perDay[String(dow)] : null
+  const openStr = win ? win.open : bh.days.includes(dow) ? bh.open : null
+  const closeStr = win ? win.close : openStr != null ? bh.close : null
+  if (openStr == null || closeStr == null) return 0
+  const open = minutesOfDay(openStr)
+  let close = minutesOfDay(closeStr)
   if (close <= open) close += 24 * 60 // overnight (e.g. 18:00 -> 02:00)
   return Math.max(0, (close - open) * 60)
 }
@@ -91,15 +100,18 @@ export function formatUptimePct(pct: number): string {
 }
 
 // Read business hours off a venue row, falling back to defaults when unset.
+// Per-day hours (business_hours) are carried through as the authoritative source.
 export function venueBusinessHours(v: {
   business_open?: string | null
   business_close?: string | null
   business_days?: number[] | null
+  business_hours?: PerDayHours | null
 }): BusinessHours {
   return {
     open: v.business_open || DEFAULT_BUSINESS_HOURS.open,
     close: v.business_close || DEFAULT_BUSINESS_HOURS.close,
     days: v.business_days && v.business_days.length ? v.business_days : DEFAULT_BUSINESS_HOURS.days,
+    perDay: v.business_hours && Object.keys(v.business_hours).length ? v.business_hours : null,
   }
 }
 
@@ -151,7 +163,9 @@ function formatDays(days: number[]): string {
 }
 
 // One-line operating-hours label for the admin screen list, e.g.
-// '10 AM to 10 PM · Every day' or '4 PM to 2 AM · Fri–Sun'.
+// '10 AM to 10 PM · Every day' or '4 PM to 2 AM · Fri–Sun'. With per-day hours it
+// reads 'Mon–Fri 9 AM–5 PM, Sun 1–5 PM'.
 export function formatBusinessHours(bh: BusinessHours): string {
+  if (bh.perDay && Object.keys(bh.perDay).length) return formatPerDayHours(bh.perDay)
   return `${to12h(bh.open)} to ${to12h(bh.close)} · ${formatDays(bh.days)}`
 }
