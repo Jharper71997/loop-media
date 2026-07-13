@@ -19,6 +19,7 @@ import {
   activateExclusiveSlots,
 } from '@/lib/exclusivity'
 import { notifyCampaignCreated } from '@/lib/notifyAdvertiser'
+import { notifyAdminNewAd } from '@/lib/notifyAdmin'
 import { CREATIVE_SETUP_FEE_CENTS, CREATIVE_REFRESH_CENTS } from '@/lib/fees'
 import { QR_SIZE_DEFAULT, isOwnCreativeUrl } from '@/lib/adCreative'
 
@@ -242,6 +243,12 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
   if (!isDemo) {
     try {
       await notifyCampaignCreated(campaign.id)
+    } catch {
+      /* swallow — never fail creation on a notification error */
+    }
+    // Heads-up to the network admins that a new ad is waiting in the review queue.
+    try {
+      await notifyAdminNewAd(ad.id)
     } catch {
       /* swallow — never fail creation on a notification error */
     }

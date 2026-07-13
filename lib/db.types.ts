@@ -46,6 +46,9 @@ export interface Profile {
   // Throwaway account minted by the guided sales demo (/demo/host, /demo/advertiser).
   // Everything it creates is also flagged and hidden from real surfaces. See lib/demo.ts.
   is_demo: boolean
+  // Has this host finished (or skipped) the first-run guided walkthrough? Gates the
+  // auto-start in app/host/layout.tsx. See migration 0058. Irrelevant for advertisers.
+  onboarding_host_done: boolean
   created_at: string
 }
 

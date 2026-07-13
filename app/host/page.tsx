@@ -9,7 +9,6 @@ import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { timeAgo, isTvLive, formatNumber } from '@/lib/format'
 import type { Tv, Venue } from '@/lib/db.types'
-import { OnboardingTour } from '@/components/app/OnboardingTour'
 import { LiveStatus } from '@/components/app/LiveStatus'
 import { AutoRefresh } from '@/components/app/AutoRefresh'
 import { RemoveLocationButton } from './RemoveLocationButton'
@@ -152,10 +151,9 @@ export default async function HostHome() {
 
   return (
     <div className="space-y-8">
-      <OnboardingTour role="host" />
       <AutoRefresh seconds={20} />
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
+        <div data-tour="host-overview">
           <h1 className="font-heading text-2xl font-bold tracking-tight">
             {venues.length > 1 ? 'Your venues' : 'Your venue'}
           </h1>
@@ -164,14 +162,18 @@ export default async function HostHome() {
           </p>
         </div>
         {venues.length > 0 && (
-          <Link href="/host/register" className={cn(buttonVariants({ variant: 'outline' }), 'shrink-0')}>
+          <Link
+            href="/host/register"
+            data-tour="host-register"
+            className={cn(buttonVariants({ variant: 'outline' }), 'shrink-0')}
+          >
             <Plus className="size-4" /> Add another location
           </Link>
         )}
       </div>
 
       {venues.length === 0 ? (
-        <Card>
+        <Card data-tour="host-register">
           <CardContent className="flex flex-col items-center gap-4 p-8 text-center">
             <p className="text-sm text-muted-foreground">
               No venue is linked to your account yet. Register your space to run the loop on your
@@ -186,7 +188,7 @@ export default async function HostHome() {
         <>
           {/* Performance at your venues — what a screen is actually driving, so
               hosting reads as worth it rather than a black box. */}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div data-tour="host-stats" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Card>
               <CardContent className="p-5">
                 <p className="text-sm text-muted-foreground">Screens online</p>
@@ -222,7 +224,7 @@ export default async function HostHome() {
           </div>
 
           {/* Venues + screens */}
-          <section className="space-y-4">
+          <section data-tour="host-screens" className="space-y-4">
             {venues.map((v) => (
               <Card key={v.id}>
                 <CardContent className="p-5">
@@ -297,7 +299,7 @@ export default async function HostHome() {
                   </div>
 
                   {v.status === 'active' && v.comp_promo_code && (
-                    <div className="mt-4 rounded-lg border border-primary/30 bg-primary/5 p-3">
+                    <div data-tour="host-perk" className="mt-4 rounded-lg border border-primary/30 bg-primary/5 p-3">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="flex items-start gap-2 text-sm">
                           <Megaphone className="mt-0.5 size-4 shrink-0 text-primary" />

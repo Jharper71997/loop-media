@@ -15,10 +15,14 @@ export function AccountScreen({
   links,
   billing,
   profile,
+  extra,
 }: {
   email: string
   role: 'advertiser' | 'host' | 'admin'
   links?: { href: string; label: string }[]
+  // Optional surface-specific control rendered above the links (e.g. the host
+  // "Replay the walkthrough" button). Omitted by surfaces that don't need it.
+  extra?: React.ReactNode
   // Editable name/phone from the user's profiles row. Optional so a surface can
   // omit it, but every account page passes it.
   profile?: { userId: string; fullName: string | null; phone: string | null }
@@ -68,6 +72,8 @@ export function AccountScreen({
           showMembership={billing.showMembership}
         />
       )}
+
+      {extra}
 
       {links?.map((l) => (
         <Link

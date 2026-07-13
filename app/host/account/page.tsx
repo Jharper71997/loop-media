@@ -2,6 +2,7 @@ import { requireProfile } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { hasUnlimitedChanges } from '@/lib/membership'
 import { AccountScreen } from '@/components/app/AccountScreen'
+import { ReplayHostTourButton } from '@/components/app/tour/ReplayHostTourButton'
 
 export default async function HostAccountPage() {
   const profile = await requireProfile()
@@ -21,6 +22,7 @@ export default async function HostAccountPage() {
       email={profile.email}
       role={profile.role}
       profile={{ userId: profile.id, fullName: profile.full_name, phone: profile.phone }}
+      extra={<ReplayHostTourButton />}
       billing={{
         returnPath: '/host/account',
         membershipBasePath: '/host/advertise',

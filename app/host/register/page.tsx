@@ -24,7 +24,7 @@ export default async function RegisterVenuePage() {
         </p>
       </div>
 
-      <Card>
+      <Card data-tour="register-form">
         <CardContent className="p-6">
           <RegisterVenueForm categories={categories} demo={profile.is_demo} />
         </CardContent>

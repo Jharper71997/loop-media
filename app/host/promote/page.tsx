@@ -51,7 +51,9 @@ export default async function PromotePage() {
         </p>
       </div>
 
-      <OwnPromoForm userId={profile.id} venues={available} existing={existing} />
+      <div data-tour="promote-form">
+        <OwnPromoForm userId={profile.id} venues={available} existing={existing} />
+      </div>
     </div>
   )
 }
