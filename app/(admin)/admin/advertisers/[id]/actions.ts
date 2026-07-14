@@ -194,6 +194,45 @@ export async function cancelCampaign(id: string) {
   return ok()
 }
 
+// ---- manual "free week" comp ----
+// Run this campaign's ad FREE for a fixed window (no card, no Stripe). Sets the
+// campaign active, approves the ad (unless it was rejected), places it now, and
+// stamps comp_until = now + N days. The place cron pauses it once comp_until
+// passes, so the ad comes off screens on its own. No subscription is created —
+// after the week it simply stops; the admin can convert them to paid separately.
+const FREE_COMP_DAYS = 7
+export async function grantFreeWeek(id: string): Promise<{ error: string | null; until?: string }> {
+  const r = await loadCampaignForAdmin(id)
+  if ('error' in r) return { error: r.error }
+  const { campaign: c, admin } = r
+
+  const until = new Date(Date.now() + FREE_COMP_DAYS * 86_400_000).toISOString()
+  const { error: upErr } = await admin
+    .from('campaigns')
+    .update({ status: 'active', comp_until: until })
+    .eq('id', id)
+  if (upErr) return { error: upErr.message }
+
+  // Green-light the creative so it can run — but never resurrect a REJECTED ad.
+  if (c.ad_id) {
+    await admin
+      .from('ads')
+      .update({ status: 'approved' })
+      .eq('id', c.ad_id)
+      .in('status', ['pending', 'paused', 'approved'])
+  }
+  // Bring back any paused placements, then fill the picked screens.
+  await admin
+    .from('ad_placements')
+    .update({ status: 'active' })
+    .eq('campaign_id', id)
+    .eq('status', 'paused')
+  await activatePlacementsIfReady(id, admin)
+
+  revalidatePath('/admin/advertisers', 'layout')
+  return { error: null, until }
+}
+
 // ---- campaign tuning (RLS-scoped via createClient — territory-safe as-is) ----
 export async function setCampaignGoal(id: string, value: number | null) {
   await requireAdmin()

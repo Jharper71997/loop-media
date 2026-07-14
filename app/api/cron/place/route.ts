@@ -19,6 +19,34 @@ export async function GET(req: Request) {
   }
 
   const admin = createAdminClient()
+
+  // Expire finished "free week" comps FIRST: pause any active campaign past its
+  // comp_until so a comped ad comes off screens on its own, and clear the timer.
+  // Defensive: if the comp_until column isn't present yet (migration not applied),
+  // skip silently rather than break the whole placement run.
+  let compsExpired = 0
+  try {
+    const nowIso = new Date().toISOString()
+    const { data: expired } = await admin
+      .from('campaigns')
+      .select('id, ad_id')
+      .eq('status', 'active')
+      .not('comp_until', 'is', null)
+      .lt('comp_until', nowIso)
+    for (const c of (expired ?? []) as { id: string; ad_id: string | null }[]) {
+      await admin.from('campaigns').update({ status: 'paused', comp_until: null }).eq('id', c.id)
+      if (c.ad_id) await admin.from('ads').update({ status: 'paused' }).eq('id', c.ad_id)
+      await admin
+        .from('ad_placements')
+        .update({ status: 'paused' })
+        .eq('campaign_id', c.id)
+        .eq('status', 'active')
+      compsExpired++
+    }
+  } catch {
+    /* comp_until column not present yet — nothing to expire */
+  }
+
   const { data: campaigns } = await admin
     .from('campaigns')
     .select('id')
@@ -59,5 +87,5 @@ export async function GET(req: Request) {
     }
   }
 
-  return NextResponse.json({ ran: results.length, results })
+  return NextResponse.json({ ran: results.length, compsExpired, results })
 }

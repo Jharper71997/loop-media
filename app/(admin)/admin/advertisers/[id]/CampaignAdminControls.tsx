@@ -2,7 +2,7 @@
 
 import { useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Check, X, Pause, Play, RotateCw, Ban } from 'lucide-react'
+import { Check, X, Pause, Play, RotateCw, Ban, Gift } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { InlineNumber } from '@/components/admin/InlineNumber'
@@ -17,6 +17,7 @@ import {
   setCampaignGoal,
   setCampaignScreenCap,
   rerunPlacement,
+  grantFreeWeek,
 } from './actions'
 
 type Props = {
@@ -106,6 +107,36 @@ export function CampaignAdminControls({
         >
           <RotateCw className="size-4" /> Re-run placement
         </Button>
+
+        {status !== 'canceled' && (
+          <ConfirmButton
+            size="sm"
+            variant="outline"
+            disabled={pending}
+            message="Run this ad FREE for 7 days? It goes live now (once the ad is approved) and comes off screens automatically after a week. No card, no charge."
+            confirmLabel="Give free week"
+            cancelLabel="Never mind"
+            onConfirm={() =>
+              start(async () => {
+                const res = await grantFreeWeek(campaignId)
+                if (res.error) {
+                  toast.error(res.error)
+                } else {
+                  const until = res.until
+                    ? new Date(res.until).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                      })
+                    : ''
+                  toast.success(until ? `Free week granted — runs through ${until}` : 'Free week granted')
+                  router.refresh()
+                }
+              })
+            }
+          >
+            <Gift className="size-4" /> Give 1 free week
+          </ConfirmButton>
+        )}
 
         {status !== 'canceled' && (
           <ConfirmButton
