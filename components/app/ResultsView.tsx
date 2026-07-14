@@ -7,6 +7,7 @@ import { buttonVariants } from '@/components/ui/button'
 import { MoneyStat } from '@/components/app/MoneyStat'
 import { ScanLocked } from '@/components/app/ScanLocked'
 import { InsightsUpsell } from '@/components/app/InsightsUpsell'
+import { AudienceInsights } from '@/components/app/AudienceInsights'
 import { formatCents, formatNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import {
@@ -194,6 +195,9 @@ export async function ResultsView({ browseHref }: { browseHref: string }) {
           ) : (
             <InsightsUpsell />
           )}
+
+          {/* Audience demographics teaser (Quividi moat) — coming soon. */}
+          <AudienceInsights />
         </>
       )}
     </div>
