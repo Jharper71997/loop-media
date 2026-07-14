@@ -417,6 +417,9 @@ export default async function Home() {
             data-ga-nav="marketing_footer"
             className="flex items-center gap-5 text-sm text-muted-foreground"
           >
+            <Link href="/directory" className="hover:text-foreground">
+              Directory
+            </Link>
             <Link href="/changelog" className="hover:text-foreground">
               What&apos;s New
             </Link>
