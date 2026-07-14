@@ -9,6 +9,7 @@ import { activatePlacementsIfReady } from '@/lib/placement'
 import { hasUnlimitedChanges, hasInsightsMembership } from '@/lib/membership'
 import { applyAdChange } from '@/lib/adChanges'
 import { isOwnCreativeUrl } from '@/lib/adCreative'
+import { categoriesConflict } from '@/lib/categoryConflicts'
 import {
   AD_CHANGE_FEE_CENTS,
   AD_CHANGE_FREE_EVERY_DAYS,
@@ -631,7 +632,9 @@ export async function addScreensToCampaign(
     .filter((v) => v.status === 'active')
     .filter((v) => v.territory_id === camp.territory_id)
     .filter((v) => !existingSet.has(v.id))
-    .filter((v) => !(adCategory && v.category_id === adCategory && v.host_user_id !== advertiserId))
+    // Host protection: skip a venue that competes with this ad (exact category or
+    // same conflict group, e.g. food/drink), unless the advertiser owns the venue.
+    .filter((v) => !(categoriesConflict(adCategory, v.category_id) && v.host_user_id !== advertiserId))
     .map((v) => v.id as string)
   if (!toAdd.length) return { error: 'None of those screens can be added to this campaign.' }
 

@@ -56,6 +56,28 @@ export function periodForMonth(month: string): ReportPeriod {
 }
 
 export type VenueTypeRow = { type: string; plays: number; scans: number }
+export type DailyScanPoint = { date: string; scans: number }
+
+// One point per day across the period (capped at today for the current, partial
+// month), so the in-app report can draw a real scan trend. Email ignores it.
+function dailyScanSeries(period: ReportPeriod, scans: ScanRow[]): DailyScanPoint[] {
+  const byDay = new Map<string, number>()
+  for (const s of scans) {
+    const k = s.scanned_at.slice(0, 10)
+    byDay.set(k, (byDay.get(k) ?? 0) + 1)
+  }
+  const start = new Date(period.startISO)
+  const end = new Date(period.endISO)
+  const now = new Date()
+  const stop = end < now ? end : now // don't draw a long empty tail for this month
+  const out: DailyScanPoint[] = []
+  for (const d = new Date(start); d < stop; d.setUTCDate(d.getUTCDate() + 1)) {
+    const k = d.toISOString().slice(0, 10)
+    out.push({ date: k, scans: byDay.get(k) ?? 0 })
+  }
+  if (!out.length) out.push({ date: period.startISO.slice(0, 10), scans: 0 })
+  return out
+}
 
 export type CampaignReport = {
   campaignId: string
@@ -68,6 +90,7 @@ export type CampaignReport = {
   totalScans: number
   scansPer1000: number | null // scans per 1,000 times shown (null when no plays)
   byVenueType: VenueTypeRow[]
+  dailyScans: DailyScanPoint[] // per-day scan counts across the period (for the trend chart)
   exclusiveCount: number // venues this campaign owns its category at
   creditCents: number // SLA uptime credits issued this period
   showScans: boolean // advertiser holds the Insights membership (QR scans unlocked)
@@ -282,6 +305,7 @@ export async function buildCampaignReport(
     totalScans: scans.length,
     scansPer1000,
     byVenueType,
+    dailyScans: dailyScanSeries(period, scans),
     exclusiveCount: exclusiveCount ?? 0,
     creditCents,
     showScans,

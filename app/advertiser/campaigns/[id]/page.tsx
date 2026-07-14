@@ -1,6 +1,9 @@
 import { notFound } from 'next/navigation'
-import { ImageOff, MapPin } from 'lucide-react'
+import Link from 'next/link'
+import { ImageOff, MapPin, BarChart3 } from 'lucide-react'
 import { requireProfile } from '@/lib/auth'
+import { buttonVariants } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { hasUnlimitedChanges } from '@/lib/membership'
@@ -347,6 +350,16 @@ export default async function CampaignDetail({
             </div>
           </CardContent>
         </Card>
+
+        {/* The shareable ROI report — polished, printable, forward-to-a-partner. */}
+        {c.ad_id && (
+          <Link
+            href={`/advertiser/campaigns/${c.id}/report`}
+            className={cn(buttonVariants({ variant: 'outline' }), 'w-full')}
+          >
+            <BarChart3 className="size-4" /> View full report
+          </Link>
+        )}
       </div>
 
       {venues.length === 0 ? (
