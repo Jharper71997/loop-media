@@ -122,16 +122,21 @@ export default async function AdminOverview() {
   {
     let q = supabase
       .from('venues')
-      .select('name, status, created_at')
+      .select('name, status, created_at, is_demo')
       .order('created_at', { ascending: false })
       .limit(5)
     if (t) q = q.eq('territory_id', t)
     const { data } = await q
-    for (const v of (data ?? []) as { name: string; status: string; created_at: string }[]) {
+    for (const v of (data ?? []) as {
+      name: string
+      status: string
+      created_at: string
+      is_demo: boolean | null
+    }[]) {
       feed.push({
         at: v.created_at,
         icon: Store,
-        text: `New venue · ${v.name}${v.status !== 'active' ? ' (pending)' : ''}`,
+        text: `New venue · ${v.name}${v.is_demo ? ' (demo)' : v.status !== 'active' ? ' (pending)' : ''}`,
       })
     }
   }
@@ -140,7 +145,7 @@ export default async function AdminOverview() {
   {
     let q = supabase
       .from('profiles')
-      .select('email, full_name, role, created_at')
+      .select('email, full_name, role, created_at, is_demo')
       .in('role', ['advertiser', 'host'])
       .order('created_at', { ascending: false })
       .limit(5)
@@ -151,11 +156,13 @@ export default async function AdminOverview() {
       full_name: string | null
       role: string
       created_at: string
+      is_demo: boolean | null
     }[]) {
       feed.push({
         at: p.created_at,
         icon: UserPlus,
-        text: `New ${p.role} · ${p.full_name ?? p.email}`,
+        // Keep sandbox tour personas visible but clearly tagged so real signups stand out.
+        text: `New ${p.role} · ${p.full_name ?? p.email}${p.is_demo ? ' (demo)' : ''}`,
       })
     }
   }
