@@ -2,13 +2,14 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Trash2, MapPin, Lock, Clock } from 'lucide-react'
+import { Trash2, MapPin, Lock, Clock, Users } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { buttonVariants } from '@/components/ui/button'
 import { StepHeader } from '@/components/app/StepHeader'
 import { StickyCta } from '@/components/app/StickyCta'
 import { useBasePath } from '@/lib/useBasePath'
 import { formatCents } from '@/lib/format'
+import { estMonthlyReachOf } from '@/lib/analytics'
 import {
   quoteCart,
   TIER_LABEL,
@@ -61,6 +62,11 @@ export function ReviewStep({
     [cart, exclSet]
   )
   const totalCents = quote.totalCents + exclusivityCents
+
+  // Estimated people your ad reaches each month across the picked screens — the
+  // value side of the price. Clearly an estimate (from venue foot traffic), never
+  // a measured count.
+  const reachPerMonth = useMemo(() => estMonthlyReachOf(cart), [cart])
 
   // Persist the reconciled set so CreativeStep sends exactly what's shown here.
   useEffect(() => {
@@ -190,6 +196,25 @@ export function ReviewStep({
           </div>
         </CardContent>
       </Card>
+
+      {reachPerMonth > 0 && (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardContent className="flex items-center gap-3 p-4">
+            <span className="grid size-10 shrink-0 place-items-center rounded-full bg-primary/10">
+              <Users className="size-5 text-primary" />
+            </span>
+            <div className="min-w-0">
+              <p className="font-heading text-lg font-bold tabular-nums">
+                ~{reachPerMonth.toLocaleString()} people / month
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Estimated reach across your screens, from each venue&apos;s foot traffic. An
+                estimate, not a measured count.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Link
         href={`${base}/browse`}

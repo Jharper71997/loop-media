@@ -2,8 +2,6 @@ import Link from 'next/link'
 import { Plus, MapPin } from 'lucide-react'
 import { requireProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
-import { createAdminClient } from '@/lib/supabase/admin'
-import { hasInsightsMembership } from '@/lib/membership'
 import { Card, CardContent } from '@/components/ui/card'
 import { buttonVariants } from '@/components/ui/button'
 import { formatNumber, isTvLive } from '@/lib/format'
@@ -127,8 +125,8 @@ export default async function LocationsPage() {
         geoVenues.reduce((s, v) => s + (v.lng as number), 0) / geoVenues.length,
       ]
     : [34.7541, -77.4302]
-  // QR scan numbers are gated behind the Insights membership (coming soon).
-  const showScans = await hasInsightsMembership(createAdminClient(), profile.id)
+  // QR scan proof is free for every advertiser (Insights now sells demographics + strategy).
+  const showScans = true
 
   return (
     <div className="space-y-6">

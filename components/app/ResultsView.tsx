@@ -2,8 +2,6 @@ import Link from 'next/link'
 import { Plus, BarChart3 } from 'lucide-react'
 import { requireProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
-import { createAdminClient } from '@/lib/supabase/admin'
-import { hasInsightsMembership } from '@/lib/membership'
 import { Card, CardContent } from '@/components/ui/card'
 import { buttonVariants } from '@/components/ui/button'
 import { MoneyStat } from '@/components/app/MoneyStat'
@@ -94,8 +92,9 @@ export async function ResultsView({ browseHref }: { browseHref: string }) {
   const maxScans = Math.max(1, ...series.map((d) => d.scans))
 
   const hasData = venues.length > 0
-  // QR scan numbers are gated behind the Insights membership (coming soon).
-  const showScans = await hasInsightsMembership(createAdminClient(), profile.id)
+  // QR scan proof is free for every advertiser — undeniable ROI is the whole point.
+  // (The Insights membership now sells audience demographics + strategy, not scans.)
+  const showScans = true
 
   return (
     <div className="space-y-6">

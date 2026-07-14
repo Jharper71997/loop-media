@@ -2,8 +2,6 @@ import Link from 'next/link'
 import { ArrowLeft, ImageOff, Archive } from 'lucide-react'
 import { requireProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
-import { createAdminClient } from '@/lib/supabase/admin'
-import { hasInsightsMembership } from '@/lib/membership'
 import { Card, CardContent } from '@/components/ui/card'
 import { ScanLocked } from '@/components/app/ScanLocked'
 import { formatNumber, formatCents } from '@/lib/format'
@@ -90,8 +88,8 @@ export default async function PastCampaignsPage() {
   const fmtDate = (iso: string) =>
     new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 
-  // QR scan numbers are gated behind the Insights membership (coming soon).
-  const showScans = await hasInsightsMembership(createAdminClient(), profile.id)
+  // QR scan proof is free for every advertiser (Insights now sells demographics + strategy).
+  const showScans = true
 
   return (
     <div className="space-y-6">

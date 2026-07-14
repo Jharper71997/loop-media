@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Upload, Sparkles, MapPin } from 'lucide-react'
+import { Upload, Sparkles, MapPin, Users } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { buttonVariants } from '@/components/ui/button'
@@ -18,6 +18,7 @@ import { useBasePath } from '@/lib/useBasePath'
 import { formatCents } from '@/lib/format'
 import { CREATIVE_SETUP_FEE_CENTS, CREATIVE_REFRESH_CENTS } from '@/lib/fees'
 import { quoteCart, type QuoteOptions, type PricingConfig } from '@/lib/pricing'
+import { estMonthlyReachOf } from '@/lib/analytics'
 import {
   QR_DEFAULT,
   QR_SIZE_DEFAULT,
@@ -162,6 +163,9 @@ export function CreativeStep({
   )
   const totalWithCreative =
     quote.totalCents + exclusivityCents + (mode === 'help' ? CREATIVE_REFRESH_CENTS : 0)
+  // Estimated monthly reach across the picked screens — a value reminder at the
+  // final step before payment.
+  const reachPerMonth = useMemo(() => estMonthlyReachOf(cart), [cart])
 
   function onSubmit() {
     if (cart.length === 0) return toast.error('Your cart is empty. Pick screens first.')
@@ -459,6 +463,14 @@ export function CreativeStep({
           </>
         )}
       </div>
+
+      {reachPerMonth > 0 && (
+        <p className="flex items-center justify-center gap-1.5 text-center text-xs text-muted-foreground">
+          <Users className="size-3.5 text-primary" />
+          Reaching ~{reachPerMonth.toLocaleString()} people/month across {cart.length} screen
+          {cart.length === 1 ? '' : 's'} (estimated)
+        </p>
+      )}
 
       <StickyCta
         label={pending ? statusMsg ?? 'Working…' : 'Continue to payment'}

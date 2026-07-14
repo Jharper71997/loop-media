@@ -21,7 +21,6 @@ import {
 } from '@/lib/analytics'
 import { isWithinOpenHours } from '@/lib/openHours'
 import { formatNumber } from '@/lib/format'
-import { hasInsightsMembership } from '@/lib/membership'
 
 type Admin = ReturnType<typeof createAdminClient>
 
@@ -268,11 +267,9 @@ export async function buildCampaignReport(
     0
   )
 
-  // QR scan numbers only go to advertisers on the Insights membership (coming
-  // soon); everyone else gets a scans-free report.
-  const showScans = campaign.advertiser_id
-    ? await hasInsightsMembership(admin, campaign.advertiser_id)
-    : false
+  // QR scan proof goes in every advertiser's report now — undeniable ROI is the
+  // point. (Insights membership sells demographics + strategy, not scans.)
+  const showScans = true
 
   return {
     campaignId,

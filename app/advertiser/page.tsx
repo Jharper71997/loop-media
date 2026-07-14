@@ -9,8 +9,6 @@ import { formatCents, formatNumber, isTvLive } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { loyaltyCredits } from '@/lib/pricing'
 import { resolveAdvertiserContext } from '@/lib/pricing.server'
-import { createAdminClient } from '@/lib/supabase/admin'
-import { hasInsightsMembership } from '@/lib/membership'
 import { PERF_WINDOW_DAYS } from '@/lib/analytics'
 import { MoneyStat } from '@/components/app/MoneyStat'
 import { ScanLocked } from '@/components/app/ScanLocked'
@@ -249,8 +247,8 @@ export default async function AdvertiserDashboard({
     nextMilestone = `${12 - ctx.monthsActive} month${12 - ctx.monthsActive === 1 ? '' : 's'} to your 5% loyalty discount`
 
   const hasCampaigns = campaigns.length > 0
-  // QR scan numbers are gated behind the Insights membership (coming soon).
-  const showScans = await hasInsightsMembership(createAdminClient(), profile.id)
+  // QR scan proof is free for every advertiser (Insights now sells demographics + strategy).
+  const showScans = true
 
   return (
     <div className="space-y-6">

@@ -68,6 +68,16 @@ export function estImpressionsPerMonth(venues: RunningVenue[]): number {
   return venues.reduce((s, v) => s + estPerMonth(v), 0)
 }
 
+// Cart-level reach estimate shown BEFORE purchase. Same per-venue math as the live
+// campaign report, but from the lightweight cart venues (they carry foot traffic
+// only — no host-stated daily count yet). Sum of each venue's estimated monthly
+// reach, so Review/Creative can preview "~X people/month" next to the price.
+export function estMonthlyReachOf(
+  venues: Pick<RunningVenue, 'footTraffic' | 'medianDailyCustomers'>[]
+): number {
+  return venues.reduce((s, v) => s + estPerMonth(v), 0)
+}
+
 // One point per day for the last `days`, oldest→newest, including zero-scan days.
 // Days are bucketed by UTC date (the scanned_at ISO prefix) for stable boundaries.
 export function dailySeries(

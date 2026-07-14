@@ -161,15 +161,21 @@ export default async function Home() {
               Start advertising
             </Link>
             <Link
-              href="#how"
+              href="/preview"
               className={cn(
                 buttonVariants({ variant: 'outline', size: 'lg' }),
                 'w-full sm:w-auto'
               )}
             >
-              See how it works
+              See your ad on a TV
             </Link>
           </div>
+          <Link
+            href="#how"
+            className="mt-3 inline-block text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+          >
+            Or see how it works
+          </Link>
           <div className="mt-5 flex flex-wrap justify-center gap-x-5 gap-y-1.5 text-xs text-muted-foreground">
             {['From $50 / screen / month', 'Month to month', 'We can design your ad'].map((t) => (
               <span key={t} className="flex items-center gap-1.5">

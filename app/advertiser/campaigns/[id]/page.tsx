@@ -3,7 +3,7 @@ import { ImageOff, MapPin } from 'lucide-react'
 import { requireProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { hasUnlimitedChanges, hasInsightsMembership } from '@/lib/membership'
+import { hasUnlimitedChanges } from '@/lib/membership'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { ScanLocked } from '@/components/app/ScanLocked'
@@ -60,8 +60,8 @@ export default async function CampaignDetail({
     profile.role !== 'host' &&
     !(await hasUnlimitedChanges(createAdminClient(), profile.id))
 
-  // QR scan numbers are gated behind the Insights membership (coming soon).
-  const showScans = await hasInsightsMembership(createAdminClient(), profile.id)
+  // QR scan proof is free for every advertiser (Insights now sells demographics + strategy).
+  const showScans = true
 
   const { data: placementsData } = await supabase
     .from('ad_placements')
