@@ -59,7 +59,7 @@ export async function placeCampaign(
 
   const { data: ad } = await admin
     .from('ads')
-    .select('id, category_id, status, owner_user_id')
+    .select('id, category_id, status, owner_user_id, owner_kind')
     .eq('id', camp.ad_id)
     .maybeSingle()
   if (!ad) return empty('Ad not found', camp.target_impressions)
@@ -156,6 +156,22 @@ export async function placeCampaign(
     if (p.campaign_id === campaignId) myTvs.add(p.tv_id)
   }
 
+  // Host-slot guarantee: reserve one slot per screen for the venue's OWN host
+  // promo so paid demand can never crowd it out. The host's own promo
+  // (owner_kind='host') ignores the reserve, and TVs that already run their host
+  // promo need no reserve (it has its slot). This costs at most one sellable slot
+  // per screen — only bites once a screen is otherwise full.
+  const isHostPromo = ad.owner_kind === 'host'
+  const hostPromoTvs = new Set<string>()
+  if (!isHostPromo) {
+    const { data: hostPl } = await admin
+      .from('ad_placements')
+      .select('tv_id, ad:ads!inner(owner_kind)')
+      .eq('status', 'active')
+      .eq('ad.owner_kind', 'host')
+    for (const r of (hostPl ?? []) as unknown as { tv_id: string }[]) hostPromoTvs.add(r.tv_id)
+  }
+
   type Candidate = { tvId: string; venueId: string; traffic: number; slot: number }
   const candidates: Candidate[] = []
   for (const v of scopedVenues) {
@@ -176,8 +192,12 @@ export async function placeCampaign(
       if (myTvs.has(t.id)) continue // already running here
       if (excludedTvs.has(t.id)) continue // admin pulled this campaign off this screen
       const maxSlots = Math.max(1, Math.floor((t.loop_length_seconds || 360) / (t.slot_seconds || 15)))
+      // Hold one slot for the host's own promo (see host-slot guarantee above),
+      // except for the host's own promo itself, a 1-slot loop, or a screen whose
+      // host promo already holds a slot.
+      const reserved = isHostPromo || maxSlots <= 1 || hostPromoTvs.has(t.id) ? 0 : 1
       const used = usedByTv.get(t.id) ?? 0
-      if (used >= maxSlots) continue // loop full
+      if (used >= maxSlots - reserved) continue // loop full (reserve held for host)
       candidates.push({ tvId: t.id, venueId: v.id, traffic: v.foot_traffic_estimate ?? 0, slot: used })
     }
   }
