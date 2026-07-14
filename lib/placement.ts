@@ -16,6 +16,7 @@
 // Always runs with the service-role admin client (ad_placements is admin-write
 // under RLS), so callers must already have authorized the action.
 import { createAdminClient } from '@/lib/supabase/admin'
+import { categoriesConflict } from '@/lib/categoryConflicts'
 
 const DEFAULT_MAX_SLOTS = 24 // 360s loop / 15s slot
 
@@ -158,13 +159,13 @@ export async function placeCampaign(
   type Candidate = { tvId: string; venueId: string; traffic: number; slot: number }
   const candidates: Candidate[] = []
   for (const v of scopedVenues) {
-    // Venue-own-category exclusivity: a venue never shows a COMPETITOR's ad in
-    // its OWN line of business (protects the host from direct competitors). The
-    // venue's own owner is exempt — a host may run their own promo on their own
-    // screen even in their category.
+    // Host protection: a venue never shows a COMPETITOR's ad. That's the exact
+    // same line of business (a barber blocks other barbers) AND cross-category
+    // rivals in the same conflict group (a food/drink venue blocks bars,
+    // restaurants, cafes, etc. — see lib/categoryConflicts). The venue's own
+    // owner is exempt — a host may run their own promo on their own screen.
     if (
-      ad.category_id &&
-      ad.category_id === v.category_id &&
+      categoriesConflict(ad.category_id, v.category_id) &&
       ad.owner_user_id !== v.host_user_id
     )
       continue

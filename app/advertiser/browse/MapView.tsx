@@ -80,7 +80,7 @@ export default function MapView({
   const legend: { color: string; label: string }[] = [
     { color: MARKER.open, label: 'Open' },
     { color: MARKER.cart, label: 'In cart' },
-    { color: MARKER.categoryFull, label: 'Category taken' },
+    { color: MARKER.categoryFull, label: 'Competitor' },
     { color: MARKER.full, label: 'Full' },
     ...(userLoc ? [{ color: MARKER.you, label: 'You' }] : []),
   ]
@@ -151,9 +151,9 @@ export default function MapView({
                     {v.openHours}
                   </p>
                 )}
-                {v.ownCategory ? (
+                {v.categoryFull ? (
                   <p className="text-xs font-medium text-muted-foreground">
-                    Same business — not available
+                    {v.ownCategory ? 'Same business' : 'Competing business'} — not available
                   </p>
                 ) : v.open === 0 ? (
                   // Screen is sold out — offer the waitlist so they hear when a slot frees.

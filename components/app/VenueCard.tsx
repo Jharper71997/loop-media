@@ -18,6 +18,8 @@ export type VenueCardData = {
   screens: number
   categoryFull: boolean
   ownCategory: boolean
+  // Cross-category rival in the same conflict group (blocked, different copy).
+  conflicting?: boolean
   open: number
   comingSoon: boolean
   // When the venue is open (e.g. "Mon–Fri, 10 AM–10 PM") — when the ad actually
@@ -84,7 +86,7 @@ export function VenueCard({
             <span className="truncate">{venue.openHours}</span>
           </p>
         )}
-        {!venue.ownCategory && venue.open > 0 && (
+        {!venue.categoryFull && venue.open > 0 && (
           <p className="mt-0.5 text-xs text-muted-foreground">
             <span className="font-medium text-foreground tabular-nums">{venue.open}</span> ad spot
             {venue.open === 1 ? '' : 's'} open
@@ -97,11 +99,15 @@ export function VenueCard({
       </div>
 
       <div className="shrink-0">
-        {venue.ownCategory ? (
-          // Same line of business as the venue — competitors are never allowed,
-          // so there's nothing to wait for.
-          <Badge variant="secondary" title="A venue won't run ads from its own line of business.">
-            Same business
+        {venue.categoryFull ? (
+          // A competing business — a venue never runs a direct competitor, whether
+          // it's the exact same line or a rival in the same space (a food/drink
+          // venue won't run bars, restaurants, cafes). Nothing to wait for.
+          <Badge
+            variant="secondary"
+            title="A venue won't run ads from a competing business."
+          >
+            {venue.ownCategory ? 'Same business' : 'Competing business'}
           </Badge>
         ) : venue.open === 0 ? (
           // Sold out — offer the waitlist so they hear when a spot frees up.

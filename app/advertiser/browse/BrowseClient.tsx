@@ -44,6 +44,9 @@ export type BrowseVenue = {
   comingSoon: boolean
   categoryFull: boolean
   ownCategory: boolean
+  // Cross-category rival in the same conflict group (e.g. a bar advertiser at a
+  // restaurant venue). Blocked like ownCategory, different copy.
+  conflicting: boolean
   waitlisted: boolean
   // Filled in client-side once we know the advertiser's location; drives the
   // "X mi away" hint and nearest-first ordering on the browse map.

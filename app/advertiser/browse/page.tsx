@@ -8,6 +8,7 @@ import {
   getPricingConfig,
 } from '@/lib/pricing.server'
 import { isVenueListable } from '@/lib/venue'
+import { isCrossCategoryConflict } from '@/lib/categoryConflicts'
 import { isTvLive } from '@/lib/format'
 import { formatOpenHours } from '@/lib/openHours'
 import { BrowseClient, type BrowseVenue } from './BrowseClient'
@@ -123,15 +124,18 @@ export default async function BrowsePage({
       // Flips to live automatically once any TV at the venue heartbeats (<95s).
       const comingSoon = !r.tvs.some((t) => isTvLive(t.last_heartbeat_at))
 
-      // Host protection: a venue never runs a COMPETITOR's ad in its own line of
-      // business (a barbershop blocks other barbers). But the venue's OWN owner may
-      // promote themselves on their own screen. This is the ONLY exclusivity —
-      // unrelated advertisers freely share a screen.
-      const ownCategory =
-        !!activeCat && activeCat === r.category_id && r.host_user_id !== profile.id
-      // Only own-business screens are blocked (kept as `categoryFull` for the
-      // card/map, which gray out and disable adding when it's true).
-      const categoryFull = ownCategory
+      // Host protection: a venue never runs a COMPETITOR's ad. That's the exact
+      // same line of business (a barbershop blocks other barbers) AND cross-category
+      // rivals in the same conflict group (food/drink venues block bars,
+      // restaurants, cafes — see lib/categoryConflicts). The venue's OWN owner is
+      // exempt (may promote themselves on their own screen). Unrelated advertisers
+      // freely share a screen.
+      const notMine = !!activeCat && r.host_user_id !== profile.id
+      const ownCategory = notMine && activeCat === r.category_id
+      const conflicting = notMine && isCrossCategoryConflict(activeCat, r.category_id)
+      // Both block the card/map (gray out + disable adding); ownCategory vs
+      // conflicting only changes the copy ("Same business" vs "Competing business").
+      const categoryFull = ownCategory || conflicting
 
       return {
         id: r.id,
@@ -151,6 +155,7 @@ export default async function BrowsePage({
         comingSoon,
         categoryFull,
         ownCategory,
+        conflicting,
         waitlisted: waitlisted.has(r.id),
       }
     })
