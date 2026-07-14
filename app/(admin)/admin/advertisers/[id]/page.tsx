@@ -156,7 +156,11 @@ export default async function AdvertiserDetail({
               territoryId={advertiser.territory_id}
               territories={territory.territories.map((t) => ({ id: t.id, name: t.name }))}
             />
-            <AdvertiserStatusControls id={advertiser.id} deactivated={deactivated} />
+            <AdvertiserStatusControls
+              id={advertiser.id}
+              deactivated={deactivated}
+              freeWeekCredit={!!(advertiser as { free_week_credit?: boolean }).free_week_credit}
+            />
             <DeleteAdvertiserDialog
               id={advertiser.id}
               name={advertiser.full_name}

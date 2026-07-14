@@ -250,6 +250,8 @@ export function CreativeStep({
         return
       }
       if (res.demo) toast.success('Campaign created (demo mode — no payment).')
+      else if (res.freeWeek)
+        toast.success('Your free week is on — the ad runs free for 7 days once it clears review.')
       router.push(`${base}/campaigns/${res.campaignId}`)
     })
   }

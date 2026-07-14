@@ -49,6 +49,7 @@ export interface SubmitResult {
   checkoutUrl?: string
   campaignId?: string
   demo?: boolean
+  freeWeek?: boolean
 }
 
 export async function submitCampaign(input: NewCampaignInput): Promise<SubmitResult> {
@@ -259,6 +260,40 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
   // open-redirect via a crafted base_path.
   const pathPrefix = input.base_path === '/host/advertise' ? '/host/advertise' : '/advertiser'
   const homePath = pathPrefix === '/host/advertise' ? '/host' : '/advertiser'
+
+  // Free-week credit: an admin granted this advertiser a comp before they built
+  // anything. Skip payment entirely and run the ad FREE for 7 days (comp_until;
+  // the place cron auto-stops it), then consume the credit. The ad still goes
+  // through review before it airs. Never for admin/demo paths. Defensive read so a
+  // pre-migration DB (no free_week_credit column) simply falls through to checkout.
+  if (!isAdmin && !isDemo) {
+    let hasFreeWeek = false
+    try {
+      const { data: p } = await admin
+        .from('profiles')
+        .select('free_week_credit')
+        .eq('id', profile.id)
+        .maybeSingle()
+      hasFreeWeek = !!(p as { free_week_credit?: boolean } | null)?.free_week_credit
+    } catch {
+      hasFreeWeek = false
+    }
+    if (hasFreeWeek) {
+      const compUntil = new Date(Date.now() + 7 * 86400000).toISOString()
+      await admin.from('campaigns').update({ status: 'active', comp_until: compUntil }).eq('id', campaign.id)
+      await admin.from('profiles').update({ free_week_credit: false }).eq('id', profile.id)
+      if (sub?.id) {
+        await admin
+          .from('subscriptions')
+          .update({ status: 'active', current_period_end: compUntil })
+          .eq('id', sub.id)
+      }
+      // No-op until the ad clears review; approveAd then places it for the week.
+      await activatePlacementsIfReady(campaign.id, admin)
+      revalidatePath(homePath)
+      return { campaignId: campaign.id, freeWeek: true }
+    }
+  }
 
   // Real Stripe Checkout when configured; admins + demo always skip live payment.
   if (process.env.STRIPE_SECRET_KEY && !isAdmin && !isDemo) {

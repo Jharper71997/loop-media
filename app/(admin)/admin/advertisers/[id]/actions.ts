@@ -362,6 +362,26 @@ export async function deactivateAdvertiser(id: string) {
   return ok()
 }
 
+// ---- free-week credit (grant BEFORE they've started a campaign) ----
+// Flags the advertiser so their NEXT self-serve campaign skips checkout and runs
+// free for 7 days (submitCampaign honors it + sets comp_until; the place cron
+// stops it after the week). One credit at a time; consumed on use.
+export async function grantFreeWeekCredit(id: string) {
+  const g = await guardAdvertiser(id)
+  if ('error' in g) return { error: g.error }
+  const { error } = await g.admin.from('profiles').update({ free_week_credit: true }).eq('id', id)
+  if (error) return { error: error.message }
+  return ok()
+}
+
+export async function revokeFreeWeekCredit(id: string) {
+  const g = await guardAdvertiser(id)
+  if ('error' in g) return { error: g.error }
+  const { error } = await g.admin.from('profiles').update({ free_week_credit: false }).eq('id', id)
+  if (error) return { error: error.message }
+  return ok()
+}
+
 export async function reactivateAdvertiser(id: string) {
   const g = await guardAdvertiser(id)
   if ('error' in g) return { error: g.error }
