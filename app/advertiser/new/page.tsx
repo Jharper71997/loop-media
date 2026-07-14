@@ -25,7 +25,7 @@ export default async function ReviewPage() {
     supabase
       .from('venues')
       .select(
-        'id, territory_id, name, category_id, foot_traffic_estimate, price_tier, price_cents_override, exclusivity_price_cents, business_open, business_close, business_days, business_hours'
+        'id, territory_id, name, category_id, foot_traffic_estimate, median_daily_customers, price_tier, price_cents_override, exclusivity_price_cents, business_open, business_close, business_days, business_hours'
       )
       .eq('status', 'active'),
     resolveAdvertiserContext(profile.id),
@@ -38,6 +38,7 @@ export default async function ReviewPage() {
     name: string
     category_id: string | null
     foot_traffic_estimate: number
+    median_daily_customers: number | null
     price_tier: PriceTier | null
     price_cents_override: number | null
     exclusivity_price_cents: number | null
@@ -70,6 +71,7 @@ export default async function ReviewPage() {
       name: r.name,
       categoryId: r.category_id,
       footTraffic: r.foot_traffic_estimate,
+      medianDailyCustomers: r.median_daily_customers,
       tier,
       priceCents: venuePriceCents(r.price_cents_override, tier, pricingConfig),
       openHours: formatOpenHours(r),

@@ -25,7 +25,7 @@ export default async function CreativePage() {
     supabase
       .from('venues')
       .select(
-        'id, territory_id, name, category_id, foot_traffic_estimate, price_tier, price_cents_override, exclusivity_price_cents'
+        'id, territory_id, name, category_id, foot_traffic_estimate, median_daily_customers, price_tier, price_cents_override, exclusivity_price_cents'
       )
       .eq('status', 'active'),
     resolveAdvertiserContext(profile.id),
@@ -38,6 +38,7 @@ export default async function CreativePage() {
     name: string
     category_id: string | null
     foot_traffic_estimate: number
+    median_daily_customers: number | null
     price_tier: PriceTier | null
     price_cents_override: number | null
     exclusivity_price_cents: number | null
@@ -64,6 +65,7 @@ export default async function CreativePage() {
       name: r.name,
       categoryId: r.category_id,
       footTraffic: r.foot_traffic_estimate,
+      medianDailyCustomers: r.median_daily_customers,
       tier,
       priceCents: venuePriceCents(r.price_cents_override, tier, pricingConfig),
       exclusivityCents: venueExclusivityCents(r.exclusivity_price_cents, pricingConfig),

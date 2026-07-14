@@ -11,6 +11,9 @@ export type CartVenue = {
   name: string
   categoryId: string | null
   footTraffic: number
+  // Host-stated typical customers/day; preferred over footTraffic for the reach
+  // estimate (matches Locations/results math). Null when the host hasn't set it.
+  medianDailyCustomers: number | null
   tier: PriceTier
   priceCents: number
   // When the venue is open (e.g. "Mon–Fri, 10 AM–10 PM") — when the ad plays.
