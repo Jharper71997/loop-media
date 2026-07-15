@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { appUrl } from '@/lib/stripe'
 import { sendEmail } from '@/lib/email'
 import { resolveEmail, escapeHtml } from '@/lib/emailSettings'
+import { runOfflineAlerts } from '@/lib/offlineAlerts'
 
 // "A new screen just went live near you" advertiser email.
 //
@@ -60,9 +61,19 @@ export async function GET(req: Request) {
   const admin = createAdminClient()
   const base = appUrl()
 
+  // Folded-in host offline-screen alerts (run on this daily cron to respect the
+  // Hobby cron cap — see lib/offlineAlerts). Independent of the screen-live email
+  // below; a failure here must never block it.
+  let offline: unknown = null
+  try {
+    offline = await runOfflineAlerts(admin, base, { dry, onlyVenue })
+  } catch {
+    offline = { ran: 0, sent: 0, skipped: 'error' }
+  }
+
   // Admin on/off gate for this email.
   if (!dry && !(await resolveEmail(admin, 'screen_live', {})).enabled) {
-    return NextResponse.json({ ran: 0, sent: 0, skipped: 'screen_live disabled' })
+    return NextResponse.json({ ran: 0, sent: 0, skipped: 'screen_live disabled', offline })
   }
 
   // Venue ids whose screen has ever checked in (so it's real + live).
@@ -71,7 +82,7 @@ export async function GET(req: Request) {
     .select('venue_id')
     .not('last_heartbeat_at', 'is', null)
   const everLive = [...new Set((liveTvs ?? []).map((t) => t.venue_id as string))]
-  if (!everLive.length) return NextResponse.json({ ran: 0, sent: 0, results: [] })
+  if (!everLive.length) return NextResponse.json({ ran: 0, sent: 0, results: [], offline })
 
   // Venues we've already announced.
   const { data: announced } = await admin.from('venue_live_notice_log').select('venue_id')
@@ -147,5 +158,6 @@ export async function GET(req: Request) {
     ran: results.length,
     sent: results.filter((r) => r.status === 'sent').length,
     results,
+    offline,
   })
 }
