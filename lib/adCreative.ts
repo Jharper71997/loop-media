@@ -57,6 +57,48 @@ export const MAX_CREATIVE_MB = 50
 export const OK_VIDEO_TYPES = ['video/mp4', 'video/webm']
 export const CREATIVE_ACCEPT = 'image/*,video/mp4,video/webm'
 
+// ---- Spot length ----
+// A spot is sold as a 15-second slot, so that's the ceiling on what we store in
+// ads.duration_seconds AND on what the TV will actually play (the player hard-cuts
+// there). Without a ceiling a long upload airs in full and holds the loop for every
+// other advertiser on that screen — a 3-minute clip meant 3 minutes of one ad.
+export const MAX_SPOT_SECONDS = 15
+
+// Whole seconds, clamped into (0, MAX_SPOT_SECONDS]. Rounds UP so a clip is never
+// cut a hair early by its own stored length. ads.duration_seconds is
+// `int not null check (> 0)`, so an unreadable file (0/NaN) must never reach the
+// insert — those fall back to the full slot rather than failing the check.
+export function clampSpotSeconds(secs: number): number {
+  if (!Number.isFinite(secs) || secs <= 0) return MAX_SPOT_SECONDS
+  return Math.min(Math.ceil(secs), MAX_SPOT_SECONDS)
+}
+
+// A video file's real length in seconds, read off its metadata in the browser, so
+// an ad's duration_seconds reflects the actual clip instead of the DB default of 15.
+// Resolves 0 when the browser can't read it (unsupported codec, truncated file) —
+// callers should route that through clampSpotSeconds rather than trust the 0.
+// Client-only (creates a <video> and an object URL).
+export function readVideoDuration(file: File): Promise<number> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file)
+    const v = document.createElement('video')
+    let settled = false
+    const done = (secs: number) => {
+      if (settled) return
+      settled = true
+      URL.revokeObjectURL(url)
+      resolve(secs)
+    }
+    v.preload = 'metadata'
+    v.onloadedmetadata = () => done(Number.isFinite(v.duration) && v.duration > 0 ? v.duration : 0)
+    v.onerror = () => done(0)
+    // Backstop: some mobile WebViews fire neither event on a file they can't parse,
+    // which would otherwise leave the upload button spinning forever.
+    setTimeout(() => done(0), 15_000)
+    v.src = url
+  })
+}
+
 export function validateCreativeFile(file: File): string | null {
   if (file.size > MAX_CREATIVE_MB * 1_000_000) {
     return `That file is ${(file.size / 1_000_000).toFixed(0)} MB. Keep it under ${MAX_CREATIVE_MB} MB so it loads fast on the venue's screen.`

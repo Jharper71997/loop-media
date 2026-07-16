@@ -26,6 +26,8 @@ import {
   QR_SIZE_MAX,
   exportImageBlob,
   validateCreativeFile,
+  readVideoDuration,
+  clampSpotSeconds,
   CREATIVE_ACCEPT,
 } from '@/lib/adCreative'
 import { CreativeImageEditor, type CreativeImageEditorHandle } from '@/components/app/CreativeImageEditor'
@@ -180,6 +182,10 @@ export function CreativeStep({
       setStatusMsg(null)
       let creative_url: string | null = null
       let creative_type: 'video' | 'image' | null = null
+      // Real clip length, so the ad's slot reflects the video instead of the DB's
+      // blanket 15s default. The server re-clamps this — it's a hint, not a trust
+      // boundary. Images leave it null and keep the default hold.
+      let duration_seconds: number | null = null
 
       if (mode === 'upload' && file) {
         const supabase = createClient()
@@ -202,6 +208,9 @@ export function CreativeStep({
           }
           ext = 'png'
           contentType = 'image/png'
+        }
+        if (isVideo) {
+          duration_seconds = clampSpotSeconds(await readVideoDuration(file))
         }
         setStatusMsg('Uploading your ad…')
         const path = `${userId}/${crypto.randomUUID()}.${ext}`
@@ -231,6 +240,7 @@ export function CreativeStep({
         qr_size: qrSize,
         creative_type,
         creative_url,
+        duration_seconds,
         creative_help_brief: mode === 'help' ? brief : null,
         base_path: base,
       }

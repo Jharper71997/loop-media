@@ -21,7 +21,7 @@ import {
 import { notifyCampaignCreated } from '@/lib/notifyAdvertiser'
 import { notifyAdminNewAd } from '@/lib/notifyAdmin'
 import { CREATIVE_SETUP_FEE_CENTS, CREATIVE_REFRESH_CENTS } from '@/lib/fees'
-import { QR_SIZE_DEFAULT, isOwnCreativeUrl } from '@/lib/adCreative'
+import { QR_SIZE_DEFAULT, isOwnCreativeUrl, clampSpotSeconds } from '@/lib/adCreative'
 
 export interface NewCampaignInput {
   territory_id: string
@@ -38,6 +38,11 @@ export interface NewCampaignInput {
   qr_size?: number
   creative_type: 'video' | 'image' | null
   creative_url: string | null
+  // Real clip length read off the uploaded video in the browser. Advisory — the
+  // server clamps it into the sold slot before it reaches the insert, so a crafted
+  // request can't buy itself extra airtime. Null (images, or an unreadable file)
+  // falls back to the full slot.
+  duration_seconds?: number | null
   creative_help_brief: string | null
   // Which app tree the buyer is in, so post-checkout returns to the right place.
   // Hosts advertise from '/host/advertise'; everyone else from '/advertiser'.
@@ -162,6 +167,9 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
       title: input.title.trim(),
       creative_type: input.creative_type ?? 'image',
       creative_url: input.creative_url,
+      // Clamped server-side: never trust a client-reported length, and never let an
+      // ad claim more of the loop than the slot it paid for.
+      duration_seconds: clampSpotSeconds(input.duration_seconds ?? 0),
       // Demo ads are auto-approved (they're never reviewed and never air).
       status: isDemo ? 'approved' : 'pending',
       is_demo: isDemo,
