@@ -90,13 +90,15 @@ const clampOverscan = (n: number) => Math.max(0, Math.min(12, n))
 const STAGE_W = 1920
 const STAGE_H = 1080
 
-// Video ads advance on their own `ended` event. These bound a video that stalls or
-// never fires ended/error inside a TV WebView (a bad/unsupported upload), so it can
-// never freeze the whole loop on one slide: once metadata gives us the real clip
-// length we cap at it + a grace; until then a hard ceiling advances anyway. Generous
-// so a normal ad video is never cut short.
-const VIDEO_GRACE_MS = 4000
-const HARD_VIDEO_CEILING_MS = 180_000
+// A video ad advances on its own `ended`, but it can never run past the slot it was
+// sold — the player hard-cuts there (see VideoAdSlide). Two graces sit around the cut:
+// CUT_GRACE_MS lets a clip baked to exactly the slot length finish naturally instead
+// of losing its last frame in a photo-finish with the timer, and LOAD_GRACE_MS holds
+// the cut open while a creative is still buffering on venue WiFi so a slow load
+// doesn't eat the ad's airtime. The load grace doubles as the stall backstop: a
+// creative that never plays at all is cut ~25s in rather than freezing the screen.
+const CUT_GRACE_MS = 500
+const LOAD_GRACE_MS = 10_000
 
 function buildPlaylist(m: Manifest): Slide[] {
   const slot = m.tv.slot_seconds || 15
@@ -585,8 +587,9 @@ function Player({
   const playlist = useMemo(() => (manifest ? buildPlaylist(manifest) : []), [manifest])
   const slide = playlist.length ? playlist[index % playlist.length] : null
 
-  // How long this slide holds. Videos run to their own `ended` event; everything
-  // else (images, filler, promo) uses the admin-set seconds.
+  // How long this slide holds. Videos manage their own advance (own `ended`, capped
+  // at the slot — see VideoAdSlide); everything else (images, filler, promo) uses the
+  // admin-set seconds on the timer below.
   const isVideoAd = slide?.kind === 'ad' && slide.creative_type === 'video'
   // Ads use their own per-ad seconds; each house slide uses its per-screen time
   // (admin-set on the screen page) or falls back to the built-in default.
@@ -682,7 +685,15 @@ function Player({
       <div className="absolute overflow-hidden" style={{ inset: `${overscanPct}%` }}>
       {slide.kind === 'ad' ? (
         slide.creative_type === 'video' ? (
-          <VideoAdSlide key={slide.id + index} src={slide.creative_url} onDone={advance} />
+          <VideoAdSlide
+            key={slide.id + index}
+            src={slide.creative_url}
+            // Never longer than the slot this screen sells, even if the ad's stored
+            // duration says otherwise (a legacy ad predating the upload-time trim, or
+            // an admin override). The slot is the contract; the ad bends to it.
+            cutMs={Math.min(slide.duration, manifest.tv.slot_seconds || 15) * 1000}
+            onDone={advance}
+          />
         ) : (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -830,17 +841,21 @@ function Player({
   )
 }
 
-// A video ad that manages its own advance. Normally it advances on the clip's natural
-// `ended`. But an uploaded creative can stall or silently fail to fire ended/error in a
-// TV WebView (wrong codec/container, a truncated file) — which would otherwise freeze
-// the loop on this one slide forever. So we also run a watchdog: onError advances at
-// once; once metadata loads we cap at the real duration + a grace; and until metadata
-// loads (or if it never does) a hard ceiling advances anyway. A bad video can therefore
-// never brick a screen — worst case it's skipped.
-function VideoAdSlide({ src, onDone }: { src: string; onDone: () => void }) {
+// A video ad that manages its own advance, bounded by `cutMs` — the slot it was sold.
+// A clip SHORTER than the slot still advances early on its own `ended` (a 9s ad doesn't
+// sit for 15s). A clip LONGER than the slot is cut here, which is the only thing
+// stopping one over-length upload from holding the loop while every other advertiser
+// on the screen waits. That same cut is the stall backstop: an upload that silently
+// fails to fire ended/error in a TV WebView (wrong codec, truncated file) is skipped
+// rather than freezing the screen on one slide.
+//
+// The cut is armed against PLAYBACK, not mount — a creative still buffering on a
+// venue's WiFi would otherwise burn its slot while showing nothing. Until playback
+// starts, a longer backstop covers the never-plays case.
+function VideoAdSlide({ src, cutMs, onDone }: { src: string; cutMs: number; onDone: () => void }) {
   const ref = useRef<HTMLVideoElement | null>(null)
-  // Hold the latest onDone in a ref so the watchdog effect arms once per src, not on
-  // every parent re-render (the 1s clock tick would otherwise keep re-arming it).
+  // Hold the latest onDone in a ref so the effect arms once per src, not on every
+  // parent re-render (the 1s clock tick would otherwise keep re-arming it).
   const doneRef = useRef(onDone)
   doneRef.current = onDone
   useEffect(() => {
@@ -852,24 +867,27 @@ function VideoAdSlide({ src, onDone }: { src: string; onDone: () => void }) {
       fired = true
       doneRef.current()
     }
-    // Hard ceiling until (and unless) metadata tells us the real duration.
-    let watchdog = window.setTimeout(finish, HARD_VIDEO_CEILING_MS)
-    const onMeta = () => {
-      if (Number.isFinite(el.duration) && el.duration > 0) {
-        window.clearTimeout(watchdog)
-        watchdog = window.setTimeout(finish, el.duration * 1000 + VIDEO_GRACE_MS)
-      }
+    // Backstop while the creative loads; re-armed to the real cut once it plays.
+    let cut = window.setTimeout(finish, cutMs + LOAD_GRACE_MS)
+    let started = false
+    const onPlaying = () => {
+      // `playing` also fires after a mid-clip rebuffer — only the first one starts
+      // the slot clock, or a stuttering ad would keep extending its own airtime.
+      if (started) return
+      started = true
+      window.clearTimeout(cut)
+      cut = window.setTimeout(finish, cutMs + CUT_GRACE_MS)
     }
-    el.addEventListener('loadedmetadata', onMeta)
+    el.addEventListener('playing', onPlaying)
     el.addEventListener('ended', finish)
     el.addEventListener('error', finish)
     return () => {
-      window.clearTimeout(watchdog)
-      el.removeEventListener('loadedmetadata', onMeta)
+      window.clearTimeout(cut)
+      el.removeEventListener('playing', onPlaying)
       el.removeEventListener('ended', finish)
       el.removeEventListener('error', finish)
     }
-  }, [src])
+  }, [src, cutMs])
   return <CreativeVideo ref={ref} src={src} className="lm-fade" autoPlay muted playsInline />
 }
 
