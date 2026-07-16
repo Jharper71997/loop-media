@@ -54,8 +54,26 @@ export const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.mi
 // (they're re-encoded to a 16:9 PNG on upload). Use CREATIVE_ACCEPT on the file input
 // and validateCreativeFile() on selection in every uploader so the rule stays in one place.
 export const MAX_CREATIVE_MB = 50
-export const OK_VIDEO_TYPES = ['video/mp4', 'video/webm']
-export const CREATIVE_ACCEPT = 'image/*,video/mp4,video/webm'
+// .mov (video/quicktime) is accepted at upload, but it is NOT a safe TV format:
+// an iPhone .mov is often HEVC/H.265, which many Fire Stick / TV WebViews can't
+// decode — so it may preview fine on the advertiser's phone yet never air on the
+// screen (the player skips a video it can't play). MP4 (H.264) / WebM remain the
+// reliable formats; the uploader surfaces that caution when a .mov is chosen.
+export const OK_VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/quicktime']
+// The `.mov` extension is listed alongside the MIME types because some OS file
+// pickers match the accept filter by extension, not by reported MIME.
+export const CREATIVE_ACCEPT = 'image/*,video/mp4,video/webm,video/quicktime,.mov'
+
+// A chosen video whose format is accepted but risky on the TV (today: .mov). The
+// uploader shows this as a non-blocking caution so the advertiser can still upload,
+// but is told mp4 is the safe choice. Not an error — validateCreativeFile passes it.
+export function riskyVideoNotice(file: File | null): string | null {
+  if (!file) return null
+  if (file.type === 'video/quicktime' || /\.mov$/i.test(file.name)) {
+    return 'Heads up: .mov files (from an iPhone) may not play on some TVs. An MP4 (H.264) is the safest bet — but you can upload this and we’ll flag it in review if it won’t air.'
+  }
+  return null
+}
 
 // ---- Spot length ----
 // A spot is sold as a 15-second slot, so that's the ceiling on what we store in
@@ -107,7 +125,7 @@ export function validateCreativeFile(file: File): string | null {
   const isImage = file.type.startsWith('image/')
   if (!isVideo && !isImage) return 'Upload an image or a video file.'
   if (isVideo && !OK_VIDEO_TYPES.includes(file.type)) {
-    return 'Please upload an MP4 (H.264) or WebM video. Other formats — like a .mov from an iPhone — may not play on the TV.'
+    return 'Please upload an MP4 (H.264), WebM, or .mov video. Other formats may not play on the TV.'
   }
   return null
 }
