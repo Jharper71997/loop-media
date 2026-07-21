@@ -7,7 +7,7 @@
 // From address; it must be on a domain verified in the Resend dashboard.
 
 const RESEND_ENDPOINT = 'https://api.resend.com/emails'
-const DEFAULT_FROM = 'Loop Network <reports@loopnetwork.app>'
+const DEFAULT_FROM = 'Loop Network <reports@loopnetwork.org>'
 
 export type SendEmailInput = {
   to: string | string[]
