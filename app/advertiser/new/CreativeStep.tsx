@@ -28,6 +28,7 @@ import {
   validateCreativeFile,
   readVideoDuration,
   clampSpotSeconds,
+  riskyVideoNotice,
   CREATIVE_ACCEPT,
 } from '@/lib/adCreative'
 import { CreativeImageEditor, type CreativeImageEditorHandle } from '@/components/app/CreativeImageEditor'
@@ -387,6 +388,11 @@ export function CreativeStep({
               />
             </label>
             <CreativeFitNotice file={file} />
+            {riskyVideoNotice(file) && (
+              <p className="rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
+                {riskyVideoNotice(file)}
+              </p>
+            )}
 
             {file && fileUrl && (
               <div className="space-y-3 pt-1">

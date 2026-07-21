@@ -12,7 +12,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
+import { PasswordInput } from '@/components/ui/password-input'
 import { Label } from '@/components/ui/label'
 
 export function UpdatePasswordForm({ role }: { role: 'advertiser' | 'host' | 'admin' }) {
@@ -46,9 +46,8 @@ export function UpdatePasswordForm({ role }: { role: 'advertiser' | 'host' | 'ad
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="password">New password</Label>
-            <Input
+            <PasswordInput
               id="password"
-              type="password"
               autoComplete="new-password"
               required
               minLength={6}
@@ -58,9 +57,8 @@ export function UpdatePasswordForm({ role }: { role: 'advertiser' | 'host' | 'ad
           </div>
           <div className="space-y-2">
             <Label htmlFor="confirm">Confirm new password</Label>
-            <Input
+            <PasswordInput
               id="confirm"
-              type="password"
               autoComplete="new-password"
               required
               minLength={6}

@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { PasswordInput } from '@/components/ui/password-input'
 import { Label } from '@/components/ui/label'
 
 // Self-service email + password management for the logged-in user. Lives on the
@@ -119,9 +120,8 @@ function ChangePassword({ onDone }: { onDone: () => void }) {
     <form onSubmit={save} className="mt-3 space-y-3 border-t pt-3">
       <div className="space-y-1.5">
         <Label htmlFor="acc-password">New password</Label>
-        <Input
+        <PasswordInput
           id="acc-password"
-          type="password"
           autoComplete="new-password"
           required
           minLength={6}
@@ -131,9 +131,8 @@ function ChangePassword({ onDone }: { onDone: () => void }) {
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="acc-confirm">Confirm new password</Label>
-        <Input
+        <PasswordInput
           id="acc-confirm"
-          type="password"
           autoComplete="new-password"
           required
           minLength={6}
