@@ -70,9 +70,16 @@ public class KioskWatchdogService extends Service {
         public void run() {
             try {
                 if (!isUnlocked() && shouldPullForward()) {
+                    // MainActivity is launchMode=singleTask, so NEW_TASK reuses
+                    // the existing instance and pulls its whole task to the front
+                    // in one shot. We deliberately do NOT add REORDER_TO_FRONT:
+                    // since our activity is already the top of its backgrounded
+                    // task, that flag makes the first several starts no-op (the
+                    // task never comes forward) and the bounce-back drags out to
+                    // several seconds on Fire OS. SINGLE_TOP routes the relaunch
+                    // through onNewIntent instead of recreating the WebView.
                     Intent i = new Intent(KioskWatchdogService.this, MainActivity.class);
                     i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
-                            | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
                             | Intent.FLAG_ACTIVITY_SINGLE_TOP);
                     startActivity(i);
                 }

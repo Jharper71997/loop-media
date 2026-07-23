@@ -289,10 +289,12 @@ public class MainActivity extends Activity {
     }
 
     private void showAdminDialog() {
-        final boolean locked = deviceOwner && !isUnlocked();
+        // The soft watchdog uses the same {@code unlocked} pref as the device-
+        // owner lock, so "locked" is simply "not unlocked" in either mode.
+        final boolean locked = !isUnlocked();
         final String lockLabel = locked
-            ? "Unlock for maintenance (Wi-Fi, etc.)"
-            : (deviceOwner ? "Re-lock kiosk" : "Kiosk lock not enabled on this stick");
+            ? "Unlock for setup (Wi-Fi, etc.)"
+            : "Re-lock kiosk";
         final String[] options = {
             "Reload screen", lockLabel, "Open Wi-Fi / device settings", "Unpair this screen", "Exit app"
         };
@@ -363,33 +365,38 @@ public class MainActivity extends Activity {
         getSharedPreferences(KIOSK_PREFS, MODE_PRIVATE).edit().putBoolean(KEY_UNLOCKED, v).apply();
     }
 
-    /** Hidden-menu toggle between locked kiosk and unlocked maintenance mode. */
+    /** Hidden-menu toggle between locked kiosk and unlocked maintenance mode.
+     *  Works in both modes: the soft watchdog stands down whenever {@code
+     *  unlocked} is true, and a device owner additionally releases lock-task. */
     private void toggleLock() {
-        if (!deviceOwner) {
-            Toast.makeText(this,
-                "This stick isn't a kiosk yet. Run the one-time adb set-device-owner step.",
-                Toast.LENGTH_LONG).show();
-            return;
-        }
         if (isUnlocked()) {
+            // Re-lock: the watchdog re-arms immediately; device owner re-pins.
             setUnlocked(false);
-            setSelfAsHome(true);
-            try { startLockTask(); } catch (Exception ignored) {}
+            if (deviceOwner) {
+                setSelfAsHome(true);
+                try { startLockTask(); } catch (Exception ignored) {}
+            }
             Toast.makeText(this, "Kiosk re-locked.", Toast.LENGTH_SHORT).show();
         } else {
+            // Unlock for setup: the watchdog stops bouncing so you can leave the
+            // app and reach Fire TV Settings (e.g. to join the host's Wi-Fi).
             setUnlocked(true);
-            try { stopLockTask(); } catch (Exception ignored) {}
-            setSelfAsHome(false);
+            if (deviceOwner) {
+                try { stopLockTask(); } catch (Exception ignored) {}
+                setSelfAsHome(false);
+            }
             Toast.makeText(this,
-                "Unlocked. Press Home to reach Settings. Re-lock from this menu when done.",
+                "Unlocked. Press Home to reach Settings and join Wi-Fi. Re-lock from this menu (MENU x3) when done.",
                 Toast.LENGTH_LONG).show();
         }
     }
 
-    /** Drop the lock so we're allowed to leave, then jump straight to Wi-Fi. */
+    /** Drop the lock so we're allowed to leave, then jump straight to Wi-Fi.
+     *  Always unlocks first (in either mode) so the soft watchdog does not yank
+     *  us out of Settings before the host's Wi-Fi is joined. */
     private void openSettingsForMaintenance() {
-        if (deviceOwner && !isUnlocked()) {
-            setUnlocked(true);
+        setUnlocked(true);
+        if (deviceOwner) {
             try { stopLockTask(); } catch (Exception ignored) {}
             setSelfAsHome(false);
         }
