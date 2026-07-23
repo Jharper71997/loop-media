@@ -6,6 +6,11 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- Granting this via `appops set ... SYSTEM_ALERT_WINDOW allow` restores
+         background-activity-launch on newer Fire OS, so the watchdog keeps
+         working there too. Harmless (and unused) if never granted. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
     <!-- A TV has no touchscreen; declare these optional so Fire TV / Android TV
          still install and show the app on the home row. -->
@@ -56,6 +61,13 @@
                 <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
             </intent-filter>
         </receiver>
+
+        <!-- Soft-kiosk watchdog: bounces the app back to the foreground after a
+             Home press, since a true OS kiosk lock is impossible on stock Fire
+             OS (protected launcher + parental-controls profile owner). -->
+        <service
+            android:name=".KioskWatchdogService"
+            android:exported="false" />
 
         <!-- Relaunch the kiosk automatically after a reboot / OS update. -->
         <receiver

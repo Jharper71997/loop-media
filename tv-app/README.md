@@ -28,7 +28,9 @@ unless the app is set as the launcher — an OS limit, not a code gap.
 1. On the Fire TV: Settings → My Fire TV → Developer options → **Install unknown
    apps** → enable for the **Downloader** app (one-time).
 2. Install **Downloader** (by AFTVnews) from the Fire TV app store if not present.
-3. Open Downloader, enter **`loopnetwork.org/app`**, download, Install, Open.
+3. Open Downloader, enter **`www.loopnetwork.org/app`**, download, Install, Open.
+   Type the `www.` — the bare apex 308s twice (http→https, then apex→www) and
+   Downloader hangs on "Connecting…" instead of following it.
 4. Enter the 4-character **pairing code** from the Loop Network dashboard. Done —
    it stays paired across reboots.
 
@@ -41,7 +43,7 @@ unless the app is set as the launcher — an OS limit, not a code gap.
 Built in the cloud by `.github/workflows/tv-app.yml` — no local Android SDK
 needed. Push to `main` (touching `tv-app/**`) or run the **Build TV APK**
 workflow manually. It publishes `loop-network-tv.apk` to the `tv-app-latest`
-release, which `loopnetwork.org/app` redirects to.
+release, which `www.loopnetwork.org/app` streams to the TV.
 
 Local build (if you have the Android SDK + JDK 17):
 

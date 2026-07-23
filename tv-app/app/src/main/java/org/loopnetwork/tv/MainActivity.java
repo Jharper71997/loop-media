@@ -45,7 +45,15 @@ import android.widget.FrameLayout;
  */
 public class MainActivity extends Activity {
 
-    private static final String TV_URL = "https://loopnetwork.org/tv";
+    // Use www. explicitly: the apex 308-redirects to www, so hitting the bare
+    // host would cost an extra round trip on every load and on every safety
+    // reload over days of uptime.
+    private static final String TV_URL = "https://www.loopnetwork.org/tv";
+
+    // Foreground state, read by KioskWatchdogService to decide when to pull the
+    // app back after a Home press. Static so the service sees it without binding.
+    static volatile boolean foreground = false;
+    static volatile long lastForegroundAt = 0;
 
     // Watchdog: the page pings us through the JS bridge. Hear nothing for this
     // long and the page has hung / white-screened, so reload it.
@@ -85,6 +93,7 @@ public class MainActivity extends Activity {
 
         setupKiosk();
         acquireLocks();
+        startWatchdog();
 
         root = new FrameLayout(this);
         setContentView(root);
@@ -196,6 +205,19 @@ public class MainActivity extends Activity {
         public void alive() { lastAlive = SystemClock.elapsedRealtime(); }
     }
 
+    /** Start the soft-kiosk watchdog that bounces the app back after a Home press.
+     *  Harmless if it can't start; the app still runs as a normal player. */
+    private void startWatchdog() {
+        try {
+            Intent svc = new Intent(this, KioskWatchdogService.class);
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                startForegroundService(svc);
+            } else {
+                startService(svc);
+            }
+        } catch (Exception ignored) {}
+    }
+
     private void acquireLocks() {
         try {
             PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
@@ -231,6 +253,8 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        foreground = true;
+        lastForegroundAt = SystemClock.elapsedRealtime();
         hideSystemBars();
         enterKioskIfLocked();
         if (web != null) web.onResume();
@@ -239,6 +263,8 @@ public class MainActivity extends Activity {
     @Override
     protected void onPause() {
         super.onPause();
+        foreground = false;
+        lastForegroundAt = SystemClock.elapsedRealtime();
         if (web != null) web.onPause();
     }
 
