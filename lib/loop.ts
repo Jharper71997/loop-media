@@ -18,15 +18,11 @@ export function adSlotCount(loopLengthSeconds: number, slotSeconds: number): num
 }
 
 // The always-on Loop Network house slides every screen injects on top of paid ads:
-// the Brew Loop ad + the "advertise on this screen" card (always, = 2), the trivia
-// teaser where trivia is on (+1), and one per authored filler card for the venue's
-// territory. Keep in sync with buildPlaylist() in app/tv/TvPlayer.tsx and the
-// house-slide assembly in app/api/tv/loop/route.ts.
-export function houseSlideCount(opts: {
-  triviaEnabled?: boolean | null
-  fillerCards?: number
-}): number {
-  return 2 + (opts.triviaEnabled ? 1 : 0) + Math.max(0, Math.floor(opts.fillerCards ?? 0))
+// the Brew Loop ad + the "advertise on this screen" card (always, = 2) and the
+// trivia teaser where trivia is on (+1). Keep in sync with buildPlaylist() in
+// app/tv/TvPlayer.tsx and the house-slide assembly in app/api/tv/loop/route.ts.
+export function houseSlideCount(opts: { triviaEnabled?: boolean | null }): number {
+  return 2 + (opts.triviaEnabled ? 1 : 0)
 }
 
 // The occupancy a screen shows everywhere, with house slides counted as filled.

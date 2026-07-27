@@ -6,7 +6,6 @@ import { Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
-import { Label } from '@/components/ui/label'
 import { CREATIVE_ACCEPT, validateCreativeFile } from '@/lib/adCreative'
 import { setHouseCreative, type HouseKind } from './actions'
 
@@ -30,7 +29,6 @@ export function HouseUploader({
 }) {
   const router = useRouter()
   const inputRef = useRef<HTMLInputElement>(null)
-  const [showQr, setShowQr] = useState(true)
   const [pending, start] = useTransition()
   const [busy, setBusy] = useState(false)
 
@@ -59,7 +57,6 @@ export function HouseUploader({
           territoryId,
           creativeType,
           creativeUrl: url,
-          showQr,
         })
         if (res.error) toast.error(res.error)
         else {
@@ -96,15 +93,6 @@ export function HouseUploader({
         <Upload className="mr-2 size-4" />
         {busy || pending ? 'Uploading…' : 'Upload replacement'}
       </Button>
-      <Label className="flex items-center gap-2 text-sm font-normal text-muted-foreground">
-        <input
-          type="checkbox"
-          checked={showQr}
-          onChange={(e) => setShowQr(e.target.checked)}
-          className="size-4 accent-primary"
-        />
-        Keep the scan QR on top
-      </Label>
     </div>
   )
 }

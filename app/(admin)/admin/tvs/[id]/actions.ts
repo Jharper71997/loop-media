@@ -118,11 +118,10 @@ const HOUSE_SECONDS_COLUMN: Record<string, string> = {
   brewloop: 'brewloop_seconds',
   advertise: 'advertise_seconds',
   trivia: 'trivia_slide_seconds',
-  filler: 'filler_seconds',
 }
 
-// Set how long a HOUSE slide (Brew Loop ad / "Advertise here" card / trivia teaser
-// / filler card) holds on THIS screen. Stored per-screen on tvs; the TV player
+// Set how long a HOUSE slide (Brew Loop ad / "Advertise here" card / trivia
+// teaser) holds on THIS screen. Stored per-screen on tvs; the TV player
 // reads it and falls back to its built-in default when null. Territory-guarded.
 export async function updateHouseSlideSeconds(tvId: string, kind: string, seconds: number) {
   const profile = await requireAdmin()

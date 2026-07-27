@@ -20,7 +20,6 @@ export async function setHouseCreative(input: {
   territoryId: string | null
   creativeType: 'image' | 'video'
   creativeUrl: string
-  showQr: boolean
 }) {
   await requireAdmin()
   if (!KINDS.includes(input.kind)) return { error: 'Unknown house slide.' }
@@ -44,7 +43,7 @@ export async function setHouseCreative(input: {
     territory_id: input.territoryId,
     creative_type: input.creativeType,
     creative_url: input.creativeUrl,
-    show_qr: input.showQr,
+    show_qr: false,
   })
   if (error) return { error: error.message }
 

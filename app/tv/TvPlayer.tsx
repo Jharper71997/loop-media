@@ -30,11 +30,6 @@ type AdItem = {
   qr_size?: number
 }
 
-type FillerCard = {
-  type: 'weather' | 'sports' | 'trivia' | 'event' | 'promo'
-  payload: { headline?: string; sub?: string; foot?: string }
-}
-
 // A house slide (the Brew Loop ad, the "advertise here" card). `url` + `qr_image`
 // are always there. The creative_* fields appear ONLY when an admin has uploaded a
 // replacement for that slide (migration 0063) — without them the player draws its
@@ -44,10 +39,6 @@ type HouseSlide = {
   qr_image: string
   creative_type?: 'image' | 'video'
   creative_url?: string
-  show_qr?: boolean
-  qr_x?: number
-  qr_y?: number
-  qr_size?: number
 }
 
 type Manifest = {
@@ -59,7 +50,6 @@ type Manifest = {
     brewloop_seconds?: number | null
     advertise_seconds?: number | null
     trivia_slide_seconds?: number | null
-    filler_seconds?: number | null
     // Overscan safe-area inset per side, as a % of each dimension (migration 0052).
     // Absent in older cached manifests, so optional — the player falls back to the
     // DEFAULT_OVERSCAN_PCT constant below.
@@ -67,7 +57,6 @@ type Manifest = {
   }
   venue: { id: string; name: string; lat: number | null; lng: number | null; territory: { name: string } | null } | null
   items: AdItem[]
-  filler?: FillerCard[]
   trivia?: { code: string; url: string; qr_image: string } | null
   advertise?: HouseSlide | null
   brewloop?: HouseSlide | null
@@ -77,18 +66,16 @@ type Manifest = {
 
 type Slide =
   | (AdItem & { kind: 'ad' })
-  | { kind: 'clock' }
   | { kind: 'trivia' }
   | { kind: 'promo' }
   | { kind: 'brewloop' }
-  | { kind: 'filler'; card: FillerCard }
 
-// Fallback hold time for the house slides (Brew Loop ad, "advertise here" card,
-// authored filler) when a screen has no per-screen value — an older cached manifest,
-// or a row predating the explicit defaults. 15s to match a paid slot, so house cards
-// run at the same beat as the ads around them. Mirrors DEFAULT_HOUSE_SLIDE_SECONDS
-// in lib/tv.ts (which this client component can't import — it pulls in node:crypto).
-const FILLER_SECONDS = 15
+// Fallback hold time for the house slides (the Brew Loop ad and the "advertise
+// here" card) when a screen has no per-screen value — an older cached manifest, or a
+// row predating the explicit defaults. 15s to match a paid slot, so house cards run
+// at the same beat as the ads around them. Mirrors DEFAULT_HOUSE_SLIDE_SECONDS in
+// lib/tv.ts (which this client component can't import — it pulls in node:crypto).
+const HOUSE_SLIDE_SECONDS = 15
 // Trivia holds the same 15s as everything else. It used to run longer on the
 // theory that a question needs more dwell than a filler card, but a house slide
 // that outlasts a paid slot costs the screen sellable inventory, and the loop
@@ -127,19 +114,6 @@ const LOAD_GRACE_MS = 10_000
 
 function buildPlaylist(m: Manifest): Slide[] {
   const slot = m.tv.slot_seconds || 15
-  // Static QR-less trivia cards were retired — the live (QR) trivia game is the
-  // only trivia now. Belt-and-suspenders: never render a trivia filler card even
-  // if one lingers in the data.
-  const cards = (m.filler ?? []).filter((c) => c.type !== 'trivia')
-  // Between-ad filler pool: AUTHORED cards only, cycled after ads. The live trivia
-  // teaser is deliberately NOT in this pool — it's inserted ONCE per loop (below).
-  // Otherwise a single-item pool (just trivia, the common case) put a trivia slide
-  // after EVERY ad — "ad, trivia, ad, trivia". Trivia should show once per cycle.
-  const fillerPool: Slide[] = cards.map((card) => ({ kind: 'filler' as const, card }))
-  let fi = 0
-  const nextFiller = (): Slide | null =>
-    fillerPool.length ? fillerPool[fi++ % fillerPool.length] : null
-
   // The Jville Brew Loop house ad plays on EVERY screen (only when the manifest
   // carries it). It leads the loop so a screen opens with real content.
   const brewloop: Slide[] = m.brewloop ? [{ kind: 'brewloop' }] : []
@@ -149,33 +123,19 @@ function buildPlaylist(m: Manifest): Slide[] {
 
   if (!m.items.length) {
     // No ads sold yet: lead with the Brew Loop ad, then the single trivia teaser,
-    // then any authored cards, then the "advertise on this screen" house slide
-    // LAST — a new screen shouldn't open by begging for advertisers.
-    return [...brewloop, ...triviaOnce, ...fillerPool, { kind: 'promo' }]
+    // then the "advertise on this screen" house slide LAST — a new screen
+    // shouldn't open by begging for advertisers.
+    return [...brewloop, ...triviaOnce, { kind: 'promo' }]
   }
   const out: Slide[] = [...brewloop]
   m.items.forEach((it, i) => {
     out.push({ ...it, kind: 'ad', duration: it.duration || slot })
-    // Trivia teaser goes in ONCE, after the first ad. Every other gap draws an
-    // authored filler card if there is one; otherwise ads just run back to back.
-    if (i === 0 && triviaOnce.length) {
-      out.push(triviaOnce[0])
-    } else {
-      const f = nextFiller()
-      if (f) out.push(f)
-    }
+    // Trivia teaser goes in ONCE, after the first ad; every other gap runs ads
+    // back to back.
+    if (i === 0 && triviaOnce.length) out.push(triviaOnce[0])
   })
   out.push({ kind: 'promo' })
   return out
-}
-
-// Badge label for an authored filler card.
-function fillerLabel(type: FillerCard['type']): string {
-  if (type === 'trivia') return 'Trivia'
-  if (type === 'event') return "What's on"
-  if (type === 'sports') return 'Game day'
-  if (type === 'promo') return 'Featured'
-  return ''
 }
 
 export function TvPlayer() {
@@ -374,7 +334,6 @@ function Player({
   const [manifest, setManifest] = useState<Manifest | null>(null)
   const [index, setIndex] = useState(0)
   const [stale, setStale] = useState(false)
-  const [now, setNow] = useState(() => new Date())
   const [fatal, setFatal] = useState<string | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -599,12 +558,6 @@ function Player({
     }
   }, [deviceId, deviceSecret, preview])
 
-  // Clock tick.
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 1000)
-    return () => clearInterval(id)
-  }, [])
-
   // Memoized so the playlist (and the current `slide`) keep a stable reference
   // between renders. Without this, the 1s clock tick rebuilt `slide` every
   // second, which reset the advance timer below before it could fire — freezing
@@ -625,8 +578,8 @@ function Player({
   )
 
   // How long this slide holds. Videos manage their own advance (own `ended`, capped
-  // at the slot — see VideoAdSlide); everything else (images, filler, promo) uses the
-  // admin-set seconds on the timer below.
+  // at the slot — see VideoAdSlide); everything else uses the admin-set seconds on
+  // the timer below.
   const isVideoAd = slide?.kind === 'ad' && slide.creative_type === 'video'
   // Ads use their own per-ad seconds; each house slide uses its per-screen time
   // (admin-set on the screen page) or falls back to the built-in default.
@@ -637,10 +590,8 @@ function Player({
       : slide.kind === 'trivia'
         ? (manifest?.tv.trivia_slide_seconds ?? TRIVIA_SLIDE_SECONDS)
         : slide.kind === 'brewloop'
-          ? (manifest?.tv.brewloop_seconds ?? FILLER_SECONDS)
-          : slide.kind === 'promo'
-            ? (manifest?.tv.advertise_seconds ?? FILLER_SECONDS)
-            : (manifest?.tv.filler_seconds ?? FILLER_SECONDS)
+          ? (manifest?.tv.brewloop_seconds ?? HOUSE_SLIDE_SECONDS)
+          : (manifest?.tv.advertise_seconds ?? HOUSE_SLIDE_SECONDS)
 
   // Advance the loop on a timer keyed to PRIMITIVES (index, length, this slide's
   // duration/kind) — never the rebuilt `slide` object — so unrelated re-renders
@@ -773,36 +724,6 @@ function Player({
           onExpire={trivia.refetch}
           qrImage={manifest.trivia?.qr_image ?? ''}
         />
-      ) : slide.kind === 'clock' ? (
-        <FillerFrame title="Loop Network">
-          <div className="text-9xl font-semibold tabular-nums">
-            {now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
-          </div>
-          <div className="mt-3 text-3xl text-white/60">
-            {now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-          </div>
-        </FillerFrame>
-      ) : slide.kind === 'filler' ? (
-        <FillerFrame title="Loop Network">
-          {fillerLabel(slide.card.type) && (
-            <div className="mb-6 rounded-full bg-primary px-5 py-1.5 text-2xl font-semibold tracking-wide text-primary-foreground">
-              {fillerLabel(slide.card.type)}
-            </div>
-          )}
-          {slide.card.payload.headline && (
-            <div className="max-w-5xl px-8 text-6xl font-semibold leading-tight">
-              {slide.card.payload.headline}
-            </div>
-          )}
-          {slide.card.payload.sub && (
-            <div className="mt-5 max-w-4xl px-8 text-4xl text-white/70">
-              {slide.card.payload.sub}
-            </div>
-          )}
-          {slide.card.payload.foot && (
-            <div className="mt-4 text-2xl text-white/40">{slide.card.payload.foot}</div>
-          )}
-        </FillerFrame>
       ) : slide.kind === 'brewloop' ? (
         manifest.brewloop?.creative_url ? (
           <HouseCreativeSlide house={manifest.brewloop} />
@@ -963,42 +884,19 @@ function VideoAdSlide({ src, cutMs, onDone }: { src: string; cutMs: number; onDo
 // like a paid ad — object-contain inside the 1080p stage, so a creative that isn't
 // exactly 16:9 letterboxes instead of cropping or stretching.
 //
+// NOTHING is drawn on top. An uploaded house creative is the whole slide: the app
+// stamped a QR over it at first, which put a code on artwork that was already
+// designed as a finished ad. Whatever the creative needs to say, it says itself.
+//
 // Video LOOPS here, unlike a video ad. An ad owns its slot and advances the loop on
 // `ended`; a house slide is held by the same timer as every other slide, so a clip
 // shorter than the hold would otherwise freeze on its last frame for the remainder.
 function HouseCreativeSlide({ house }: { house: HouseSlide }) {
-  const showQr = house.show_qr !== false && !!house.qr_image
-  return (
-    <>
-      {house.creative_type === 'video' ? (
-        <CreativeVideo
-          src={house.creative_url!}
-          className="lm-fade"
-          autoPlay
-          muted
-          playsInline
-          loop
-        />
-      ) : (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={house.creative_url!}
-          alt=""
-          className="lm-fade h-full w-full object-contain"
-        />
-      )}
-      {/* Same overlay math as a paid ad, so a house creative's QR sits exactly where
-          the admin placed it in the editor preview. Off for a creative that bakes
-          its own code into the artwork. */}
-      {showQr && (
-        <QrChip
-          src={house.qr_image}
-          x={house.qr_x ?? 0.88}
-          y={house.qr_y ?? 0.82}
-          size={house.qr_size ?? QR_SIZE_DEFAULT}
-        />
-      )}
-    </>
+  return house.creative_type === 'video' ? (
+    <CreativeVideo src={house.creative_url!} className="lm-fade" autoPlay muted playsInline loop />
+  ) : (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={house.creative_url!} alt="" className="lm-fade h-full w-full object-contain" />
   )
 }
 
@@ -1568,19 +1466,6 @@ function AdvertiseAd({ qrImage }: { qrImage: string }) {
           </div>
         )}
       </div>
-    </div>
-  )
-}
-
-function FillerFrame({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="relative flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-[#1c1813] via-[#100e0a] to-black text-center text-white">
-      {children}
-      {title && (
-        <div className="absolute left-8 top-6 font-heading text-lg font-semibold tracking-[0.18em] text-primary/80">
-          LOOP NETWORK
-        </div>
-      )}
     </div>
   )
 }
