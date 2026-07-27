@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { roundPhase } from '@/lib/trivia'
+import { ANSWER_SECONDS, ROUND_SECONDS, pointsFor, roundPhase } from '@/lib/trivia'
 import { resolveVenueQuestion } from '@/lib/triviaQuestions'
 import { verifyPlayerToken } from '@/lib/triviaToken'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
@@ -61,13 +61,30 @@ export async function POST(req: Request) {
   }
   const correct = choiceIdx === question.correct_idx
 
-  const { error } = await supabase.from('trivia_answers').insert({
+  // Speed scoring. Points come from how far into the answer window THIS REQUEST
+  // arrived by the server's own clock — the phone shows a live countdown of what
+  // the question is worth, but it never gets to claim a number (a patched client
+  // would otherwise post "1000" every round). A wrong answer banks nothing and
+  // costs nothing.
+  const elapsedMs = ((now / 1000) % ROUND_SECONDS) * 1000
+  const points = correct ? pointsFor(Math.min(elapsedMs, ANSWER_SECONDS * 1000)) : 0
+
+  const row = {
     player_id: playerId,
     venue_id: player.venue_id,
     round,
     choice_idx: choiceIdx,
     is_correct: correct,
-  })
+  }
+  let { error } = await supabase.from('trivia_answers').insert({ ...row, points })
+  // Migrations here are applied by hand, so this code can reach production before
+  // 0061 adds trivia_answers.points. Rather than 500 on every answer until someone
+  // runs the SQL, record the answer without a score and let it start counting the
+  // moment the column exists.
+  if ((error as { code?: string } | null)?.code === '42703') {
+    console.warn('trivia: points column missing — apply migration 0061_trivia_points.sql')
+    ;({ error } = await supabase.from('trivia_answers').insert(row))
+  }
   if (error) {
     if ((error as { code?: string }).code === '23505') {
       return NextResponse.json({ error: 'You already answered this round.' }, { status: 409 })
@@ -75,5 +92,5 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Could not record answer.' }, { status: 500 })
   }
 
-  return NextResponse.json({ correct, correctIdx: question.correct_idx })
+  return NextResponse.json({ correct, correctIdx: question.correct_idx, points })
 }

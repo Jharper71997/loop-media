@@ -5,7 +5,7 @@ import Image from 'next/image'
 import { QR_SIZE_DEFAULT } from '@/lib/adCreative'
 import { QrChip } from '@/components/app/QrChip'
 import { CreativeVideo } from '@/components/app/CreativeVideo'
-import { ANSWER_SECONDS, ROUND_SECONDS } from '@/lib/trivia'
+import { ANSWER_SECONDS, ROUND_SECONDS, pointsWithMsLeft } from '@/lib/trivia'
 import { cn } from '@/lib/utils'
 
 const DEVICE_KEY = 'lm_device'
@@ -1143,6 +1143,9 @@ function TriviaSlide({ venueId, qrImage }: { venueId: string; qrImage: string })
   // color change is what pulls an eye back mid-round.
   const urgent = !reveal && secs <= 5
   const warm = !reveal && secs <= 15
+  // Points the current question is still worth (same curve the phone counts down
+  // and the server pays out).
+  const worth = pointsWithMsLeft(secs * 1000)
   const timeColor = reveal
     ? 'text-success'
     : urgent
@@ -1189,20 +1192,33 @@ function TriviaSlide({ venueId, qrImage }: { venueId: string; qrImage: string })
             <span className="relative inline-flex size-3.5 rounded-full bg-primary" />
           </span>
           {live && (
+            // Flex with a gap rather than text + spaces: the animated counters are
+            // inline-block, and inter-element whitespace around them is not reliable.
             <span
               className={cn(
-                'rounded-full border px-5 py-1.5 text-2xl tabular-nums transition-colors duration-500',
-                urgent ? 'border-red-400/40 bg-red-500/10' : 'border-white/15 bg-white/5',
-                reveal ? 'text-white/70' : 'text-white/70'
+                'inline-flex items-center gap-2 rounded-full border px-5 py-1.5 text-2xl tabular-nums text-white/70 transition-colors duration-500',
+                urgent ? 'border-red-400/40 bg-red-500/10' : 'border-white/15 bg-white/5'
               )}
             >
-              {reveal ? 'Answer' : 'Time left'}{' '}
+              <span>{reveal ? 'Answer' : 'Time left'}</span>
               <span
                 key={secs}
                 className={cn('lm-tick font-bold', timeColor, urgent && 'lm-urgent')}
               >
                 {secs}s
               </span>
+              {!reveal && (
+                // What the question is worth RIGHT NOW, falling every second. This is
+                // the hook for someone who hasn't joined: the screen is visibly
+                // handing out fewer points the longer they sit there.
+                <>
+                  <span className="mx-1 text-white/25">|</span>
+                  <span key={`w${worth}`} className="lm-tick font-bold text-white">
+                    {worth.toLocaleString()}
+                  </span>
+                  <span className="text-white/50">pts</span>
+                </>
+              )}
             </span>
           )}
         </div>
@@ -1295,7 +1311,8 @@ function TriviaSlide({ venueId, qrImage }: { venueId: string; qrImage: string })
         <div className="mt-5 text-center text-3xl font-semibold text-white/85">
           Scan to play <span className="text-primary">free</span>
         </div>
-        <div className="mt-8 w-full">
+        <div className="mt-2 text-center text-xl text-white/50">Fastest answer wins the most</div>
+        <div className="mt-7 w-full">
           <div className="text-sm uppercase tracking-[0.2em] text-white/40">
             This Week&apos;s Leaders
           </div>
@@ -1310,7 +1327,9 @@ function TriviaSlide({ venueId, qrImage }: { venueId: string; qrImage: string })
                   <span className="min-w-0 truncate">
                     <span className={cn(i === 0 && 'text-primary')}>{i + 1}.</span> {p.name}
                   </span>
-                  <span className="ml-3 shrink-0 font-mono text-primary">{p.score}</span>
+                  <span className="ml-3 shrink-0 font-mono text-primary">
+                    {p.score.toLocaleString()}
+                  </span>
                 </li>
               ))}
             </ol>

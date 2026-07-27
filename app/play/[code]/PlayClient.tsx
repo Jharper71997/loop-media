@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { MAX_POINTS, pointsWithMsLeft } from '@/lib/trivia'
 
 type TriviaState = {
   round: number
@@ -12,7 +13,7 @@ type TriviaState = {
   question: { prompt: string; choices: string[] }
   correctIdx: number | null
   leaderboard: { name: string; score: number }[]
-  you: { answered: boolean; choiceIdx: number | null; score: number } | null
+  you: { answered: boolean; choiceIdx: number | null; score: number; awarded: number | null } | null
   sponsors?: {
     adId: string | null
     tvId: string | null
@@ -37,6 +38,13 @@ export function PlayClient({ code }: { code: string }) {
   const [locked, setLocked] = useState(false) // locked in this round (local echo)
   const [submitting, setSubmitting] = useState(false)
   const roundRef = useRef<number | null>(null)
+  // What the question is worth right now, ticking down between polls. Anchored to
+  // the server's endsInMs on every poll so a phone with a wrong clock still sees
+  // the real number.
+  const [worth, setWorth] = useState(MAX_POINTS)
+  const worthAnchor = useRef<{ endsAt: number } | null>(null)
+  // What the last locked-in answer actually banked (server-authoritative).
+  const [awarded, setAwarded] = useState<number | null>(null)
 
   // Restore a prior join for this game code.
   useEffect(() => {
@@ -101,7 +109,12 @@ export function PlayClient({ code }: { code: string }) {
           roundRef.current = data.round
           setPicked(null) // new question → clear tentative pick
           setLocked(false)
+          setAwarded(null)
         }
+        // Re-anchor the points counter to the server's clock on every poll.
+        worthAnchor.current =
+          data.phase === 'question' ? { endsAt: Date.now() + Math.max(0, data.endsInMs) } : null
+        if (data.you?.awarded != null) setAwarded(data.you.awarded)
         setState(data)
       } catch {
         /* keep last */
@@ -115,6 +128,17 @@ export function PlayClient({ code }: { code: string }) {
     }
   }, [join])
 
+  // Tick the live points counter down between polls. Four times a second, because
+  // a value that visibly slides is the whole point — a number that only moved when
+  // the poll landed would read as a static label.
+  useEffect(() => {
+    const id = setInterval(() => {
+      const a = worthAnchor.current
+      setWorth(a ? pointsWithMsLeft(Math.max(0, a.endsAt - Date.now())) : MAX_POINTS)
+    }, 250)
+    return () => clearInterval(id)
+  }, [])
+
   // Tapping a choice only PICKS it (highlights). Nothing is recorded until the
   // player presses "Lock it in" — that's the actual submit.
   const lockIn = useCallback(async () => {
@@ -123,7 +147,7 @@ export function PlayClient({ code }: { code: string }) {
     setLocked(true)
     setSubmitting(true)
     try {
-      await fetch('/api/trivia/answer', {
+      const res = await fetch('/api/trivia/answer', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -135,6 +159,10 @@ export function PlayClient({ code }: { code: string }) {
           round: state.round,
         }),
       })
+      // The server's award is the real number (it scores off its own clock, not
+      // the counter on this phone). Show it the instant it comes back.
+      const data = await res.json().catch(() => null)
+      if (res.ok && data && typeof data.points === 'number') setAwarded(data.points)
     } catch {
       /* the next poll reflects the truth */
     } finally {
@@ -208,12 +236,50 @@ export function PlayClient({ code }: { code: string }) {
           <span className="font-heading font-bold text-primary">Loop Network</span>
         </span>
         <span className="font-mono text-primary">
-          {(state?.you?.score ?? 0) > 0 ? `🔥 ${state?.you?.score} in a row` : '0 in a row'}
+          {(state?.you?.score ?? 0).toLocaleString()} pts
         </span>
       </div>
 
       {state ? (
         <div className="mt-6 w-full max-w-md">
+          {/* Live value of the question. Draining on screen is what makes people
+              answer NOW instead of waiting for the table to agree. Once they've
+              locked in, it flips to what they actually banked. */}
+          <div className="mb-4 flex items-baseline justify-center gap-2">
+            {answered ? (
+              <>
+                <span
+                  className={cn(
+                    'font-mono text-4xl font-bold tabular-nums',
+                    (awarded ?? 0) > 0 ? 'text-success' : 'text-muted-foreground'
+                  )}
+                >
+                  {(awarded ?? 0) > 0 ? `+${(awarded ?? 0).toLocaleString()}` : '+0'}
+                </span>
+                <span className="text-sm text-muted-foreground">
+                  {state.phase === 'results'
+                    ? (awarded ?? 0) > 0
+                      ? 'nice'
+                      : 'no points this round'
+                    : 'locked in'}
+                </span>
+              </>
+            ) : state.phase === 'question' ? (
+              <>
+                <span
+                  className={cn(
+                    'font-mono text-4xl font-bold tabular-nums transition-colors',
+                    worth <= 300 ? 'text-destructive' : worth <= 600 ? 'text-amber-400' : 'text-primary'
+                  )}
+                >
+                  {worth.toLocaleString()}
+                </span>
+                <span className="text-sm text-muted-foreground">points, dropping</span>
+              </>
+            ) : (
+              <span className="text-sm text-muted-foreground">Next question coming up</span>
+            )}
+          </div>
           <div className="min-h-[3.5rem] text-center text-2xl font-semibold leading-snug text-foreground">
             {state.question.prompt}
           </div>
@@ -249,7 +315,11 @@ export function PlayClient({ code }: { code: string }) {
               disabled={picked == null || submitting}
               className="mt-4 h-14 w-full text-lg"
             >
-              {submitting ? 'Locking in…' : picked == null ? 'Pick an answer' : 'Lock it in'}
+              {submitting
+                ? 'Locking in…'
+                : picked == null
+                  ? 'Pick an answer'
+                  : `Lock it in for ${worth.toLocaleString()}`}
             </Button>
           )}
 
@@ -301,7 +371,9 @@ export function PlayClient({ code }: { code: string }) {
                     <span>
                       {i + 1}. {p.name}
                     </span>
-                    <span className="font-mono text-muted-foreground">{p.score}</span>
+                    <span className="font-mono text-muted-foreground">
+                      {p.score.toLocaleString()}
+                    </span>
                   </li>
                 ))}
               </ol>

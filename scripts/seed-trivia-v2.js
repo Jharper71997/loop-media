@@ -80,6 +80,51 @@ const GLOBAL = [
   ['Which US state has the most coastline?', ['Florida', 'Alaska', 'California', 'Texas'], 1],
   ['Which president is on the $50 bill?', ['Ulysses S. Grant', 'Andrew Jackson', 'Alexander Hamilton', 'Benjamin Franklin'], 0],
   ['How many ribs does the average person have?', ['Twelve', 'Twenty', 'Twenty-four', 'Thirty'], 2],
+  // Second batch. The old pool is being retired wholesale, so the new one has to
+  // be big enough to not repeat inside a shift — at one question a minute, ~115
+  // questions is about two hours before anyone sees a repeat.
+  ['Which US state has a one-syllable name?', ['Maine', 'Utah', 'Ohio', 'Texas'], 0],
+  ['How many bones does a shark have?', ['None', 'Twelve', 'Sixty', 'Two hundred'], 0],
+  ['What is the loudest animal on Earth?', ['Sperm whale', 'Lion', 'Howler monkey', 'Elephant'], 0],
+  ['Which US coin shows a president facing right?', ['Penny', 'Nickel', 'Dime', 'Quarter'], 0],
+  ['What is the most common last name in the US?', ['Smith', 'Johnson', 'Williams', 'Brown'], 0],
+  ['How many dots are on a pair of dice?', ['21', '36', '42', '48'], 2],
+  ['How many squares are on a chessboard?', ['36', '49', '64', '81'], 2],
+  ['In poker, which hand beats a flush?', ['Full house', 'Straight', 'Three of a kind', 'Two pair'], 0],
+  ['Which number is spelled with its letters in alphabetical order?', ['Forty', 'Sixty', 'Ninety', 'Thirty'], 0],
+  ['Which planet has the shortest day?', ['Jupiter', 'Mercury', 'Earth', 'Mars'], 0],
+  ['Which is the hottest planet in the solar system?', ['Mercury', 'Venus', 'Mars', 'Jupiter'], 1],
+  ['What is the fastest fish in the ocean?', ['Sailfish', 'Great white shark', 'Tuna', 'Marlin'], 0],
+  ['Which animal sleeps the most each day?', ['Koala', 'Sloth', 'House cat', 'Bear'], 0],
+  ['What do you call a group of flamingos?', ['A flamboyance', 'A flock', 'A parade', 'A blush'], 0],
+  ['About how much of Earth’s surface is water?', ['50%', '61%', '71%', '85%'], 2],
+  ['Which country has the most islands?', ['Sweden', 'Indonesia', 'Philippines', 'Canada'], 0],
+  ['Which language has the most total speakers worldwide?', ['English', 'Mandarin Chinese', 'Spanish', 'Hindi'], 0],
+  ['Which state was the first admitted to the Union?', ['Delaware', 'Virginia', 'Massachusetts', 'Pennsylvania'], 0],
+  ['Which amendment protects freedom of speech?', ['The First', 'The Second', 'The Fourth', 'The Fifth'], 0],
+  ['How many keys are on a standard piano?', ['76', '88', '96', '100'], 1],
+  ['What is the best-selling album of all time?', ['Thriller', 'Back in Black', 'The Dark Side of the Moon', 'Hotel California'], 0],
+  ['Which nut is marzipan made from?', ['Almond', 'Walnut', 'Cashew', 'Pecan'], 0],
+  ['What is the main ingredient in hummus?', ['Chickpeas', 'Lentils', 'White beans', 'Green peas'], 0],
+  ['Which fruit carries its seeds on the outside?', ['Strawberry', 'Blueberry', 'Grape', 'Kiwi'], 0],
+  ['What is the largest desert in the world?', ['Antarctica', 'The Sahara', 'The Gobi', 'The Arabian'], 0],
+  ['How many time zones does Russia have?', ['Eleven', 'Seven', 'Nine', 'Fifteen'], 0],
+  ['What is the smallest country in the world?', ['Vatican City', 'Monaco', 'San Marino', 'Malta'], 0],
+  ['Which US state has the most active volcanoes?', ['Alaska', 'Hawaii', 'California', 'Washington'], 0],
+  ['What is the deepest point in the ocean called?', ['The Mariana Trench', 'The Puerto Rico Trench', 'The Java Trench', 'The Tonga Trench'], 0],
+  ['What color are airplane "black boxes"?', ['Orange', 'Black', 'Yellow', 'Red'], 0],
+  ['Which country gets the most tourists each year?', ['France', 'The United States', 'Spain', 'Italy'], 0],
+  ['How many strings does a bass guitar usually have?', ['Four', 'Five', 'Six', 'Seven'], 0],
+  ['Which decade did the first Star Wars movie come out?', ['The 1970s', 'The 1960s', 'The 1980s', 'The 1990s'], 0],
+  ['Who played Jack in Titanic?', ['Leonardo DiCaprio', 'Brad Pitt', 'Matt Damon', 'Johnny Depp'], 0],
+  ['Which superhero is from the planet Krypton?', ['Superman', 'Batman', 'Iron Man', 'Thor'], 0],
+  ['What is the only sport ever played on the moon?', ['Golf', 'Baseball', 'Tennis', 'Soccer'], 0],
+  ['How many players are on a basketball court at once?', ['Ten', 'Eight', 'Twelve', 'Fourteen'], 0],
+  ['Which animal has fingerprints almost identical to a human’s?', ['Koala', 'Chimpanzee', 'Gorilla', 'Orangutan'], 0],
+  ['What year did humans first walk on the moon?', ['1969', '1965', '1972', '1959'], 0],
+  ['A lightning bolt is how hot compared to the sun’s surface?', ['About five times hotter', 'About half as hot', 'About the same', 'Ten times cooler'], 0],
+  ['In hockey, a hat trick is three what?', ['Goals', 'Assists', 'Penalties', 'Saves'], 0],
+  ['How many minutes are on the clock in an NFL game?', ['48', '60', '72', '90'], 1],
 ]
 
 const LOCAL_NC = [
@@ -122,42 +167,14 @@ const LOCAL_USMC = [
   ['Chesty Puller earned a record how many Navy Crosses?', ['Three', 'Four', 'Five', 'Six'], 2],
 ]
 
-// --- Questions to retire -------------------------------------------------------
-// Matched on exact prompt. Two groups: the clipped seed rows that read like flash
-// cards on a 1080p screen ("Largest planet?"), and the ones no adult gets wrong.
-const RETIRE = [
-  'Largest planet?',
-  'Continents on Earth?',
-  'Symbol for gold?',
-  'Eiffel Tower country?',
-  'Strings on a guitar?',
-  'Tallest animal?',
-  'Largest ocean?',
-  'First iPhone year?',
-  'Gas plants absorb?',
-  'Minutes in a day?',
-  'What do you call a baby dog?',
-  'How many sides does a stop sign have?',
-  'How many colors are in a rainbow?',
-  'What is the smallest prime number?',
-  'What is the chemical symbol for oxygen?',
-  'In which sport would you perform a slam dunk?',
-  'How many legs does a spider have?',
-  'How many zeros are in one million?',
-  'How many sides does a hexagon have?',
-  'What color do you get by mixing red and white?',
-  'What color do you get by mixing blue and yellow?',
-  'What is the boiling point of water in Celsius?',
-  'What is the freezing point of water in Fahrenheit?',
-  'What does a thermometer measure?',
-  'How many seconds are in one minute?',
-  'What is frozen water called?',
-  'How many feet are in a yard?',
-  'How many days are in a leap year?',
-  'How many planets are in our solar system?',
-  'Which holiday falls on the 25th of December?',
-  'What is the chemical formula for water?',
-]
+// --- Retiring the old pool -----------------------------------------------------
+// Every pre-existing question goes inactive, not just the worst ones. They were all
+// the same flavor of grade-school general knowledge, and keeping the "decent" half
+// would just dilute the new pool — a good question competing with "How many feet
+// are in a yard?" still loses the room. Nothing is deleted: this flips active to
+// false, so `update trivia_questions set active = true where created_at < '<date>'`
+// puts them all back.
+const RETIRE_ALL_EXISTING = true
 
 function env() {
   const file = path.join(__dirname, '..', '.env.local')
@@ -219,7 +236,7 @@ async function main() {
 
   // Sanity: 4 choices, a valid answer index, no duplicate choices, no duplicate
   // prompts against what's already live. A bad row here shows on a wall in a bar.
-  const { data: existing } = await sb.from('trivia_questions').select('prompt, active')
+  const { data: existing } = await sb.from('trivia_questions').select('id, prompt, active')
   const have = new Set((existing ?? []).map((q) => q.prompt.replace(/\s+/g, ' ').trim()))
   const problems = []
   for (const r of rows) {
@@ -235,14 +252,20 @@ async function main() {
   }
 
   const answerSpread = [0, 1, 2, 3].map((i) => rows.filter((r) => r.correct_idx === i).length)
+  // Captured BEFORE the insert so retiring "everything that was here" can't catch
+  // the rows this run is adding.
+  const retireIds = RETIRE_ALL_EXISTING
+    ? (existing ?? []).filter((q) => q.active).map((q) => q.id)
+    : []
 
   console.log(`New questions:      ${rows.length}`)
   console.log(`  global:           ${GLOBAL.length}`)
   console.log(`  Jacksonville NC:  ${LOCAL_NC.length}`)
   console.log(`  Marine Corps:     ${LOCAL_USMC.length}`)
   console.log(`Answer spread A/B/C/D: ${answerSpread.join(' / ')}`)
-  console.log(`Retiring (active=false): ${RETIRE.length}`)
   console.log(`Currently active:   ${(existing ?? []).filter((q) => q.active).length}`)
+  console.log(`Retiring (active=false): ${retireIds.length}`)
+  console.log(`Active pool after:  ${rows.length}`)
 
   if (!apply) {
     console.log('\n--- every question, as it will appear ---')
@@ -258,12 +281,14 @@ async function main() {
   if (insErr) throw insErr
   console.log(`\nInserted ${rows.length}.`)
 
-  const { error: retErr, count } = await sb
-    .from('trivia_questions')
-    .update({ active: false }, { count: 'exact' })
-    .in('prompt', RETIRE)
-  if (retErr) throw retErr
-  console.log(`Retired ${count ?? RETIRE.length}.`)
+  if (retireIds.length) {
+    const { error: retErr, count } = await sb
+      .from('trivia_questions')
+      .update({ active: false }, { count: 'exact' })
+      .in('id', retireIds)
+    if (retErr) throw retErr
+    console.log(`Retired ${count ?? retireIds.length}.`)
+  }
 
   const { data: after } = await sb.from('trivia_questions').select('active')
   console.log(`Active pool now:    ${(after ?? []).filter((q) => q.active).length}`)
