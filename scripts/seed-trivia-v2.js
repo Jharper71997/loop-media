@@ -167,6 +167,106 @@ const LOCAL_USMC = [
   ['Chesty Puller earned a record how many Navy Crosses?', ['Three', 'Four', 'Five', 'Six'], 2],
 ]
 
+// Sports. A bar TV is already a sports TV, and this is the category a room will
+// argue about out loud — which is the whole point of the game. Same bar as the
+// rest: no "current champion", no "this season", nothing that rots. Anything with
+// more than one defensible answer (which NFL team has never made a Super Bowl)
+// is left out on purpose.
+const SPORTS = [
+  ['Which sport has been played on the moon?', ['Golf', 'Baseball', 'Tennis', 'Javelin'], 0],
+  [
+    'A marathon is 26.2 miles. Where did the extra .2 come from?',
+    ['To reach the royal box in 1908', 'A surveying error', "A Greek legend's route", 'To make it a round kilometer count'],
+    0,
+  ],
+  [
+    'What is a "Gordie Howe hat trick"?',
+    ['A goal, an assist, and a fight', 'Three goals in one period', 'Two goals and a shutout', 'Three assists in a game'],
+    0,
+  ],
+  [
+    'Which NFL team wears its logo on only one side of the helmet?',
+    ['Steelers', 'Raiders', 'Browns', 'Bears'],
+    0,
+  ],
+  ['In golf, what is three under par on one hole called?', ['Albatross', 'Condor', 'Falcon', 'Osprey'], 0],
+  [
+    'Why is a tennis score of zero called "love"?',
+    ["From the French for 'the egg'", 'From a Victorian betting term', 'Latin for nothing', 'Named after a player'],
+    0,
+  ],
+  [
+    'Which Olympic sport was once contested with live pigeons?',
+    ['Shooting', 'Archery', 'Falconry', 'Fencing'],
+    0,
+  ],
+  ['What shape is a boxing ring?', ['Square', 'Circular', 'Octagonal', 'Hexagonal'], 0],
+  [
+    'What do the five Olympic rings represent?',
+    ['The five inhabited continents', 'The five founding nations', 'Five Olympic values', 'The first five host cities'],
+    0,
+  ],
+  [
+    'Which athlete has won the most Olympic gold medals?',
+    ['Michael Phelps', 'Usain Bolt', 'Carl Lewis', 'Larisa Latynina'],
+    0,
+  ],
+  ['What does the "K" mean in a baseball scorebook?', ['A strikeout', 'A knuckleball', 'A caught stealing', 'A called ball'], 0],
+  ['Which country has won the most World Cups?', ['Brazil', 'Germany', 'Italy', 'Argentina'], 0],
+  ['Which country invented curling?', ['Scotland', 'Canada', 'Norway', 'Sweden'], 0],
+  ['In cricket, a batsman out for zero is said to have scored what?', ['A duck', 'A goose', 'A blank', 'A love'], 0],
+  ['The Iron Bowl is played between which two schools?', ['Alabama and Auburn', 'Georgia and Florida', 'Texas and Oklahoma', 'Ohio State and Michigan'], 0],
+  ['The Green Jacket goes to the winner of which tournament?', ['The Masters', 'The Open Championship', 'The US Open', 'The PGA Championship'], 0],
+  [
+    'Which sport were the first Olympic marathon runners NOT allowed to do?',
+    ['Accept refreshments', 'Wear shoes', 'Run at night', 'Compete twice'],
+    0,
+  ],
+  ['A regulation basketball hoop is how wide across?', ['18 inches', '16 inches', '20 inches', '24 inches'], 0],
+  ['What is the maximum score in a game of ten-pin bowling?', ['300', '200', '250', '360'], 0],
+  [
+    'Which boxer refused induction into the Vietnam draft and lost his title for it?',
+    ['Muhammad Ali', 'Joe Frazier', 'Sonny Liston', 'George Foreman'],
+    0,
+  ],
+  [
+    'In the NFL, how many points is a safety worth?',
+    ['Two', 'One', 'Three', 'Six'],
+    0,
+  ],
+  [
+    'Which sport uses the term "love-thirty"?',
+    ['Tennis', 'Badminton', 'Squash', 'Table tennis'],
+    0,
+  ],
+  [
+    'Wimbledon players are required to wear what?',
+    ['Almost entirely white', 'Club colors', 'Numbered bibs', 'Long sleeves'],
+    0,
+  ],
+  [
+    'What was basketball originally played with instead of a hoop?',
+    ['Peach baskets', 'Barrel rings', 'Netted posts', 'Painted squares'],
+    0,
+  ],
+]
+
+// NC sports. Same logic as the other local questions: a room answers what it
+// recognizes, and this market is deep NASCAR and Tobacco Road country.
+const LOCAL_SPORTS = [
+  ['Michael Jordan grew up in which North Carolina city?', ['Wilmington', 'Charlotte', 'Raleigh', 'Greensboro'], 0],
+  ['The NASCAR Hall of Fame is in which city?', ['Charlotte', 'Daytona Beach', 'Mooresville', 'Talladega'], 0],
+  ['Dale Earnhardt Sr. was born in which North Carolina town?', ['Kannapolis', 'Mooresville', 'Concord', 'Level Cross'], 0],
+  [
+    'Duke and UNC campuses sit roughly how far apart?',
+    ['About 10 miles', 'About 40 miles', 'About 75 miles', 'About 100 miles'],
+    0,
+  ],
+  ['The Carolina Hurricanes won their Stanley Cup in what year?', ['2006', '1998', '2011', '2019'], 0],
+  ['UNC basketball plays its home games in which building?', ['The Dean Smith Center', 'Cameron Indoor', 'Reynolds Coliseum', 'The Spectrum Center'], 0],
+  ['Which NC school does the mascot "Rameses" belong to?', ['UNC', 'NC State', 'Duke', 'East Carolina'], 0],
+]
+
 // --- Retiring the old pool -----------------------------------------------------
 // Every pre-existing question goes inactive, not just the worst ones. They were all
 // the same flavor of grade-school general knowledge, and keeping the "decent" half
@@ -193,14 +293,14 @@ async function main() {
   const sb = createClient(e.NEXT_PUBLIC_SUPABASE_URL, e.SUPABASE_SERVICE_ROLE_KEY)
 
   const raw = [
-    ...GLOBAL.map(([prompt, choices, correct_idx]) => ({
+    ...[...GLOBAL, ...SPORTS].map(([prompt, choices, correct_idx]) => ({
       prompt,
       choices,
       correct_idx,
       territory_id: null,
       venue_id: null,
     })),
-    ...[...LOCAL_NC, ...LOCAL_USMC].map(([prompt, choices, correct_idx]) => ({
+    ...[...LOCAL_NC, ...LOCAL_USMC, ...LOCAL_SPORTS].map(([prompt, choices, correct_idx]) => ({
       prompt,
       choices,
       correct_idx,
@@ -260,8 +360,10 @@ async function main() {
 
   console.log(`New questions:      ${rows.length}`)
   console.log(`  global:           ${GLOBAL.length}`)
+  console.log(`  sports:           ${SPORTS.length}`)
   console.log(`  Jacksonville NC:  ${LOCAL_NC.length}`)
   console.log(`  Marine Corps:     ${LOCAL_USMC.length}`)
+  console.log(`  NC sports:        ${LOCAL_SPORTS.length}`)
   console.log(`Answer spread A/B/C/D: ${answerSpread.join(' / ')}`)
   console.log(`Currently active:   ${(existing ?? []).filter((q) => q.active).length}`)
   console.log(`Retiring (active=false): ${retireIds.length}`)
