@@ -1044,7 +1044,8 @@ function CalibrationOverlay({
 }
 
 // Live trivia on the TV: the CURRENT QUESTION and its four choices, a countdown,
-// the answer reveal when the round closes, plus the join QR and this week's top 3.
+// a neutral close when the round ends, plus the join QR and this week's top 3.
+// The correct answer is never on this screen — only on the player's phone.
 //
 // The question used to be withheld here (it looked like it "skipped" when the
 // round rolled over mid-slide). It's on screen now because a bar TV showing only
@@ -1063,7 +1064,8 @@ type TriviaLive = {
   endsAt: number // local ms timestamp the current phase ends at
   prompt: string
   choices: string[]
-  correctIdx: number | null
+  // No correctIdx on purpose. The state endpoint sends one once the round closes,
+  // and the TV deliberately drops it on the floor — the answer is the phone's job.
 }
 
 function TriviaSlide({ venueId, qrImage }: { venueId: string; qrImage: string }) {
@@ -1091,7 +1093,6 @@ function TriviaSlide({ venueId, qrImage }: { venueId: string; qrImage: string })
               endsAt: Date.now() + Math.max(0, d.endsInMs ?? 0),
               prompt: d.question.prompt,
               choices: Array.isArray(d.question.choices) ? d.question.choices : [],
-              correctIdx: typeof d.correctIdx === 'number' ? d.correctIdx : null,
             })
           }
         }
@@ -1135,6 +1136,10 @@ function TriviaSlide({ venueId, qrImage }: { venueId: string; qrImage: string })
     return () => clearInterval(id)
   }, [live])
 
+  // Between rounds. The TV deliberately does NOT mark the correct choice: the answer
+  // belongs on the player's phone, which already gets it from /api/trivia/answer.
+  // Putting it on a bar screen hands it to everyone who never joined, and to anyone
+  // still answering on a slow poll — so this phase just closes the question out.
   const reveal = live?.phase === 'results'
   const total = reveal ? ROUND_SECONDS - ANSWER_SECONDS : ANSWER_SECONDS
   const pct = Math.max(0, Math.min(100, (secs / total) * 100))
@@ -1146,15 +1151,18 @@ function TriviaSlide({ venueId, qrImage }: { venueId: string; qrImage: string })
   // Points the current question is still worth (same curve the phone counts down
   // and the server pays out).
   const worth = pointsWithMsLeft(secs * 1000)
+  // Neutral between rounds. Green used to land here with the reveal; without an
+  // answer on screen it would just read as "you got it right" to a room that was
+  // never told anything.
   const timeColor = reveal
-    ? 'text-success'
+    ? 'text-white/70'
     : urgent
       ? 'text-red-400'
       : warm
         ? 'text-amber-300'
         : 'text-primary'
   const barColor = reveal
-    ? 'bg-success'
+    ? 'bg-white/30'
     : urgent
       ? 'bg-red-500'
       : warm
@@ -1165,8 +1173,8 @@ function TriviaSlide({ venueId, qrImage }: { venueId: string; qrImage: string })
     <div className="relative flex h-full w-full items-center gap-14 overflow-hidden bg-gradient-to-br from-[#1c1813] via-[#100e0a] to-black px-16 py-14 text-white">
       {/* Drifting light. Two static-blur blobs moved with transform/opacity only —
           a Fire Stick can composite that, but re-rastering an animated blur would
-          drop frames. The second blob turns green on the reveal so the whole screen
-          shifts color when the answer lands, not just the choice chip. */}
+          drop frames. The second blob cools off between rounds so the whole screen
+          reads as "question closed", then warms back up for the next one. */}
       <div
         aria-hidden
         className="lm-drift-a pointer-events-none absolute -left-32 top-[-15%] size-[46rem] rounded-full bg-primary/[0.09] blur-2xl"
@@ -1175,7 +1183,7 @@ function TriviaSlide({ venueId, qrImage }: { venueId: string; qrImage: string })
         aria-hidden
         className={cn(
           'lm-drift-b pointer-events-none absolute -right-40 bottom-[-20%] size-[42rem] rounded-full blur-2xl transition-colors duration-700',
-          reveal ? 'bg-success/[0.10]' : 'bg-amber-500/[0.06]'
+          reveal ? 'bg-white/[0.05]' : 'bg-amber-500/[0.06]'
         )}
       />
 
@@ -1200,7 +1208,7 @@ function TriviaSlide({ venueId, qrImage }: { venueId: string; qrImage: string })
                 urgent ? 'border-red-400/40 bg-red-500/10' : 'border-white/15 bg-white/5'
               )}
             >
-              <span>{reveal ? 'Answer' : 'Time left'}</span>
+              <span>{reveal ? 'Next question' : 'Time left'}</span>
               <span
                 key={secs}
                 className={cn('lm-tick font-bold', timeColor, urgent && 'lm-urgent')}
@@ -1231,35 +1239,27 @@ function TriviaSlide({ venueId, qrImage }: { venueId: string; qrImage: string })
               {live.prompt}
             </div>
             <div className="mt-9 grid grid-cols-2 gap-5">
-              {live.choices.map((c, i) => {
-                const right = reveal && live.correctIdx === i
-                return (
-                  <div
-                    key={i}
-                    // Staggered so the four choices deal in like cards rather than
-                    // appearing as a block.
-                    style={{ animationDelay: `${140 + i * 110}ms` }}
-                    className={cn(
-                      'lm-rise flex items-center gap-5 rounded-2xl border px-7 py-6 transition-all duration-500',
-                      right
-                        ? 'lm-pop border-success bg-success/20 shadow-[0_0_60px_-10px] shadow-success/60'
-                        : reveal
-                          ? 'border-white/10 bg-white/[0.02] opacity-40'
-                          : 'border-white/15 bg-white/[0.06]'
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        'flex size-14 shrink-0 items-center justify-center rounded-xl text-3xl font-bold transition-colors duration-500',
-                        right ? 'bg-success text-black' : 'bg-white/10 text-white/70'
-                      )}
-                    >
-                      {String.fromCharCode(65 + i)}
-                    </span>
-                    <span className="min-w-0 truncate text-4xl">{c}</span>
-                  </div>
-                )
-              })}
+              {live.choices.map((c, i) => (
+                <div
+                  key={i}
+                  // Staggered so the four choices deal in like cards rather than
+                  // appearing as a block.
+                  style={{ animationDelay: `${140 + i * 110}ms` }}
+                  className={cn(
+                    'lm-rise flex items-center gap-5 rounded-2xl border px-7 py-6 transition-all duration-500',
+                    // Closed rounds dim ALL four evenly — no chip is ever singled
+                    // out, so the screen never leaks which one was right.
+                    reveal
+                      ? 'border-white/10 bg-white/[0.02] opacity-40'
+                      : 'border-white/15 bg-white/[0.06]'
+                  )}
+                >
+                  <span className="flex size-14 shrink-0 items-center justify-center rounded-xl bg-white/10 text-3xl font-bold text-white/70">
+                    {String.fromCharCode(65 + i)}
+                  </span>
+                  <span className="min-w-0 truncate text-4xl">{c}</span>
+                </div>
+              ))}
             </div>
             {/* Time bar — visibly draining, and it changes color as the clock gets
                 short, so a rollover reads as the game advancing, not a glitch. */}
