@@ -699,9 +699,23 @@ function Player({
         .lm-breathe { animation: lm-breathe 3.2s ease-in-out infinite }
         .lm-drift-a { animation: lm-drift-a 22s ease-in-out infinite }
         .lm-drift-b { animation: lm-drift-b 26s ease-in-out infinite }
+
+        /* House-ad motion: the Brew Loop route circling with its stops firing in
+           sequence, and the empty-spot frame on the "advertise here" card. */
+        @keyframes lm-spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }
+        @keyframes lm-stop { 0%, 70%, 100% { transform: scale(1); opacity: .45 } 20% { transform: scale(1.9); opacity: 1 } }
+        @keyframes lm-sweep { from { transform: translateX(0) rotate(12deg) } to { transform: translateX(560%) rotate(12deg) } }
+        @keyframes lm-caret { 0%, 45% { opacity: 1 } 55%, 100% { opacity: 0 } }
+        @keyframes lm-bracket { 0%, 100% { opacity: .45 } 50% { opacity: 1 } }
+        .lm-spin { animation: lm-spin 60s linear infinite }
+        .lm-stop { animation: lm-stop 2.6s ease-in-out infinite }
+        .lm-sweep { animation: lm-sweep 9s ease-in-out infinite }
+        .lm-caret { animation: lm-caret 1.1s step-end infinite }
+        .lm-bracket { animation: lm-bracket 2.4s ease-in-out infinite }
         @media (prefers-reduced-motion: reduce) {
           .lm-ken, .lm-rise, .lm-pop, .lm-ping, .lm-tick, .lm-urgent, .lm-breathe,
-          .lm-drift-a, .lm-drift-b { animation: none }
+          .lm-drift-a, .lm-drift-b, .lm-spin, .lm-stop, .lm-sweep, .lm-caret,
+          .lm-bracket { animation: none }
         }
       `}</style>
       {/* Fixed 1920x1080 canvas scaled to fit this device's viewport as a whole, so
@@ -1352,93 +1366,181 @@ function TriviaSlide({ venueId, qrImage }: { venueId: string; qrImage: string })
 // dropped on a card. Uses the TRANSPARENT round badge so nothing renders as a
 // black block. Brand voice: shared shuttle, "friends", no alcohol/DUI angle.
 function BrewLoopAd({ qrImage }: { qrImage: string }) {
+  // The idea is the loop itself: a route that never stops circling, with stops
+  // lighting up one after another. A logo sitting next to a headline reads like
+  // every other slide on every other bar TV — a moving route reads like the thing
+  // it's selling. Black + gold only (brand), shared shuttle, no drink angle.
+  const stops = [0, 60, 120, 180, 240, 300]
   return (
-    <div className="relative flex h-full w-full items-center justify-center gap-20 overflow-hidden bg-gradient-to-br from-[#171310] via-[#0c0a07] to-black px-20 text-white">
-      {/* soft gold glow behind the brand */}
+    <div className="relative flex h-full w-full items-center overflow-hidden bg-[#0a0a0b] px-20 text-white">
       <div
         aria-hidden
-        className="pointer-events-none absolute top-1/2 -left-40 h-[42rem] w-[42rem] -translate-y-1/2 rounded-full bg-primary/10 blur-3xl"
+        className="pointer-events-none absolute top-1/2 -left-40 size-[42rem] -translate-y-1/2 rounded-full bg-primary/10 blur-3xl"
       />
-      <div className="relative z-10 max-w-2xl">
-        <Image
-          src="/brewloop-badge.png"
-          alt="Jville Brew Loop"
-          width={1024}
-          height={1024}
-          priority
-          className="size-44 drop-shadow-[0_0_30px_rgba(212,163,51,0.35)]"
-        />
-        <div className="mt-8 font-heading text-7xl font-extrabold leading-[0.95] tracking-tight">
-          One ticket.
-          <br />
-          <span className="text-primary">Ride all night.</span>
+
+      <div className="relative z-10 max-w-3xl">
+        <div className="flex items-center gap-5">
+          <Image
+            src="/brewloop-badge.png"
+            alt="Jville Brew Loop"
+            width={1024}
+            height={1024}
+            priority
+            className="size-24 drop-shadow-[0_0_30px_rgba(212,163,51,0.35)]"
+          />
+          <span className="text-2xl font-semibold uppercase tracking-[0.28em] text-primary/80">
+            Jville Brew Loop
+          </span>
         </div>
-        <div className="mt-6 max-w-xl text-3xl leading-snug text-white/70">
-          A shared shuttle that loops between town&apos;s best local spots. Hop on, hop off, all
-          night long.
+        <div className="mt-8 font-heading text-[7.5rem] font-black leading-[0.86] tracking-tight">
+          RIDE
+          <br />
+          <span className="text-primary">ALL NIGHT.</span>
+        </div>
+        <div className="mt-7 max-w-xl text-3xl leading-snug text-white/70">
+          One ticket, one shuttle, looping between town&apos;s best local spots with your
+          friends. Hop on, hop off, all night long.
+        </div>
+        <div className="mt-9 inline-flex items-center gap-5 rounded-2xl border border-primary/40 bg-primary/10 px-8 py-4">
+          <span className="font-heading text-6xl font-black leading-none text-primary">$5 OFF</span>
+          <span className="text-2xl leading-tight text-white/80">
+            your first ride
+            <br />
+            <span className="font-mono font-bold text-white">LOOP5</span>
+          </span>
         </div>
       </div>
-      <div className="relative z-10 flex flex-col items-center">
-        <div className="font-heading text-8xl font-black leading-none text-primary drop-shadow">
-          $5 OFF
+
+      {/* The route, with the QR at its hub. A dashed ring on a slow rotate and stop
+          pins firing in sequence — cheap to composite (one transform each) and it
+          never stops moving, which is the point on a screen people only glance at. */}
+      <div className="relative z-10 ml-auto flex size-[40rem] shrink-0 items-center justify-center">
+        <div aria-hidden className="lm-spin absolute inset-0">
+          <svg viewBox="0 0 100 100" className="size-full">
+            <circle
+              cx="50"
+              cy="50"
+              r="46"
+              fill="none"
+              stroke="var(--color-primary)"
+              strokeOpacity="0.4"
+              strokeWidth="0.5"
+              strokeDasharray="3 2.4"
+            />
+          </svg>
+          {stops.map((deg, i) => (
+            <div
+              key={deg}
+              className="absolute left-1/2 top-1/2 size-4"
+              style={{ transform: `rotate(${deg}deg) translate(-50%, -18.4rem)` }}
+            >
+              <span
+                className="lm-stop block size-4 rounded-full bg-primary"
+                style={{ animationDelay: `${i * 400}ms` }}
+              />
+            </div>
+          ))}
         </div>
-        <div className="mt-3 text-2xl font-medium text-white/80">your first ride</div>
         {qrImage && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={qrImage}
-            alt="Scan to book"
-            className="mt-8 size-64 rounded-3xl bg-white p-4 ring-4 ring-primary"
-          />
+          <div className="relative flex flex-col items-center">
+            <div className="relative">
+              <div
+                aria-hidden
+                className="lm-breathe absolute inset-0 rounded-3xl bg-primary/30 blur-xl"
+              />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={qrImage}
+                alt="Scan to book"
+                className="relative size-64 rounded-3xl bg-white p-4 ring-4 ring-primary"
+              />
+            </div>
+            <div className="mt-5 text-center text-2xl text-white/75">Scan to book</div>
+          </div>
         )}
-        <div className="mt-6 text-center text-2xl text-white/70">
-          Scan to book &middot; code{' '}
-          <span className="font-mono font-bold text-white">LOOP5</span>
-        </div>
       </div>
     </div>
   )
 }
 
-// The "advertise on this screen" house ad. Renders the full Loop Network logo
-// lockup LARGE (it was tiny before) on a flat near-black field that matches the
-// logo art's own dark background, so there's no visible rectangle seam.
+// The "advertise on this screen" house ad. The slide IS the demo: it shows an
+// empty ad frame where a real spot would run, so a business owner watching sees
+// exactly what they'd be buying — the screen selling the screen. That beats a logo
+// beside a headline, which is what every other house card in every other bar looks
+// like. The frame's brackets and caret keep it alive between ads.
 function AdvertiseAd({ qrImage }: { qrImage: string }) {
   return (
-    <div className="relative flex h-full w-full items-center justify-center gap-16 overflow-hidden bg-[#0a0908] px-16 text-white">
+    <div className="relative flex h-full w-full items-center gap-16 overflow-hidden bg-[#0a0908] px-16 text-white">
+      {/* Slow light sweep across the whole field. */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="lm-sweep absolute -inset-y-40 -left-1/3 w-1/3 rotate-12 bg-gradient-to-r from-transparent via-primary/[0.07] to-transparent" />
+      </div>
       <div
         aria-hidden
-        className="pointer-events-none absolute top-0 right-0 h-[40rem] w-[40rem] rounded-full bg-primary/10 blur-3xl"
+        className="pointer-events-none absolute -top-40 right-0 size-[40rem] rounded-full bg-primary/10 blur-3xl"
       />
-      <div className="relative z-10 flex flex-1 justify-center">
+
+      {/* The empty spot */}
+      <div className="relative z-10 flex-1">
+        <div className="relative aspect-[16/9] w-full rounded-2xl border-2 border-dashed border-primary/35 bg-white/[0.02]">
+          {/* corner brackets */}
+          {[
+            'left-0 top-0 border-l-4 border-t-4 rounded-tl-2xl',
+            'right-0 top-0 border-r-4 border-t-4 rounded-tr-2xl',
+            'left-0 bottom-0 border-b-4 border-l-4 rounded-bl-2xl',
+            'right-0 bottom-0 border-b-4 border-r-4 rounded-br-2xl',
+          ].map((pos, i) => (
+            <span
+              key={i}
+              aria-hidden
+              className={cn('lm-bracket absolute size-16 border-primary', pos)}
+              style={{ animationDelay: `${i * 180}ms` }}
+            />
+          ))}
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <div className="font-heading text-6xl font-black tracking-tight text-white/85">
+              YOUR AD HERE
+              <span className="lm-caret ml-2 inline-block h-12 w-2 translate-y-1 bg-primary align-middle" />
+            </div>
+            <div className="mt-4 text-2xl text-white/45">This spot is open</div>
+            <div className="mt-10 text-xl uppercase tracking-[0.25em] text-primary/70">
+              Plays every few minutes &middot; all night
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* The pitch */}
+      <div className="relative z-10 flex w-[38rem] shrink-0 flex-col items-start">
         <Image
           src="/loop-network-logo.png"
           alt="Loop Network"
           width={1244}
           height={1244}
           priority
-          className="w-[27rem] max-w-full"
+          className="w-40"
         />
-      </div>
-      <div className="relative z-10 flex flex-1 flex-col items-start">
-        <div className="font-heading text-6xl font-extrabold leading-[1.05]">
-          Your business,
+        <div className="mt-6 font-heading text-6xl font-extrabold leading-[1.02]">
+          Put your business
           <br />
           <span className="text-primary">on this screen.</span>
         </div>
-        <div className="mt-5 max-w-lg text-3xl leading-snug text-white/70">
-          Local ads people actually see, right where your customers already are.
+        <div className="mt-5 text-3xl leading-snug text-white/70">
+          Everyone in this room is already looking here.
         </div>
         {qrImage ? (
           <div className="mt-9 flex items-center gap-7">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={qrImage}
-              alt="Scan to advertise"
-              className="size-44 rounded-2xl bg-white p-3.5 ring-4 ring-primary"
-            />
+            <div className="relative">
+              <div aria-hidden className="lm-breathe absolute inset-0 rounded-2xl bg-primary/30 blur-xl" />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={qrImage}
+                alt="Scan to advertise"
+                className="relative size-44 rounded-2xl bg-white p-3.5 ring-4 ring-primary"
+              />
+            </div>
             <div className="text-left">
-              <div className="font-heading text-5xl font-extrabold text-primary">Advertise here</div>
+              <div className="font-heading text-5xl font-extrabold text-primary">Claim it</div>
               <div className="mt-2 text-2xl text-white/70">Scan to get started</div>
             </div>
           </div>
