@@ -128,32 +128,6 @@ export default async function VenuesPage({
     }
   }
 
-  // Active, non-expired authored filler cards per territory. Filler is one of the
-  // always-on house slides (with the Brew Loop ad + "advertise" card + trivia
-  // teaser); counted here so each screen's slot fill reflects the house slides that
-  // occupy the loop, not just paid ads.
-  const fillerByTerritory = new Map<string, number>()
-  {
-    const territoryIds = [...new Set(rows.map((v) => v.territory_id).filter((x): x is string => !!x))]
-    if (territoryIds.length) {
-      const nowMs = Date.now()
-      const { data: fillerRows } = await supabase
-        .from('filler_content')
-        .select('territory_id, type, expires_at')
-        .in('territory_id', territoryIds)
-        .eq('active', true)
-      for (const f of (fillerRows ?? []) as {
-        territory_id: string
-        type: string
-        expires_at: string | null
-      }[]) {
-        if (f.type === 'trivia') continue // static trivia retired; the live teaser is counted separately
-        if (f.expires_at && new Date(f.expires_at).getTime() <= nowMs) continue
-        fillerByTerritory.set(f.territory_id, (fillerByTerritory.get(f.territory_id) ?? 0) + 1)
-      }
-    }
-  }
-
   const liveCount = allTvs.filter((r) => !!r.device_id && isTvLive(r.last_heartbeat_at)).length
 
   return (
@@ -248,10 +222,7 @@ export default async function VenuesPage({
                   screens.map((tv, i) => {
                     const occ = loopOccupancy({
                       adSlots: adSlotCount(tv.loop_length_seconds, tv.slot_seconds),
-                      houseSlides: houseSlideCount({
-                        triviaEnabled: v.trivia_enabled,
-                        fillerCards: fillerByTerritory.get(v.territory_id) ?? 0,
-                      }),
+                      houseSlides: houseSlideCount({ triviaEnabled: v.trivia_enabled }),
                       paidSold: adsByTv.get(tv.id) ?? 0,
                     })
                     return (

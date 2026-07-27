@@ -30,7 +30,6 @@ type Row = {
   kind: HouseKind
   creative_type: 'image' | 'video'
   creative_url: string
-  show_qr: boolean
   active: boolean
   created_at: string
   territory_id: string | null
@@ -51,7 +50,7 @@ export default async function HouseSlidesPage() {
   let q = supabase
     .from('house_creatives')
     .select(
-      'id, kind, creative_type, creative_url, show_qr, active, created_at, territory_id, territory:territories(name)'
+      'id, kind, creative_type, creative_url, active, created_at, territory_id, territory:territories(name)'
     )
     .order('created_at', { ascending: false })
   if (t) q = q.or(`territory_id.is.null,territory_id.eq.${t}`)
@@ -138,9 +137,7 @@ export default async function HouseSlidesPage() {
                     <>
                       Uploaded {formatDateTime(live.created_at)}.
                       <br />
-                      {live.show_qr
-                        ? 'The scan QR is drawn on top.'
-                        : 'No QR overlay — the artwork carries its own.'}
+                      The creative plays on its own — nothing is drawn over it.
                     </>
                   ) : (
                     'Upload an image or video to replace it. Remove the upload later and this comes back.'

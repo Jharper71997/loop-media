@@ -31,10 +31,6 @@ type HouseCreative = {
   kind: 'brewloop' | 'advertise'
   creative_type: 'image' | 'video'
   creative_url: string
-  show_qr: boolean
-  qr_x: number
-  qr_y: number
-  qr_size: number
   territory_id: string | null
 }
 
@@ -46,15 +42,11 @@ function creativeFields(c: HouseCreative | undefined) {
   return {
     creative_type: c.creative_type,
     creative_url: c.creative_url,
-    show_qr: c.show_qr,
-    qr_x: c.qr_x,
-    qr_y: c.qr_y,
-    qr_size: c.qr_size,
   }
 }
 
 // Returns the ordered ad loop for a paired device, plus venue info the display
-// uses for filler (weather etc). Only approved/active ads with a creative play.
+// uses for the house slides. Only approved/active ads with a creative play.
 export async function GET(req: Request) {
   const device = new URL(req.url).searchParams.get('device')
   if (!device) {
@@ -64,7 +56,7 @@ export async function GET(req: Request) {
   const supabase = createAdminClient()
   const { data: tvRow } = await supabase
     .from('tvs')
-    .select('id, device_secret, loop_length_seconds, slot_seconds, brewloop_seconds, advertise_seconds, trivia_slide_seconds, filler_seconds, overscan_pct, venue:venues(id, name, lat, lng, play_code, trivia_enabled, territory:territories(id, name))')
+    .select('id, device_secret, loop_length_seconds, slot_seconds, brewloop_seconds, advertise_seconds, trivia_slide_seconds, overscan_pct, venue:venues(id, name, lat, lng, play_code, trivia_enabled, territory:territories(id, name))')
     .eq('device_id', device)
     .maybeSingle()
 
@@ -80,7 +72,6 @@ export async function GET(req: Request) {
     brewloop_seconds: number | null
     advertise_seconds: number | null
     trivia_slide_seconds: number | null
-    filler_seconds: number | null
     overscan_pct: number | null
     venue: {
       id: string
@@ -163,23 +154,6 @@ export async function GET(req: Request) {
     })
   )
 
-  // Custom filler cards (trivia / local events / sports / promos) the admin
-  // authored for this territory. Active and unexpired only. The TV interleaves
-  // them with ads + the built-in weather/clock slides.
-  let filler: { type: string; payload: Record<string, unknown> }[] = []
-  const territoryId = tv.venue?.territory?.id
-  if (territoryId) {
-    const { data: fillerData } = await supabase
-      .from('filler_content')
-      .select('type, payload, expires_at')
-      .eq('territory_id', territoryId)
-      .eq('active', true)
-      .order('created_at', { ascending: false })
-    filler = ((fillerData ?? []) as { type: string; payload: Record<string, unknown>; expires_at: string | null }[])
-      .filter((f) => !f.expires_at || new Date(f.expires_at).getTime() > Date.now())
-      .map((f) => ({ type: f.type, payload: f.payload }))
-  }
-
   // A TRIVIA-ENABLED venue needs a play_code so the phone-trivia join link works
   // and the TV shows the trivia slide. Mint one lazily the first time trivia is
   // turned on here (idempotent: only sets when still null, then reads back the
@@ -222,7 +196,7 @@ export async function GET(req: Request) {
   {
     let hq = supabase
       .from('house_creatives')
-      .select('kind, creative_type, creative_url, show_qr, qr_x, qr_y, qr_size, territory_id')
+      .select('kind, creative_type, creative_url, territory_id')
       .eq('active', true)
     hq = tv.venue?.territory?.id
       ? hq.or(`territory_id.is.null,territory_id.eq.${tv.venue.territory.id}`)
@@ -267,12 +241,10 @@ export async function GET(req: Request) {
       brewloop_seconds: tv.brewloop_seconds,
       advertise_seconds: tv.advertise_seconds,
       trivia_slide_seconds: tv.trivia_slide_seconds,
-      filler_seconds: tv.filler_seconds,
       overscan_pct: tv.overscan_pct,
     },
     venue: tv.venue,
     items,
-    filler,
     trivia,
     advertise,
     brewloop,
