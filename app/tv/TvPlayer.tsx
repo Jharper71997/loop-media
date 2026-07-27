@@ -674,7 +674,30 @@ function Player({
         @keyframes lm-kenburns { from { transform: scale(1.06) } to { transform: scale(1.0) } }
         .lm-fade { animation: lm-fade 600ms ease-out both }
         .lm-ken { animation: lm-kenburns 9s ease-out both }
-        @media (prefers-reduced-motion: reduce) { .lm-ken { animation: none } }
+
+        /* Trivia motion. Everything here animates TRANSFORM or OPACITY only — a Fire
+           Stick composites those on the GPU, while animating blur/size/color would
+           re-rasterize every frame and stutter. */
+        @keyframes lm-rise { from { opacity: 0; transform: translateY(26px) } to { opacity: 1; transform: none } }
+        @keyframes lm-pop { 0% { transform: scale(1) } 45% { transform: scale(1.045) } 100% { transform: scale(1) } }
+        @keyframes lm-ping { 0% { transform: scale(1); opacity: .7 } 75%, 100% { transform: scale(2.2); opacity: 0 } }
+        @keyframes lm-tick { from { transform: scale(1.28); opacity: .55 } to { transform: scale(1); opacity: 1 } }
+        @keyframes lm-urgent { 0%, 100% { opacity: 1 } 50% { opacity: .45 } }
+        @keyframes lm-breathe { 0%, 100% { transform: scale(1); opacity: .35 } 50% { transform: scale(1.09); opacity: .7 } }
+        @keyframes lm-drift-a { 0%, 100% { transform: translate3d(0,0,0) scale(1) } 50% { transform: translate3d(90px,60px,0) scale(1.12) } }
+        @keyframes lm-drift-b { 0%, 100% { transform: translate3d(0,0,0) scale(1.08) } 50% { transform: translate3d(-70px,-50px,0) scale(1) } }
+        .lm-rise { animation: lm-rise 520ms cubic-bezier(.22,1,.36,1) both }
+        .lm-pop { animation: lm-pop 620ms ease-out }
+        .lm-ping { animation: lm-ping 1.8s cubic-bezier(0,0,.2,1) infinite }
+        .lm-tick { display: inline-block; animation: lm-tick 320ms ease-out }
+        .lm-urgent { animation: lm-urgent 900ms ease-in-out infinite }
+        .lm-breathe { animation: lm-breathe 3.2s ease-in-out infinite }
+        .lm-drift-a { animation: lm-drift-a 22s ease-in-out infinite }
+        .lm-drift-b { animation: lm-drift-b 26s ease-in-out infinite }
+        @media (prefers-reduced-motion: reduce) {
+          .lm-ken, .lm-rise, .lm-pop, .lm-ping, .lm-tick, .lm-urgent, .lm-breathe,
+          .lm-drift-a, .lm-drift-b { animation: none }
+        }
       `}</style>
       {/* Fixed 1920x1080 canvas scaled to fit this device's viewport as a whole, so
           every slide is laid out at 1080p and can't overflow/clip on a Fire Stick or
@@ -1115,25 +1138,80 @@ function TriviaSlide({ venueId, qrImage }: { venueId: string; qrImage: string })
   const reveal = live?.phase === 'results'
   const total = reveal ? ROUND_SECONDS - ANSWER_SECONDS : ANSWER_SECONDS
   const pct = Math.max(0, Math.min(100, (secs / total) * 100))
+  // Urgency ramp on the answer clock: gold most of the round, amber inside 15s, red
+  // and pulsing inside 5s. A bar TV competes with conversation for attention — the
+  // color change is what pulls an eye back mid-round.
+  const urgent = !reveal && secs <= 5
+  const warm = !reveal && secs <= 15
+  const timeColor = reveal
+    ? 'text-success'
+    : urgent
+      ? 'text-red-400'
+      : warm
+        ? 'text-amber-300'
+        : 'text-primary'
+  const barColor = reveal
+    ? 'bg-success'
+    : urgent
+      ? 'bg-red-500'
+      : warm
+        ? 'bg-amber-400'
+        : 'bg-primary'
 
   return (
-    <div className="flex h-full w-full items-center gap-14 bg-gradient-to-br from-[#1c1813] via-[#100e0a] to-black px-16 py-14 text-white">
+    <div className="relative flex h-full w-full items-center gap-14 overflow-hidden bg-gradient-to-br from-[#1c1813] via-[#100e0a] to-black px-16 py-14 text-white">
+      {/* Drifting light. Two static-blur blobs moved with transform/opacity only —
+          a Fire Stick can composite that, but re-rastering an animated blur would
+          drop frames. The second blob turns green on the reveal so the whole screen
+          shifts color when the answer lands, not just the choice chip. */}
+      <div
+        aria-hidden
+        className="lm-drift-a pointer-events-none absolute -left-32 top-[-15%] size-[46rem] rounded-full bg-primary/[0.09] blur-2xl"
+      />
+      <div
+        aria-hidden
+        className={cn(
+          'lm-drift-b pointer-events-none absolute -right-40 bottom-[-20%] size-[42rem] rounded-full blur-2xl transition-colors duration-700',
+          reveal ? 'bg-success/[0.10]' : 'bg-amber-500/[0.06]'
+        )}
+      />
+
       {/* The game itself */}
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="relative z-10 flex min-w-0 flex-1 flex-col">
         <div className="flex items-center gap-5">
           <span className="font-heading text-4xl font-extrabold tracking-wide text-primary">
             LOOP TRIVIA
           </span>
+          {/* Live dot — a small constant heartbeat that says the screen isn't a
+              static poster, even while a question sits still. */}
+          <span className="relative flex size-3.5">
+            <span className="lm-ping absolute inline-flex size-full rounded-full bg-primary/70" />
+            <span className="relative inline-flex size-3.5 rounded-full bg-primary" />
+          </span>
           {live && (
-            <span className="rounded-full border border-white/15 bg-white/5 px-5 py-1.5 text-2xl tabular-nums text-white/70">
-              {reveal ? `Next question in ${secs}s` : `${secs}s to answer`}
+            <span
+              className={cn(
+                'rounded-full border px-5 py-1.5 text-2xl tabular-nums transition-colors duration-500',
+                urgent ? 'border-red-400/40 bg-red-500/10' : 'border-white/15 bg-white/5',
+                reveal ? 'text-white/70' : 'text-white/70'
+              )}
+            >
+              {reveal ? 'Answer' : 'Time left'}{' '}
+              <span
+                key={secs}
+                className={cn('lm-tick font-bold', timeColor, urgent && 'lm-urgent')}
+              >
+                {secs}s
+              </span>
             </span>
           )}
         </div>
 
         {live ? (
-          <>
-            <div className="mt-7 font-heading text-7xl font-extrabold leading-[1.06]">
+          // Keyed on the round so every new question replays the entrance animation —
+          // the screen visibly RESETS between questions instead of quietly swapping text.
+          <div key={live.round}>
+            <div className="lm-rise mt-7 font-heading text-7xl font-extrabold leading-[1.06]">
               {live.prompt}
             </div>
             <div className="mt-9 grid grid-cols-2 gap-5">
@@ -1142,18 +1220,21 @@ function TriviaSlide({ venueId, qrImage }: { venueId: string; qrImage: string })
                 return (
                   <div
                     key={i}
+                    // Staggered so the four choices deal in like cards rather than
+                    // appearing as a block.
+                    style={{ animationDelay: `${140 + i * 110}ms` }}
                     className={cn(
-                      'flex items-center gap-5 rounded-2xl border px-7 py-6 transition-colors',
+                      'lm-rise flex items-center gap-5 rounded-2xl border px-7 py-6 transition-all duration-500',
                       right
-                        ? 'border-success bg-success/20'
+                        ? 'lm-pop border-success bg-success/20 shadow-[0_0_60px_-10px] shadow-success/60'
                         : reveal
-                          ? 'border-white/10 bg-white/[0.02] opacity-45'
+                          ? 'border-white/10 bg-white/[0.02] opacity-40'
                           : 'border-white/15 bg-white/[0.06]'
                     )}
                   >
                     <span
                       className={cn(
-                        'flex size-14 shrink-0 items-center justify-center rounded-xl text-3xl font-bold',
+                        'flex size-14 shrink-0 items-center justify-center rounded-xl text-3xl font-bold transition-colors duration-500',
                         right ? 'bg-success text-black' : 'bg-white/10 text-white/70'
                       )}
                     >
@@ -1164,23 +1245,24 @@ function TriviaSlide({ venueId, qrImage }: { venueId: string; qrImage: string })
                 )
               })}
             </div>
-            {/* Time bar — makes the round obviously timed, so a rollover reads as
-                the game advancing rather than the screen skipping. */}
-            <div className="mt-8 h-2 w-full overflow-hidden rounded-full bg-white/10">
+            {/* Time bar — visibly draining, and it changes color as the clock gets
+                short, so a rollover reads as the game advancing, not a glitch. */}
+            <div className="mt-8 h-2.5 w-full overflow-hidden rounded-full bg-white/10">
               <div
                 className={cn(
-                  'h-full rounded-full transition-[width] duration-300 ease-linear',
-                  reveal ? 'bg-success' : 'bg-primary'
+                  'h-full rounded-full transition-[width,background-color] duration-300 ease-linear',
+                  barColor,
+                  urgent && 'lm-urgent'
                 )}
                 style={{ width: `${pct}%` }}
               />
             </div>
-          </>
+          </div>
         ) : (
           // No live question yet (state still loading, or no questions configured
           // for this venue) — fall back to the invitation so the slide is never blank.
           <>
-            <div className="mt-7 font-heading text-6xl font-extrabold leading-tight">
+            <div className="lm-rise mt-7 font-heading text-6xl font-extrabold leading-tight">
               Trivia night,
               <br />
               <span className="text-primary">live on your phone.</span>
@@ -1193,10 +1275,22 @@ function TriviaSlide({ venueId, qrImage }: { venueId: string; qrImage: string })
       </div>
 
       {/* Join QR + this week's standings */}
-      <div className="flex w-[24rem] shrink-0 flex-col items-center">
+      <div className="relative z-10 flex w-[24rem] shrink-0 flex-col items-center">
         {qrImage && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={qrImage} alt="Scan to play" className="size-64 rounded-2xl bg-white p-3" />
+          <div className="relative">
+            {/* Slow breathing halo behind the QR — the one thing on screen we want
+                someone to actually act on. */}
+            <div
+              aria-hidden
+              className="lm-breathe absolute inset-0 rounded-2xl bg-primary/30 blur-xl"
+            />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={qrImage}
+              alt="Scan to play"
+              className="relative size-64 rounded-2xl bg-white p-3"
+            />
+          </div>
         )}
         <div className="mt-5 text-center text-3xl font-semibold text-white/85">
           Scan to play <span className="text-primary">free</span>
@@ -1208,9 +1302,13 @@ function TriviaSlide({ venueId, qrImage }: { venueId: string; qrImage: string })
           {lb.length ? (
             <ol className="mt-3 space-y-1.5">
               {lb.slice(0, 3).map((p, i) => (
-                <li key={i} className="flex justify-between text-2xl">
+                <li
+                  key={i}
+                  style={{ animationDelay: `${300 + i * 120}ms` }}
+                  className="lm-rise flex justify-between text-2xl"
+                >
                   <span className="min-w-0 truncate">
-                    {i + 1}. {p.name}
+                    <span className={cn(i === 0 && 'text-primary')}>{i + 1}.</span> {p.name}
                   </span>
                   <span className="ml-3 shrink-0 font-mono text-primary">{p.score}</span>
                 </li>
