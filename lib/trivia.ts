@@ -11,7 +11,34 @@
 // sync automatically.
 export const ROUND_SECONDS = 60
 export const ANSWER_SECONDS = 45
-export const CORRECT_POINTS = 100
+
+// Speed scoring, the Buzztime/Buffalo Wild Wings model: a question is worth
+// MAX_POINTS the instant it appears and decays every second it sits unanswered.
+// This is the difference between a game people play and a game people watch —
+// knowing the answer isn't enough, you have to beat the table to it. A wrong
+// answer simply scores nothing (no penalty, no streak wipe), so the cost of
+// guessing fast is always lower than the cost of sitting out.
+//
+// The floor matters: a correct answer at the buzzer still banks MIN_POINTS, so
+// someone who joins mid-round isn't playing for zero.
+export const MAX_POINTS = 1000
+export const MIN_POINTS = 100
+
+// Points for an answer locked in `elapsedMs` into the answer window. Rounded to
+// the nearest 10 so the phone's live counter and the server's award agree even
+// with a little network lag between them.
+export function pointsFor(elapsedMs: number): number {
+  const frac = Math.max(0, Math.min(1, elapsedMs / 1000 / ANSWER_SECONDS))
+  const raw = MAX_POINTS - (MAX_POINTS - MIN_POINTS) * frac
+  return Math.round(raw / 10) * 10
+}
+
+// What the question on screen is worth RIGHT NOW, from the time left in the
+// answer window. The phone counts this down live; the server recomputes it from
+// its own clock when the answer lands (the client's number is never trusted).
+export function pointsWithMsLeft(msLeft: number): number {
+  return pointsFor(ANSWER_SECONDS * 1000 - msLeft)
+}
 
 export type Phase = 'question' | 'results'
 

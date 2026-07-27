@@ -2,14 +2,18 @@
 //
 // A host's perk (replacing the old "2 free promo slots") is a 100%-off Stripe
 // promotion code, readable from their business name, minted when their venue goes
-// live. They enter it at advertiser checkout — Stripe Checkout already sets
-// allow_promotion_codes, so no checkout change is needed.
+// live. The buy flow applies it for them: submitCampaign resolves the stored code
+// to its promotion id and attaches it to the Checkout session, so a host never has
+// to remember or retype it. The code is still shown on their dashboard.
 //
 // The code is capped at 2 redemptions (the host's "2 free TVs"). It is readable
 // (a business name) and not customer-locked; if sharing ever matters, lock it to
 // the host's Stripe customer here.
 
 import { stripe } from '@/lib/stripe'
+import type { createAdminClient } from '@/lib/supabase/admin'
+
+type Admin = ReturnType<typeof createAdminClient>
 
 // One reusable coupon backs every host comp code: 100% off, forever. Created
 // lazily with a stable id so we never make duplicates.
@@ -67,4 +71,49 @@ export async function createHostCompCode(businessName: string): Promise<string> 
     }
   }
   throw new Error('Could not generate a unique comp code.')
+}
+
+// Resolve a stored comp code to the live Stripe promotion code id, or null when
+// there's nothing usable. Checkout's `discounts` takes the id (promo_...), not the
+// code string, so this is the lookup that lets us apply it automatically.
+//
+// Null on anything doubtful (missing, deactivated, redemptions used up, Stripe
+// unreachable) — the caller then falls back to the manual promo-code box rather
+// than sending a dead discount into Checkout, which would fail the whole session.
+export async function hostCompPromotionId(code: string | null): Promise<string | null> {
+  if (!code?.trim()) return null
+  try {
+    const { data } = await stripe().promotionCodes.list({
+      code: code.trim(),
+      active: true,
+      limit: 1,
+    })
+    const promo = data[0]
+    if (!promo) return null
+    // Stripe deactivates a code once max_redemptions is hit, but check anyway so a
+    // code exhausted mid-flight can't take the checkout down with it.
+    if (promo.max_redemptions != null && promo.times_redeemed >= promo.max_redemptions) return null
+    if (promo.expires_at != null && promo.expires_at * 1000 <= Date.now()) return null
+    return promo.id
+  } catch {
+    return null
+  }
+}
+
+// The comp code a buyer is entitled to as a host: the first active venue of theirs
+// that has one. Hosts with several live venues still get one perk, not one each.
+export async function hostCompCodeForUser(admin: Admin, userId: string): Promise<string | null> {
+  try {
+    const { data } = await admin
+      .from('venues')
+      .select('comp_promo_code')
+      .eq('host_user_id', userId)
+      .eq('status', 'active')
+      .not('comp_promo_code', 'is', null)
+      .limit(1)
+      .maybeSingle()
+    return (data as { comp_promo_code: string | null } | null)?.comp_promo_code ?? null
+  } catch {
+    return null
+  }
 }

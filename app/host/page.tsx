@@ -306,11 +306,12 @@ export default async function HostHome() {
                           <div>
                             <p className="font-medium">Advertise free — your host perk</p>
                             <p className="text-muted-foreground">
-                              Enter code{' '}
+                              Your code{' '}
                               <span className="font-mono font-semibold text-foreground">
                                 {v.comp_promo_code}
                               </span>{' '}
-                              at checkout for 100% off, good for up to 2 screens.
+                              applies itself at checkout for 100% off, good for up to 2 screens.
+                              Nothing to type.
                             </p>
                           </div>
                         </div>
