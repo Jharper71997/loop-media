@@ -24,50 +24,26 @@ export async function GET(req: Request) {
   const { round, question: q } = resolved
   const { phase, endsInMs } = roundPhase(now)
 
-  // Score = the player's current STREAK of correct answers in a row. One wrong
-  // answer resets them to zero — the whole game is how many you can get right in
-  // a row without a miss. Window resets weekly (Monday 00:00 server time; server
-  // runs UTC on Vercel, fine until per-venue tz lands). Fetch every answer this
-  // week (right AND wrong), ordered by round, and walk each player's run.
+  // Score = POINTS banked this week. Every correct answer is worth up to 1,000,
+  // decaying by the second it took to lock in (see pointsFor in lib/trivia) — so
+  // the board rewards playing every round and beating the table to the tap, not
+  // an unbroken run. A wrong answer banks 0 and costs nothing.
+  //
+  // Window resets weekly (Monday 00:00 server time; server runs UTC on Vercel,
+  // fine until per-venue tz lands).
   const weekStart = new Date()
   weekStart.setHours(0, 0, 0, 0)
   weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7))
   const { data: answers } = await supabase
     .from('trivia_answers')
-    .select('player_id, round, is_correct')
+    .select('player_id, points')
     .eq('venue_id', venueId)
     .gte('created_at', weekStart.toISOString())
 
-  // CURRENT streak = walk a player's answers in round order; +1 per correct, back
-  // to 0 on any miss. The final value is their live run — this is the "X in a row"
-  // shown on the player's own phone (resets to 0 when they miss).
-  const streakOf = (rows: { round: number; is_correct: boolean }[]): number => {
-    let s = 0
-    for (const r of [...rows].sort((a, b) => a.round - b.round)) s = r.is_correct ? s + 1 : 0
-    return s
-  }
-  // BEST streak this week = the longest run of correct-in-a-row a player reached.
-  // The leaderboard ranks by THIS (a weekly high score), not the current streak,
-  // so getting 3 in a row and then missing doesn't wipe you off the board — your
-  // best run stands until someone beats it or the weekly window resets.
-  const bestStreakOf = (rows: { round: number; is_correct: boolean }[]): number => {
-    let s = 0
-    let best = 0
-    for (const r of [...rows].sort((a, b) => a.round - b.round)) {
-      s = r.is_correct ? s + 1 : 0
-      if (s > best) best = s
-    }
-    return best
-  }
-  const seqByPlayer = new Map<string, { round: number; is_correct: boolean }[]>()
-  for (const a of (answers ?? []) as { player_id: string; round: number; is_correct: boolean }[]) {
-    const arr = seqByPlayer.get(a.player_id) ?? []
-    arr.push({ round: Number(a.round), is_correct: a.is_correct })
-    seqByPlayer.set(a.player_id, arr)
-  }
-  // Leaderboard is ranked by each player's best run of the week.
   const byPlayer = new Map<string, number>()
-  for (const [pid, rows] of seqByPlayer) byPlayer.set(pid, bestStreakOf(rows))
+  for (const a of (answers ?? []) as { player_id: string; points: number | null }[]) {
+    byPlayer.set(a.player_id, (byPlayer.get(a.player_id) ?? 0) + (a.points ?? 0))
+  }
   const top = [...byPlayer.entries()]
     .filter(([, s]) => s > 0)
     .sort((a, b) => b[1] - a[1])
@@ -84,18 +60,30 @@ export async function GET(req: Request) {
     leaderboard = top.map(([id, score]) => ({ name: nameById.get(id) ?? '—', score }))
   }
 
-  // This player's status for the current round + their current streak.
-  let you: { answered: boolean; choiceIdx: number | null; score: number } | null = null
+  // This player's status for the current round + their week's points. `awarded` is
+  // what THIS round banked, so the phone can show the "+840" the moment it lands
+  // instead of waiting for the reveal.
+  let you: {
+    answered: boolean
+    choiceIdx: number | null
+    score: number
+    awarded: number | null
+  } | null = null
   if (playerId) {
     const { data: mine } = await supabase
       .from('trivia_answers')
-      .select('round, choice_idx, is_correct')
+      .select('round, choice_idx, points')
       .eq('player_id', playerId)
       .gte('created_at', weekStart.toISOString())
-    const rows = (mine ?? []) as { round: number; choice_idx: number; is_correct: boolean }[]
+    const rows = (mine ?? []) as { round: number; choice_idx: number; points: number | null }[]
     const thisRound = rows.find((r) => Number(r.round) === round)
-    const score = streakOf(rows.map((r) => ({ round: Number(r.round), is_correct: r.is_correct })))
-    you = { answered: !!thisRound, choiceIdx: thisRound?.choice_idx ?? null, score }
+    const score = rows.reduce((sum, r) => sum + (r.points ?? 0), 0)
+    you = {
+      answered: !!thisRound,
+      choiceIdx: thisRound?.choice_idx ?? null,
+      score,
+      awarded: thisRound ? (thisRound.points ?? 0) : null,
+    }
   }
 
   // What's on the screens here, for a player to browse while they wait. Always
