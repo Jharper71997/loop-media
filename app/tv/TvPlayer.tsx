@@ -5,6 +5,8 @@ import Image from 'next/image'
 import { QR_SIZE_DEFAULT } from '@/lib/adCreative'
 import { QrChip } from '@/components/app/QrChip'
 import { CreativeVideo } from '@/components/app/CreativeVideo'
+import { ANSWER_SECONDS, ROUND_SECONDS } from '@/lib/trivia'
+import { cn } from '@/lib/utils'
 
 const DEVICE_KEY = 'lm_device'
 const DEVICE_SECRET_KEY = 'lm_device_secret'
@@ -1018,73 +1020,206 @@ function CalibrationOverlay({
   )
 }
 
-// Live "play trivia" teaser shown on the TV: a scannable join QR and this week's
-// leaderboard. The GAME QUESTION is intentionally NOT shown here — it's answered
-// on the phone. Putting the live question on the TV made it look like it "skipped"
-// (the question changes across slide appearances and at round boundaries), so the
-// TV now only invites people to scan and tracks the standings, which update
-// smoothly. Polls the public state endpoint for the leaderboard while on screen.
+// Live trivia on the TV: the CURRENT QUESTION and its four choices, a countdown,
+// the answer reveal when the round closes, plus the join QR and this week's top 3.
+//
+// The question used to be withheld here (it looked like it "skipped" when the
+// round rolled over mid-slide). It's on screen now because a bar TV showing only
+// a QR gives nobody a reason to scan — but the churn is handled instead of hidden:
+// every state carries a visible countdown ("18s to answer" / "next question in
+// 6s"), so a rollover reads as the game moving on, not as a glitch.
+//
+// Round timing comes from the SERVER's endsInMs (anchored to a local timestamp on
+// each poll), not from the TV's own clock — a Fire Stick with a skewed clock would
+// otherwise count down to the wrong question. The countdown ticks locally between
+// polls and forces an immediate refetch the moment it hits zero, so the reveal and
+// the next question land on time.
+type TriviaLive = {
+  round: number
+  phase: 'question' | 'results'
+  endsAt: number // local ms timestamp the current phase ends at
+  prompt: string
+  choices: string[]
+  correctIdx: number | null
+}
+
 function TriviaSlide({ venueId, qrImage }: { venueId: string; qrImage: string }) {
   const [lb, setLb] = useState<{ name: string; score: number }[]>([])
+  const [live, setLive] = useState<TriviaLive | null>(null)
+  const [secs, setSecs] = useState(0)
+  const refetch = useRef<(() => void) | null>(null)
 
   useEffect(() => {
     if (!venueId) return
     let alive = true
+    let timer: ReturnType<typeof setTimeout> | null = null
     const tick = async () => {
+      if (timer) clearTimeout(timer)
       try {
         const r = await fetch(`/api/trivia/state?venue=${venueId}`, { cache: 'no-store' })
-        if (!r.ok) return
-        const d = await r.json()
-        if (!alive) return
-        setLb(d.leaderboard ?? [])
+        if (r.ok) {
+          const d = await r.json()
+          if (!alive) return
+          setLb(d.leaderboard ?? [])
+          if (d.question?.prompt) {
+            setLive({
+              round: d.round,
+              phase: d.phase === 'results' ? 'results' : 'question',
+              endsAt: Date.now() + Math.max(0, d.endsInMs ?? 0),
+              prompt: d.question.prompt,
+              choices: Array.isArray(d.question.choices) ? d.question.choices : [],
+              correctIdx: typeof d.correctIdx === 'number' ? d.correctIdx : null,
+            })
+          }
+        }
       } catch {
-        /* keep last */
+        /* keep the last state on screen */
+      } finally {
+        // Poll fast enough that the reveal + the next question show up promptly;
+        // the slide is only on screen ~20s per loop cycle, so this is a handful of
+        // reads, not a standing load.
+        if (alive) timer = setTimeout(tick, 2500)
       }
     }
+    refetch.current = tick
     tick()
-    const id = setInterval(tick, 5000)
     return () => {
       alive = false
-      clearInterval(id)
+      refetch.current = null
+      if (timer) clearTimeout(timer)
     }
   }, [venueId])
 
+  // Local countdown off the server anchor. When a phase expires, pull fresh state
+  // right away rather than waiting out the poll interval.
+  useEffect(() => {
+    if (!live) return
+    // Only chase the rollover for an anchor that was still in the future when it
+    // arrived. An already-expired anchor (a poll that landed right on the boundary)
+    // would otherwise refetch, expire again, and spin the endpoint — let the normal
+    // poll pick that one up instead.
+    let fired = live.endsAt <= Date.now()
+    const t = () => {
+      const left = Math.max(0, Math.ceil((live.endsAt - Date.now()) / 1000))
+      setSecs(left)
+      if (left === 0 && !fired) {
+        fired = true
+        refetch.current?.()
+      }
+    }
+    t()
+    const id = setInterval(t, 250)
+    return () => clearInterval(id)
+  }, [live])
+
+  const reveal = live?.phase === 'results'
+  const total = reveal ? ROUND_SECONDS - ANSWER_SECONDS : ANSWER_SECONDS
+  const pct = Math.max(0, Math.min(100, (secs / total) * 100))
+
   return (
-    <div className="flex h-full w-full items-center justify-center gap-16 bg-gradient-to-br from-[#1c1813] via-[#100e0a] to-black px-16 text-white">
-      <div className="flex flex-col items-center">
-        <div className="text-3xl font-extrabold tracking-wide text-primary">PLAY TRIVIA</div>
+    <div className="flex h-full w-full items-center gap-14 bg-gradient-to-br from-[#1c1813] via-[#100e0a] to-black px-16 py-14 text-white">
+      {/* The game itself */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex items-center gap-5">
+          <span className="font-heading text-4xl font-extrabold tracking-wide text-primary">
+            LOOP TRIVIA
+          </span>
+          {live && (
+            <span className="rounded-full border border-white/15 bg-white/5 px-5 py-1.5 text-2xl tabular-nums text-white/70">
+              {reveal ? `Next question in ${secs}s` : `${secs}s to answer`}
+            </span>
+          )}
+        </div>
+
+        {live ? (
+          <>
+            <div className="mt-7 font-heading text-7xl font-extrabold leading-[1.06]">
+              {live.prompt}
+            </div>
+            <div className="mt-9 grid grid-cols-2 gap-5">
+              {live.choices.map((c, i) => {
+                const right = reveal && live.correctIdx === i
+                return (
+                  <div
+                    key={i}
+                    className={cn(
+                      'flex items-center gap-5 rounded-2xl border px-7 py-6 transition-colors',
+                      right
+                        ? 'border-success bg-success/20'
+                        : reveal
+                          ? 'border-white/10 bg-white/[0.02] opacity-45'
+                          : 'border-white/15 bg-white/[0.06]'
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'flex size-14 shrink-0 items-center justify-center rounded-xl text-3xl font-bold',
+                        right ? 'bg-success text-black' : 'bg-white/10 text-white/70'
+                      )}
+                    >
+                      {String.fromCharCode(65 + i)}
+                    </span>
+                    <span className="min-w-0 truncate text-4xl">{c}</span>
+                  </div>
+                )
+              })}
+            </div>
+            {/* Time bar — makes the round obviously timed, so a rollover reads as
+                the game advancing rather than the screen skipping. */}
+            <div className="mt-8 h-2 w-full overflow-hidden rounded-full bg-white/10">
+              <div
+                className={cn(
+                  'h-full rounded-full transition-[width] duration-300 ease-linear',
+                  reveal ? 'bg-success' : 'bg-primary'
+                )}
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+          </>
+        ) : (
+          // No live question yet (state still loading, or no questions configured
+          // for this venue) — fall back to the invitation so the slide is never blank.
+          <>
+            <div className="mt-7 font-heading text-6xl font-extrabold leading-tight">
+              Trivia night,
+              <br />
+              <span className="text-primary">live on your phone.</span>
+            </div>
+            <div className="mt-6 text-3xl text-white/60">
+              Answer from your seat and climb this week&apos;s leaderboard.
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Join QR + this week's standings */}
+      <div className="flex w-[24rem] shrink-0 flex-col items-center">
         {qrImage && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={qrImage} alt="Scan to play" className="mt-6 size-60 rounded-2xl bg-white p-3" />
+          <img src={qrImage} alt="Scan to play" className="size-64 rounded-2xl bg-white p-3" />
         )}
-        <div className="mt-5 text-2xl text-white/70">Scan to play on your phone</div>
-      </div>
-      <div className="max-w-xl">
-        <div className="font-heading text-5xl font-extrabold leading-tight">
-          Trivia night,
-          <br />
-          <span className="text-primary">live on your phone.</span>
+        <div className="mt-5 text-center text-3xl font-semibold text-white/85">
+          Scan to play <span className="text-primary">free</span>
         </div>
-        <div className="mt-4 text-2xl text-white/60">
-          Answer from your seat and climb this week&apos;s leaderboard.
+        <div className="mt-8 w-full">
+          <div className="text-sm uppercase tracking-[0.2em] text-white/40">
+            This Week&apos;s Leaders
+          </div>
+          {lb.length ? (
+            <ol className="mt-3 space-y-1.5">
+              {lb.slice(0, 3).map((p, i) => (
+                <li key={i} className="flex justify-between text-2xl">
+                  <span className="min-w-0 truncate">
+                    {i + 1}. {p.name}
+                  </span>
+                  <span className="ml-3 shrink-0 font-mono text-primary">{p.score}</span>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <div className="mt-3 text-2xl text-white/50">Be the first to play!</div>
+          )}
         </div>
-        <div className="mt-8 text-sm uppercase tracking-[0.2em] text-white/40">
-          This Week&apos;s Leaders
-        </div>
-        {lb.length ? (
-          <ol className="mt-4 space-y-2">
-            {lb.slice(0, 3).map((p, i) => (
-              <li key={i} className="flex justify-between text-3xl">
-                <span>
-                  {i + 1}. {p.name}
-                </span>
-                <span className="font-mono text-primary">{p.score}</span>
-              </li>
-            ))}
-          </ol>
-        ) : (
-          <div className="mt-4 text-3xl text-white/50">Be the first to play!</div>
-        )}
       </div>
     </div>
   )

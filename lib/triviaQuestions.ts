@@ -52,9 +52,18 @@ export async function resolveVenueQuestion(
   // round, a fresh order each day, all questions cycle before any repeat.
   const order = shuffledOrder(questions.length, dayNumber(nowMs))
   const q = questions[order[round % questions.length]]
+  // Collapse whitespace: some seeded rows carry the newline + indent from the SQL
+  // literal they were inserted with ("Leonardo da\r\n  Vinci"), which shows up as a
+  // ragged gap on the TV's single-line choice chips. Display-only — grading is by
+  // index, so this can't change an answer.
+  const clean = (s: string) => s.replace(/\s+/g, ' ').trim()
   return {
     round,
     count: questions.length,
-    question: { prompt: q.prompt, choices: q.choices, correct_idx: q.correct_idx },
+    question: {
+      prompt: clean(q.prompt),
+      choices: q.choices.map(clean),
+      correct_idx: q.correct_idx,
+    },
   }
 }
