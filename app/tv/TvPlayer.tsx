@@ -74,9 +74,12 @@ type Slide =
 // run at the same beat as the ads around them. Mirrors DEFAULT_HOUSE_SLIDE_SECONDS
 // in lib/tv.ts (which this client component can't import — it pulls in node:crypto).
 const FILLER_SECONDS = 15
-// The trivia join slide holds longer than a plain filler card so a patron can
-// read the question and scan without it churning to the next one.
-const TRIVIA_SLIDE_SECONDS = 22
+// Trivia holds the same 15s as everything else. It used to run longer on the
+// theory that a question needs more dwell than a filler card, but a house slide
+// that outlasts a paid slot costs the screen sellable inventory, and the loop
+// comes back around every few minutes anyway — a question a patron half-read is
+// still on the board when it returns.
+const TRIVIA_SLIDE_SECONDS = 15
 
 // Default overscan safe-area inset (percent per side) when a screen has no
 // per-screen overscan_pct set. Default 0 = edge-to-edge (no inset), so screens are

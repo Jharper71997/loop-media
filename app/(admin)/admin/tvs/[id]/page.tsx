@@ -158,7 +158,7 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
     { kind: 'advertise', label: '“Advertise on this screen” card', seconds: tv.advertise_seconds ?? 15 },
   ]
   if (tv.venue?.trivia_enabled)
-    houseSlides.push({ kind: 'trivia', label: 'Trivia teaser', seconds: tv.trivia_slide_seconds ?? 22 })
+    houseSlides.push({ kind: 'trivia', label: 'Trivia teaser', seconds: tv.trivia_slide_seconds ?? 15 })
   if (tv.venue?.territory_id) {
     const { data: fillerRows } = await supabase
       .from('filler_content')
