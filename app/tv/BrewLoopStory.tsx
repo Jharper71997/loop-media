@@ -422,7 +422,9 @@ export function BrewLoopStory({ qrImage }: { qrImage: string }) {
       <div className="bl-offer bl-offer-box">
         <div className="bl-price">
           <div className="bl-price-num">$20</div>
-          <div className="bl-price-sub">All night. Everybody home.</div>
+          {/* Says what the $20 buys, not what the story already said. A safety line
+              here re-preaches the point the art just made. */}
+          <div className="bl-price-sub">One ticket. Every stop.</div>
         </div>
         {qrImage && (
           <div>
