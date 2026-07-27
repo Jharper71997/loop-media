@@ -389,24 +389,32 @@ export function BrewLoopStory({ qrImage }: { qrImage: string }) {
       </div>
       <div className="bl-rule" />
 
+      {/* Copy voice: dry, not preachy. The picture already delivers the consequence,
+          so the words stay light and let it land — a PSA register fights the bricks
+          and nobody in a bar reads a lecture. Giving him a name is what makes it
+          repeatable: "don't be Greg" is a thing friends say to each other, which is
+          the whole point of an ad that plays where friends are sitting.
+          Still never names alcohol; the story implies it and the art never shows it. */}
       <div className="bl-caps">
         <div className="bl-cap bl-cap1">
-          <div className="bl-line">Ten minutes from home.</div>
-          <div className="bl-sub">He&apos;s made this drive a hundred times.</div>
+          <div className="bl-line">Greg was pretty sure he was fine.</div>
+          <div className="bl-sub">It&apos;s a ten minute drive. He&apos;s done it a hundred times.</div>
         </div>
         <div className="bl-cap bl-cap2">
-          <div className="bl-line">Then the lights.</div>
-          <div className="bl-sub">Ten minutes turns into the longest night of the year.</div>
+          <div className="bl-line">Greg was not fine.</div>
+          <div className="bl-sub">It&apos;s now a very long night.</div>
         </div>
         <div className="bl-cap bl-cap3">
-          <div className="bl-line">Thousands in fines. Months without a license.</div>
-          <div className="bl-sub">And a phone call he has to make in the morning.</div>
+          <div className="bl-line">The most expensive ten minutes of Greg&apos;s life.</div>
+          <div className="bl-sub">
+            Fines, a lawyer, insurance, and a year of asking friends for rides.
+          </div>
         </div>
         <div className="bl-cap bl-cap4">
           <div className="bl-tag">
-            DRIVE SOBER.
+            DON&apos;T BE GREG.
             <br />
-            <span className="bl-tag-gold">OR JUST RIDE THE LOOP.</span>
+            <span className="bl-tag-gold">RIDE THE LOOP.</span>
           </div>
         </div>
       </div>
