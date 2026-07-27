@@ -26,6 +26,7 @@ export type EmailKey =
   | 'host_monthly_report'
   | 'screen_offline'
   | 'screen_live'
+  | 'host_screen_live'
 
 export type EmailField = 'subject' | 'heading' | 'body'
 
@@ -169,6 +170,22 @@ export const EMAIL_CATALOG: EmailCatalogEntry[] = [
       subject: 'A new screen just went live in {city}',
       heading: 'A new screen is live in {city}.',
       body: '{venue} is now showing the loop. It is on the map if you would like to take a look.',
+    },
+  },
+  {
+    key: 'host_screen_live',
+    label: 'New screen live (host)',
+    audience: 'Host',
+    description:
+      'Announces a newly live screen to the other hosts in that market. Same trigger as the advertiser version, sent on the same run, but toggled separately. The new venue’s own host never gets it.',
+    fields: ['subject', 'heading', 'body'],
+    placeholders: ['venue', 'city'],
+    default: {
+      subject: 'A new screen just went live in {city}',
+      heading: 'The Loop is growing in {city}',
+      body:
+        '{venue} just joined the network in {city}.\n\n' +
+        'More screens in the market means more advertisers, which means more running on your screen too.',
     },
   },
 ]
