@@ -178,7 +178,7 @@ export function ReplaceCreative({
         </button>
       </div>
       <p className="text-xs text-muted-foreground">
-        Images look best at 16:9 — 1920 × 1080. Your new spot goes to review, then replaces the
+        Swap in a video or a still image, either one at 16:9, 1920 × 1080. Your new spot goes to review, then replaces the
         current one on your screens. Placements and billing stay as they are. Your first change each
         week is free. We ask for {AD_CHANGE_NOTICE_DAYS} days notice on changes.
       </p>
@@ -207,7 +207,7 @@ export function ReplaceCreative({
       >
         <Upload className="size-5 text-muted-foreground" />
         <span className="text-sm text-muted-foreground">
-          {file ? file.name : dragActive ? 'Drop to upload' : 'Tap to upload, or drag an image or video here'}
+          {file ? file.name : dragActive ? 'Drop to upload' : 'Tap to upload a video or an image, or drag one here'}
         </span>
         {file && (
           <span className="text-xs text-muted-foreground">

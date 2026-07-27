@@ -176,7 +176,7 @@ export function CreativeStep({
     if (!qrTarget)
       return toast.error('Add the link people go to when they scan your ad.')
     if (mode === 'upload' && !file)
-      return toast.error('Upload your ad image or switch to "Request creative help".')
+      return toast.error('Upload your video or image, or switch to "Make it for me".')
     if (mode === 'help' && !brief.trim()) return toast.error('Tell our team what you need designed.')
 
     start(async () => {
@@ -284,7 +284,7 @@ export function CreativeStep({
         step={3}
         total={3}
         title="Add your ad"
-        subtitle="A 15-second spot. Images look best at 16:9 — 1920 × 1080."
+        subtitle="A 15-second spot. Upload a video or a still image — either looks best at 16:9, 1920 × 1080."
       />
 
       <div className="space-y-1.5">
@@ -372,7 +372,7 @@ export function CreativeStep({
                   ? file.name
                   : dragActive
                     ? 'Drop to upload'
-                    : 'Tap to upload, or drag an image or video here'}
+                    : 'Tap to upload a video or an image, or drag one here'}
               </span>
               {file && (
                 <span className="text-xs text-muted-foreground">

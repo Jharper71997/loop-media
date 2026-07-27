@@ -45,7 +45,7 @@ const STEPS: Record<'advertiser' | 'host', { steps: Step[]; cta: string; href: s
       {
         icon: Upload,
         title: 'Add your ad and go live',
-        body: 'Upload a 15-second ad — or have us make one — and it runs as soon as it\'s approved.',
+        body: 'Upload a 15-second video or image — or have us make one — and it runs as soon as it\'s approved.',
       },
     ],
     cta: 'Build my first campaign',

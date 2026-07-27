@@ -111,7 +111,7 @@ const STEPS = [
   {
     n: '2',
     title: "Add your ad, or we'll make it",
-    sub: 'Upload a 15-second spot, or have our team design one for you.',
+    sub: 'Upload a 15-second video or a still image, or have our team design one for you.',
   },
   {
     n: '3',
@@ -177,7 +177,12 @@ export default async function Home() {
             Or see how it works
           </Link>
           <div className="mt-5 flex flex-wrap justify-center gap-x-5 gap-y-1.5 text-xs text-muted-foreground">
-            {['From $50 / screen / month', 'Month to month', 'We can design your ad'].map((t) => (
+            {[
+              'From $50 / screen / month',
+              'Month to month',
+              'Run a video or an image',
+              'We can design your ad',
+            ].map((t) => (
               <span key={t} className="flex items-center gap-1.5">
                 <Check className="size-3.5 text-primary" /> {t}
               </span>

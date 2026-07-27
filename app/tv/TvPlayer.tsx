@@ -1447,6 +1447,13 @@ function AdvertiseAd({ qrImage }: { qrImage: string }) {
         <div className="mt-5 max-w-lg text-3xl leading-snug text-white/70">
           Local ads people actually see, right where your customers already are.
         </div>
+        {/* Most owners assume a screen like this only takes a flyer image. Saying
+            video out loud on the slide itself is the cheapest place to fix that. */}
+        <div className="mt-4 flex items-center gap-4 text-2xl text-white/45">
+          <span>Run a video or a photo</span>
+          <span className="text-white/20">•</span>
+          <span>We can make it for you</span>
+        </div>
         {qrImage ? (
           <div className="mt-9 flex items-center gap-7">
             {/* eslint-disable-next-line @next/next/no-img-element */}
