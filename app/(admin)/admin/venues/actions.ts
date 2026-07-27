@@ -10,6 +10,7 @@ import {
   TV_PAIRING_CODE_LEN,
   DEFAULT_LOOP_SECONDS,
   DEFAULT_SLOT_SECONDS,
+  DEFAULT_HOUSE_SLIDE_SECONDS,
 } from '@/lib/tv'
 import { createHostCompCode } from '@/lib/hostComp'
 import type { PriceTier } from '@/lib/db.types'
@@ -110,6 +111,9 @@ export async function saveVenue(input: VenueInput) {
           status: 'unpaired',
           loop_length_seconds: DEFAULT_LOOP_SECONDS,
           slot_seconds: DEFAULT_SLOT_SECONDS,
+          brewloop_seconds: DEFAULT_HOUSE_SLIDE_SECONDS,
+          advertise_seconds: DEFAULT_HOUSE_SLIDE_SECONDS,
+          filler_seconds: DEFAULT_HOUSE_SLIDE_SECONDS,
         })
         if (!tvErr) break
         if (!/duplicate|unique/i.test(tvErr.message)) break

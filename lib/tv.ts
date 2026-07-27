@@ -61,3 +61,15 @@ export function pairingUrl(origin: string, code: string): string {
 // Default loop config for a freshly provisioned screen (360s loop / 15s slots).
 export const DEFAULT_LOOP_SECONDS = 360
 export const DEFAULT_SLOT_SECONDS = 15
+
+// Seconds each HOUSE slide holds on a brand-new screen — the Brew Loop ad, the
+// "advertise on this screen" card, and any authored filler card. 15s, the same as
+// a paid slot: a new host's loop should look consistent from the first boot, not
+// run house cards at a different (shorter) beat than the ads around them. Written
+// explicitly at creation so the value is visible on the admin screen page instead
+// of sitting NULL and relying on a fallback.
+//
+// The TV player carries its own copy (FILLER_SECONDS in app/tv/TvPlayer.tsx) for
+// older cached manifests — it's a client component and can't import this file,
+// which pulls in node:crypto. Keep the two in sync.
+export const DEFAULT_HOUSE_SLIDE_SECONDS = 15

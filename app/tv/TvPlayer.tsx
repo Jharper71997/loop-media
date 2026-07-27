@@ -68,7 +68,12 @@ type Slide =
   | { kind: 'brewloop' }
   | { kind: 'filler'; card: FillerCard }
 
-const FILLER_SECONDS = 10
+// Fallback hold time for the house slides (Brew Loop ad, "advertise here" card,
+// authored filler) when a screen has no per-screen value — an older cached manifest,
+// or a row predating the explicit defaults. 15s to match a paid slot, so house cards
+// run at the same beat as the ads around them. Mirrors DEFAULT_HOUSE_SLIDE_SECONDS
+// in lib/tv.ts (which this client component can't import — it pulls in node:crypto).
+const FILLER_SECONDS = 15
 // The trivia join slide holds longer than a plain filler card so a patron can
 // read the question and scan without it churning to the next one.
 const TRIVIA_SLIDE_SECONDS = 22

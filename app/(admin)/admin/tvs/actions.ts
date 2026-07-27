@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { requireAdmin, adminCanTerritory } from '@/lib/auth'
 import type { Profile } from '@/lib/db.types'
-import { genPairingCode, TV_PAIRING_CODE_LEN } from '@/lib/tv'
+import { genPairingCode, TV_PAIRING_CODE_LEN, DEFAULT_HOUSE_SLIDE_SECONDS } from '@/lib/tv'
 
 type Supa = Awaited<ReturnType<typeof createClient>>
 
@@ -70,6 +70,11 @@ export async function createTv(input: {
       status: 'unpaired',
       loop_length_seconds: input.loop_length_seconds,
       slot_seconds: input.slot_seconds,
+      // House slides run at the same 15s beat as a paid slot from the first boot,
+      // rather than defaulting shorter and needing an admin to even them up.
+      brewloop_seconds: DEFAULT_HOUSE_SLIDE_SECONDS,
+      advertise_seconds: DEFAULT_HOUSE_SLIDE_SECONDS,
+      filler_seconds: DEFAULT_HOUSE_SLIDE_SECONDS,
     })
     if (!error) {
       revalidatePath('/admin/venues')
