@@ -15,6 +15,12 @@ import type { createAdminClient } from '@/lib/supabase/admin'
 
 type Admin = ReturnType<typeof createAdminClient>
 
+// How many screens the perk covers. Stripe can only cap REDEMPTIONS, and the
+// coupon is 100% off the whole order — so a single checkout with five screens in
+// the cart would comp all five and still leave a redemption on the code. The buy
+// flow enforces the screen count itself against this number.
+export const HOST_COMP_MAX_SCREENS = 2
+
 // One reusable coupon backs every host comp code: 100% off, forever. Created
 // lazily with a stable id so we never make duplicates.
 const HOST_COMP_COUPON_ID = 'host-comp-100'

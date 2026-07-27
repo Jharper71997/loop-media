@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { HOST_COMP_MAX_SCREENS } from '@/lib/hostComp'
 import { timeAgo, isTvLive, formatNumber } from '@/lib/format'
 import type { Tv, Venue } from '@/lib/db.types'
 import { LiveStatus } from '@/components/app/LiveStatus'
@@ -310,8 +311,8 @@ export default async function HostHome() {
                               <span className="font-mono font-semibold text-foreground">
                                 {v.comp_promo_code}
                               </span>{' '}
-                              applies itself at checkout for 100% off, good for up to 2 screens.
-                              Nothing to type.
+                              covers up to {HOST_COMP_MAX_SCREENS} screens and applies itself at
+                              checkout for 100% off. Nothing to type.
                             </p>
                           </div>
                         </div>

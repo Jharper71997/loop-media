@@ -21,7 +21,7 @@ import {
 import { notifyCampaignCreated } from '@/lib/notifyAdvertiser'
 import { notifyAdminNewAd } from '@/lib/notifyAdmin'
 import { CREATIVE_SETUP_FEE_CENTS, CREATIVE_REFRESH_CENTS } from '@/lib/fees'
-import { hostCompCodeForUser, hostCompPromotionId } from '@/lib/hostComp'
+import { hostCompCodeForUser, hostCompPromotionId, HOST_COMP_MAX_SCREENS } from '@/lib/hostComp'
 import { QR_SIZE_DEFAULT, isOwnCreativeUrl, clampSpotSeconds } from '@/lib/adCreative'
 
 export interface NewCampaignInput {
@@ -315,8 +315,13 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
       // into Stripe. Resolve it here and attach it to the session instead. Stripe
       // rejects `discounts` alongside `allow_promotion_codes`, so it's one or the
       // other — a host without a usable code still gets the manual box.
+      //
+      // Only up to HOST_COMP_MAX_SCREENS. The coupon is 100% off the ENTIRE order,
+      // so auto-applying it to a big cart would quietly comp every screen in it
+      // against a perk that promises two. Over the cap we apply nothing and leave
+      // the manual box — same as before this existed.
       const hostDiscountId =
-        profile.role === 'host'
+        profile.role === 'host' && quote.totalScreens <= HOST_COMP_MAX_SCREENS
           ? await hostCompPromotionId(await hostCompCodeForUser(admin, profile.id))
           : null
 
