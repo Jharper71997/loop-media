@@ -35,6 +35,21 @@ type FillerCard = {
   payload: { headline?: string; sub?: string; foot?: string }
 }
 
+// A house slide (the Brew Loop ad, the "advertise here" card). `url` + `qr_image`
+// are always there. The creative_* fields appear ONLY when an admin has uploaded a
+// replacement for that slide (migration 0063) — without them the player draws its
+// built-in design, which is also what an older cached manifest does.
+type HouseSlide = {
+  url: string
+  qr_image: string
+  creative_type?: 'image' | 'video'
+  creative_url?: string
+  show_qr?: boolean
+  qr_x?: number
+  qr_y?: number
+  qr_size?: number
+}
+
 type Manifest = {
   tv: {
     loop_length_seconds: number
@@ -54,8 +69,8 @@ type Manifest = {
   items: AdItem[]
   filler?: FillerCard[]
   trivia?: { code: string; url: string; qr_image: string } | null
-  advertise?: { url: string; qr_image: string } | null
-  brewloop?: { url: string; qr_image: string } | null
+  advertise?: HouseSlide | null
+  brewloop?: HouseSlide | null
   generated_at: string
   build?: string
 }
@@ -789,7 +804,13 @@ function Player({
           )}
         </FillerFrame>
       ) : slide.kind === 'brewloop' ? (
-        <BrewLoopAd qrImage={manifest.brewloop?.qr_image ?? ''} />
+        manifest.brewloop?.creative_url ? (
+          <HouseCreativeSlide house={manifest.brewloop} />
+        ) : (
+          <BrewLoopAd qrImage={manifest.brewloop?.qr_image ?? ''} />
+        )
+      ) : manifest.advertise?.creative_url ? (
+        <HouseCreativeSlide house={manifest.advertise} />
       ) : (
         <AdvertiseAd qrImage={manifest.advertise?.qr_image ?? ''} />
       )}
@@ -936,6 +957,49 @@ function VideoAdSlide({ src, cutMs, onDone }: { src: string; cutMs: number; onDo
     }
   }, [src, cutMs])
   return <CreativeVideo ref={ref} src={src} className="lm-fade" autoPlay muted playsInline />
+}
+
+// An admin-uploaded house slide, playing in place of the built-in design. Laid out
+// like a paid ad — object-contain inside the 1080p stage, so a creative that isn't
+// exactly 16:9 letterboxes instead of cropping or stretching.
+//
+// Video LOOPS here, unlike a video ad. An ad owns its slot and advances the loop on
+// `ended`; a house slide is held by the same timer as every other slide, so a clip
+// shorter than the hold would otherwise freeze on its last frame for the remainder.
+function HouseCreativeSlide({ house }: { house: HouseSlide }) {
+  const showQr = house.show_qr !== false && !!house.qr_image
+  return (
+    <>
+      {house.creative_type === 'video' ? (
+        <CreativeVideo
+          src={house.creative_url!}
+          className="lm-fade"
+          autoPlay
+          muted
+          playsInline
+          loop
+        />
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={house.creative_url!}
+          alt=""
+          className="lm-fade h-full w-full object-contain"
+        />
+      )}
+      {/* Same overlay math as a paid ad, so a house creative's QR sits exactly where
+          the admin placed it in the editor preview. Off for a creative that bakes
+          its own code into the artwork. */}
+      {showQr && (
+        <QrChip
+          src={house.qr_image}
+          x={house.qr_x ?? 0.88}
+          y={house.qr_y ?? 0.82}
+          size={house.qr_size ?? QR_SIZE_DEFAULT}
+        />
+      )}
+    </>
+  )
 }
 
 // A fixed 1920x1080 design canvas scaled to fit the device's viewport as a whole. The
