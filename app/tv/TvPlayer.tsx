@@ -724,7 +724,18 @@ function Player({
           3%, 21%   { opacity: 1; transform: translateY(0) }
           24%, 100% { opacity: 0; transform: translateY(-12px) }
         }
-        .lm-joke { animation: lm-joke 15s cubic-bezier(.22,1,.36,1) infinite }
+        /* The backwards fill mode is load-bearing, not a flourish: each line after the
+           first sits on an animation-delay, and during a delay an element renders its
+           NORMAL style — so without it all four lines paint at once, stacked and
+           unreadable. backwards holds the 0% keyframe (opacity 0) through the delay.
+           The base opacity:0 covers the other half: any browser that doesn't run the
+           animation at all would otherwise show the same pile-up.
+           (No backticks in this comment — the whole block is a template literal.) */
+        .lm-joke { opacity: 0; animation: lm-joke 15s cubic-bezier(.22,1,.36,1) infinite backwards }
+        /* Fallback for any TV browser that ignores the animation entirely: show the
+           first line rather than an empty gap. While the animation IS running it
+           owns opacity, so this never fights it. */
+        .lm-joke:first-child { opacity: 1 }
 
         /* Loop Network gravitas: one slow, deliberate fill. Nothing bouncy — the
            Loop Network card sells to a business owner, so its motion reads as
@@ -1586,11 +1597,9 @@ function AdvertiseAd({ qrImage }: { qrImage: string }) {
             ask before they'd ever scan — and it does NOT get a joke. The Brew Loop
             card is the funny one; this one has to read as a media buy. */}
         <div className="mt-7 w-full max-w-[34rem]">
-          <div className="flex items-baseline gap-3 text-xl uppercase tracking-[0.2em] text-white/50">
-            <span className="font-heading text-4xl font-bold tracking-normal text-white">
-              15 seconds
-            </span>
-            <span>on rotation, all night</span>
+          <div className="font-heading text-5xl font-bold leading-none text-white">15 seconds</div>
+          <div className="mt-2 text-lg uppercase tracking-[0.2em] text-white/50">
+            on rotation, all night
           </div>
           <div className="mt-4 h-0.5 w-full overflow-hidden rounded-full bg-white/10">
             <div aria-hidden className="lm-meter h-full w-full rounded-full bg-primary/70" />
