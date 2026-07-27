@@ -6,7 +6,7 @@ import { QR_SIZE_DEFAULT } from '@/lib/adCreative'
 import { QrChip } from '@/components/app/QrChip'
 import { CreativeVideo } from '@/components/app/CreativeVideo'
 import { ANSWER_SECONDS, ROUND_SECONDS, pointsWithMsLeft } from '@/lib/trivia'
-import { BrewLoopStory } from './BrewLoopStory'
+import { BrewLoopHouseAd } from './BrewLoopHouseAd'
 import { cn } from '@/lib/utils'
 
 const DEVICE_KEY = 'lm_device'
@@ -795,7 +795,7 @@ function Player({
           )}
         </FillerFrame>
       ) : slide.kind === 'brewloop' ? (
-        <BrewLoopStory qrImage={manifest.brewloop?.qr_image ?? ''} />
+        <BrewLoopHouseAd qrImage={manifest.brewloop?.qr_image ?? ''} />
       ) : (
         <AdvertiseAd qrImage={manifest.advertise?.qr_image ?? ''} />
       )}
