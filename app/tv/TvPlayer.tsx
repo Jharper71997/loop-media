@@ -713,10 +713,33 @@ function Player({
         .lm-sweep { animation: lm-sweep 9s ease-in-out infinite }
         .lm-caret { animation: lm-caret 1.1s step-end infinite }
         .lm-bracket { animation: lm-bracket 2.4s ease-in-out infinite }
+
+        /* Brew Loop punchline rotator: stacked lines that each take a turn. Pure CSS
+           with a staggered delay rather than a JS timer, so it can't drift on a Fire
+           Stick, and it restarts clean on every remount — the first line always lands
+           first, which matters when the slide only holds 15s. The cycle is tuned to
+           that hold: four lines, one full pass, no half-finished joke on screen. */
+        @keyframes lm-joke {
+          0%, 1%    { opacity: 0; transform: translateY(16px) }
+          3%, 21%   { opacity: 1; transform: translateY(0) }
+          24%, 100% { opacity: 0; transform: translateY(-12px) }
+        }
+        .lm-joke { animation: lm-joke 15s cubic-bezier(.22,1,.36,1) infinite }
+
+        /* Loop Network gravitas: one slow, deliberate fill. Nothing bouncy — the
+           Loop Network card sells to a business owner, so its motion reads as
+           precision, not personality. */
+        @keyframes lm-meter { 0%, 4% { transform: scaleX(0) } 62%, 100% { transform: scaleX(1) } }
+        .lm-meter { animation: lm-meter 7s ease-out infinite; transform-origin: left center }
+
         @media (prefers-reduced-motion: reduce) {
           .lm-ken, .lm-rise, .lm-pop, .lm-ping, .lm-tick, .lm-urgent, .lm-breathe,
           .lm-drift-a, .lm-drift-b, .lm-spin, .lm-stop, .lm-sweep, .lm-caret,
-          .lm-bracket { animation: none }
+          .lm-bracket, .lm-meter { animation: none }
+          /* The rotator can't just stop — every line would stack on top of the
+             others. Freeze it showing only the first. */
+          .lm-joke { animation: none; opacity: 0; transform: none }
+          .lm-joke:first-child { opacity: 1 }
         }
       `}</style>
       {/* Fixed 1920x1080 canvas scaled to fit this device's viewport as a whole, so
@@ -1362,6 +1385,18 @@ function TriviaSlide({ venueId, qrImage }: { venueId: string; qrImage: string })
   )
 }
 
+// The Brew Loop card is the one that gets to be funny — it plays to riders and
+// their friends, not to buyers. Every line here is about the hassle the shuttle
+// removes (parking, the group chat, who has to drive), never about drinking:
+// we can't market alcohol, so the joke has to land on the logistics instead. Four
+// lines, because the slide holds 15s and the rotator does one clean pass.
+const BREW_LOOP_LINES = [
+  'Because the group chat took forty minutes to pick a place.',
+  'Because parking downtown is a competitive sport.',
+  'Because someone always gets stuck driving. Not tonight.',
+  'Because “we’ll just meet you there” has never once worked.',
+]
+
 // The Jville Brew Loop house ad — a real two-column advertisement (brand + hook on
 // the left, the $5-off offer + scannable QR on the right) rather than a logo
 // dropped on a card. Uses the TRANSPARENT round badge so nothing renders as a
@@ -1398,7 +1433,23 @@ function BrewLoopAd({ qrImage }: { qrImage: string }) {
           <br />
           <span className="text-primary">ALL NIGHT.</span>
         </div>
-        <div className="mt-7 max-w-xl text-3xl leading-snug text-white/70">
+
+        {/* The punchline rotator carries the humor; the fixed line under it carries
+            the facts. Riders glancing up mid-conversation get a joke they finish
+            reading in two seconds, then the mechanics if they keep watching. */}
+        <div className="relative mt-7 h-[7rem] max-w-2xl">
+          {BREW_LOOP_LINES.map((line, i) => (
+            <p
+              key={line}
+              className="lm-joke absolute inset-x-0 top-0 text-4xl leading-snug text-white/80"
+              style={{ animationDelay: `${i * 3.75}s` }}
+            >
+              {line}
+            </p>
+          ))}
+        </div>
+
+        <div className="mt-2 max-w-xl text-2xl leading-snug text-white/45">
           One ticket, one shuttle, looping between town&apos;s best local spots with your
           friends. Hop on, hop off, all night long.
         </div>
@@ -1528,6 +1579,22 @@ function AdvertiseAd({ qrImage }: { qrImage: string }) {
         </div>
         <div className="mt-5 text-3xl leading-snug text-white/70">
           Everyone in this room is already looking here.
+        </div>
+
+        {/* Stated flatly, with one slow fill for motion. This card sells to an owner
+            standing at the bar doing math in their head, so it answers what they'd
+            ask before they'd ever scan — and it does NOT get a joke. The Brew Loop
+            card is the funny one; this one has to read as a media buy. */}
+        <div className="mt-7 w-full max-w-[34rem]">
+          <div className="flex items-baseline gap-3 text-xl uppercase tracking-[0.2em] text-white/50">
+            <span className="font-heading text-4xl font-bold tracking-normal text-white">
+              15 seconds
+            </span>
+            <span>on rotation, all night</span>
+          </div>
+          <div className="mt-4 h-0.5 w-full overflow-hidden rounded-full bg-white/10">
+            <div aria-hidden className="lm-meter h-full w-full rounded-full bg-primary/70" />
+          </div>
         </div>
         {qrImage ? (
           <div className="mt-9 flex items-center gap-7">
