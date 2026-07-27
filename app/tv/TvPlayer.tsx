@@ -6,6 +6,7 @@ import { QR_SIZE_DEFAULT } from '@/lib/adCreative'
 import { QrChip } from '@/components/app/QrChip'
 import { CreativeVideo } from '@/components/app/CreativeVideo'
 import { ANSWER_SECONDS, ROUND_SECONDS, pointsWithMsLeft } from '@/lib/trivia'
+import { BrewLoopStory } from './BrewLoopStory'
 import { cn } from '@/lib/utils'
 
 const DEVICE_KEY = 'lm_device'
@@ -714,29 +715,6 @@ function Player({
         .lm-caret { animation: lm-caret 1.1s step-end infinite }
         .lm-bracket { animation: lm-bracket 2.4s ease-in-out infinite }
 
-        /* Brew Loop punchline rotator: stacked lines that each take a turn. Pure CSS
-           with a staggered delay rather than a JS timer, so it can't drift on a Fire
-           Stick, and it restarts clean on every remount — the first line always lands
-           first, which matters when the slide only holds 15s. The cycle is tuned to
-           that hold: four lines, one full pass, no half-finished joke on screen. */
-        @keyframes lm-joke {
-          0%, 1%    { opacity: 0; transform: translateY(16px) }
-          3%, 21%   { opacity: 1; transform: translateY(0) }
-          24%, 100% { opacity: 0; transform: translateY(-12px) }
-        }
-        /* The backwards fill mode is load-bearing, not a flourish: each line after the
-           first sits on an animation-delay, and during a delay an element renders its
-           NORMAL style — so without it all four lines paint at once, stacked and
-           unreadable. backwards holds the 0% keyframe (opacity 0) through the delay.
-           The base opacity:0 covers the other half: any browser that doesn't run the
-           animation at all would otherwise show the same pile-up.
-           (No backticks in this comment — the whole block is a template literal.) */
-        .lm-joke { opacity: 0; animation: lm-joke 15s cubic-bezier(.22,1,.36,1) infinite backwards }
-        /* Fallback for any TV browser that ignores the animation entirely: show the
-           first line rather than an empty gap. While the animation IS running it
-           owns opacity, so this never fights it. */
-        .lm-joke:first-child { opacity: 1 }
-
         /* Loop Network gravitas: one slow, deliberate fill. Nothing bouncy — the
            Loop Network card sells to a business owner, so its motion reads as
            precision, not personality. */
@@ -747,10 +725,6 @@ function Player({
           .lm-ken, .lm-rise, .lm-pop, .lm-ping, .lm-tick, .lm-urgent, .lm-breathe,
           .lm-drift-a, .lm-drift-b, .lm-spin, .lm-stop, .lm-sweep, .lm-caret,
           .lm-bracket, .lm-meter { animation: none }
-          /* The rotator can't just stop — every line would stack on top of the
-             others. Freeze it showing only the first. */
-          .lm-joke { animation: none; opacity: 0; transform: none }
-          .lm-joke:first-child { opacity: 1 }
         }
       `}</style>
       {/* Fixed 1920x1080 canvas scaled to fit this device's viewport as a whole, so
@@ -821,7 +795,7 @@ function Player({
           )}
         </FillerFrame>
       ) : slide.kind === 'brewloop' ? (
-        <BrewLoopAd qrImage={manifest.brewloop?.qr_image ?? ''} />
+        <BrewLoopStory qrImage={manifest.brewloop?.qr_image ?? ''} />
       ) : (
         <AdvertiseAd qrImage={manifest.advertise?.qr_image ?? ''} />
       )}
@@ -1391,136 +1365,6 @@ function TriviaSlide({ venueId, qrImage }: { venueId: string; qrImage: string })
             <div className="mt-3 text-2xl text-white/50">Be the first to play!</div>
           )}
         </div>
-      </div>
-    </div>
-  )
-}
-
-// The Brew Loop card is the one that gets to be funny — it plays to riders and
-// their friends, not to buyers. Every line here is about the hassle the shuttle
-// removes (parking, the group chat, who has to drive), never about drinking:
-// we can't market alcohol, so the joke has to land on the logistics instead. Four
-// lines, because the slide holds 15s and the rotator does one clean pass.
-const BREW_LOOP_LINES = [
-  'Because the group chat took forty minutes to pick a place.',
-  'Because parking downtown is a competitive sport.',
-  'Because someone always gets stuck driving. Not tonight.',
-  'Because “we’ll just meet you there” has never once worked.',
-]
-
-// The Jville Brew Loop house ad — a real two-column advertisement (brand + hook on
-// the left, the $5-off offer + scannable QR on the right) rather than a logo
-// dropped on a card. Uses the TRANSPARENT round badge so nothing renders as a
-// black block. Brand voice: shared shuttle, "friends", no alcohol/DUI angle.
-function BrewLoopAd({ qrImage }: { qrImage: string }) {
-  // The idea is the loop itself: a route that never stops circling, with stops
-  // lighting up one after another. A logo sitting next to a headline reads like
-  // every other slide on every other bar TV — a moving route reads like the thing
-  // it's selling. Black + gold only (brand), shared shuttle, no drink angle.
-  const stops = [0, 60, 120, 180, 240, 300]
-  return (
-    <div className="relative flex h-full w-full items-center overflow-hidden bg-[#0a0a0b] px-20 text-white">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute top-1/2 -left-40 size-[42rem] -translate-y-1/2 rounded-full bg-primary/10 blur-3xl"
-      />
-
-      <div className="relative z-10 max-w-3xl">
-        <div className="flex items-center gap-5">
-          <Image
-            src="/brewloop-badge.png"
-            alt="Jville Brew Loop"
-            width={1024}
-            height={1024}
-            priority
-            className="size-24 drop-shadow-[0_0_30px_rgba(212,163,51,0.35)]"
-          />
-          <span className="text-2xl font-semibold uppercase tracking-[0.28em] text-primary/80">
-            Jville Brew Loop
-          </span>
-        </div>
-        <div className="mt-8 font-heading text-[7.5rem] font-black leading-[0.86] tracking-tight">
-          RIDE
-          <br />
-          <span className="text-primary">ALL NIGHT.</span>
-        </div>
-
-        {/* The punchline rotator carries the humor; the fixed line under it carries
-            the facts. Riders glancing up mid-conversation get a joke they finish
-            reading in two seconds, then the mechanics if they keep watching. */}
-        <div className="relative mt-7 h-[7rem] max-w-2xl">
-          {BREW_LOOP_LINES.map((line, i) => (
-            <p
-              key={line}
-              className="lm-joke absolute inset-x-0 top-0 text-4xl leading-snug text-white/80"
-              style={{ animationDelay: `${i * 3.75}s` }}
-            >
-              {line}
-            </p>
-          ))}
-        </div>
-
-        <div className="mt-2 max-w-xl text-2xl leading-snug text-white/45">
-          One ticket, one shuttle, looping between town&apos;s best local spots with your
-          friends. Hop on, hop off, all night long.
-        </div>
-        <div className="mt-9 inline-flex items-center gap-5 rounded-2xl border border-primary/40 bg-primary/10 px-8 py-4">
-          <span className="font-heading text-6xl font-black leading-none text-primary">$5 OFF</span>
-          <span className="text-2xl leading-tight text-white/80">
-            your first ride
-            <br />
-            <span className="font-mono font-bold text-white">LOOP5</span>
-          </span>
-        </div>
-      </div>
-
-      {/* The route, with the QR at its hub. A dashed ring on a slow rotate and stop
-          pins firing in sequence — cheap to composite (one transform each) and it
-          never stops moving, which is the point on a screen people only glance at. */}
-      <div className="relative z-10 ml-auto flex size-[40rem] shrink-0 items-center justify-center">
-        <div aria-hidden className="lm-spin absolute inset-0">
-          <svg viewBox="0 0 100 100" className="size-full">
-            <circle
-              cx="50"
-              cy="50"
-              r="46"
-              fill="none"
-              stroke="var(--color-primary)"
-              strokeOpacity="0.4"
-              strokeWidth="0.5"
-              strokeDasharray="3 2.4"
-            />
-          </svg>
-          {stops.map((deg, i) => (
-            <div
-              key={deg}
-              className="absolute left-1/2 top-1/2 size-4"
-              style={{ transform: `rotate(${deg}deg) translate(-50%, -18.4rem)` }}
-            >
-              <span
-                className="lm-stop block size-4 rounded-full bg-primary"
-                style={{ animationDelay: `${i * 400}ms` }}
-              />
-            </div>
-          ))}
-        </div>
-        {qrImage && (
-          <div className="relative flex flex-col items-center">
-            <div className="relative">
-              <div
-                aria-hidden
-                className="lm-breathe absolute inset-0 rounded-3xl bg-primary/30 blur-xl"
-              />
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={qrImage}
-                alt="Scan to book"
-                className="relative size-64 rounded-3xl bg-white p-4 ring-4 ring-primary"
-              />
-            </div>
-            <div className="mt-5 text-center text-2xl text-white/75">Scan to book</div>
-          </div>
-        )}
       </div>
     </div>
   )
