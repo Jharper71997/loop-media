@@ -21,6 +21,7 @@ import {
 import { notifyCampaignCreated } from '@/lib/notifyAdvertiser'
 import { notifyAdminNewAd } from '@/lib/notifyAdmin'
 import { CREATIVE_SETUP_FEE_CENTS, CREATIVE_REFRESH_CENTS } from '@/lib/fees'
+import { hostCompCodeForUser, hostCompPromotionId, HOST_COMP_MAX_SCREENS } from '@/lib/hostComp'
 import { QR_SIZE_DEFAULT, isOwnCreativeUrl, clampSpotSeconds } from '@/lib/adCreative'
 
 export interface NewCampaignInput {
@@ -308,9 +309,27 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
     try {
       const base = appUrl()
       const wantsCreative = !!input.creative_help_brief?.trim()
+
+      // Host perk, applied for them. A live host has a 100%-off comp code minted
+      // when their venue went active; they used to have to remember it and type it
+      // into Stripe. Resolve it here and attach it to the session instead. Stripe
+      // rejects `discounts` alongside `allow_promotion_codes`, so it's one or the
+      // other — a host without a usable code still gets the manual box.
+      //
+      // Only up to HOST_COMP_MAX_SCREENS. The coupon is 100% off the ENTIRE order,
+      // so auto-applying it to a big cart would quietly comp every screen in it
+      // against a perk that promises two. Over the cap we apply nothing and leave
+      // the manual box — same as before this existed.
+      const hostDiscountId =
+        profile.role === 'host' && quote.totalScreens <= HOST_COMP_MAX_SCREENS
+          ? await hostCompPromotionId(await hostCompCodeForUser(admin, profile.id))
+          : null
+
       const session = await stripe().checkout.sessions.create({
         mode: 'subscription',
-        allow_promotion_codes: true,
+        ...(hostDiscountId
+          ? { discounts: [{ promotion_code: hostDiscountId }] }
+          : { allow_promotion_codes: true }),
         customer_email: profile.email,
         line_items: [
           {
