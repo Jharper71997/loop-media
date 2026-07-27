@@ -4,7 +4,13 @@ import { revalidatePath } from 'next/cache'
 import { requireProfile } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { geocodeAddress } from '@/lib/geocode'
-import { genPairingCode, TV_PAIRING_CODE_LEN, DEFAULT_LOOP_SECONDS, DEFAULT_SLOT_SECONDS } from '@/lib/tv'
+import {
+  genPairingCode,
+  TV_PAIRING_CODE_LEN,
+  DEFAULT_LOOP_SECONDS,
+  DEFAULT_SLOT_SECONDS,
+  DEFAULT_HOUSE_SLIDE_SECONDS,
+} from '@/lib/tv'
 import { AGREEMENT_VERSION } from '@/lib/agreement'
 import { DEMO_COMP_CODE } from '@/lib/demo'
 import { findOrCreateTerritory } from '@/lib/territory'
@@ -158,6 +164,11 @@ export async function requestVenue(input: RegisterVenueInput) {
       status: 'unpaired',
       loop_length_seconds: DEFAULT_LOOP_SECONDS,
       slot_seconds: DEFAULT_SLOT_SECONDS,
+      // House slides run at the same 15s beat as a paid slot from the first boot,
+      // rather than defaulting shorter and needing an admin to even them up.
+      brewloop_seconds: DEFAULT_HOUSE_SLIDE_SECONDS,
+      advertise_seconds: DEFAULT_HOUSE_SLIDE_SECONDS,
+      filler_seconds: DEFAULT_HOUSE_SLIDE_SECONDS,
     })
     if (!tvErr) {
       tvError = null
