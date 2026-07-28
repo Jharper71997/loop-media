@@ -6,7 +6,6 @@ import 'leaflet/dist/leaflet.css'
 import { Clock } from 'lucide-react'
 import { MAP_TILE_URL, MAP_TILE_ATTRIBUTION } from '@/lib/mapTiles'
 import { formatCents } from '@/lib/format'
-import { TIER_LABEL } from '@/lib/pricing'
 import { US_CENTER, US_ZOOM } from '@/lib/geo'
 import { MapFitBounds } from '@/components/app/MapFitBounds'
 import { Button } from '@/components/ui/button'
@@ -138,7 +137,6 @@ export default function MapView({
                   )}
                   <div>
                     <p className="font-heading text-sm font-semibold text-foreground">{v.name}</p>
-                    <p className="text-xs text-muted-foreground">{TIER_LABEL[v.tier]}</p>
                   </div>
                 </div>
                 <p className="text-foreground">

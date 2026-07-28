@@ -29,10 +29,15 @@ export interface PricingConfig {
 // NO account minimum) so a missing or unreadable row can't silently bill a
 // different rate. Admins tune the live values at /admin/pricing.
 export const DEFAULT_PRICING_CONFIG: PricingConfig = {
+  // One rate for every screen. The four tiers still exist as an internal
+  // classification (admins band venues by foot traffic, and a per-venue
+  // price_cents_override still wins for negotiated accounts), but an advertiser
+  // pays the same $50 whichever screen they tap. Volume is the only thing that
+  // moves the price.
   tierPriceCents: {
-    premium: 12000,
-    high: 9500,
-    standard: 8500,
+    premium: 5000,
+    high: 5000,
+    standard: 5000,
     local: 5000,
   },
   // No account minimum: one screen at a local venue bills $50 and nothing else.
@@ -41,7 +46,9 @@ export const DEFAULT_PRICING_CONFIG: PricingConfig = {
   minMonthlyCents: 0,
   hostDiscount: 0.2,
   loyalty12moDiscount: 0.05,
-  maxDiscount: 0.35,
+  // Has to clear the top volume rung (35%) with room for host + loyalty on top,
+  // or a 20-screen host would hit the cap and see their host discount vanish.
+  maxDiscount: 0.5,
   exclusivityPriceCents: 15000, // $150/mo to own a category at a venue (admin-tunable)
 }
 
@@ -98,15 +105,26 @@ export function suggestTier(footTrafficMonthly: number): PriceTier {
   return 'local'
 }
 
-// Volume discount by number of screens actively running (the "lower and lower"
-// curve). Capped at 25% so a brand-new tap still pays full price.
+// Volume discount by number of screens in the cart. This IS the published rate
+// card — at the flat $50 screen price the rungs land on round monthly numbers:
+//
+//    1 screen    $50      (no minimum — the whole point)
+//   10 screens   $400     (20% off $500)
+//   20 screens   $650     (35% off $1,000)
+//
+// Deliberately steeper than it used to be: an extra screen on an already-running
+// TV costs the network nothing, and competing bundle networks sell 20 screens for
+// ~$25/screen. Nothing below 10 screens is discounted, so a small local buyer and
+// a 9-screen buyer both pay the honest $50 a screen.
 export function volumeDiscount(screens: number): number {
-  if (screens >= 25) return 0.25
-  if (screens >= 15) return 0.2
-  if (screens >= 10) return 0.15
-  if (screens >= 5) return 0.1
+  if (screens >= 20) return 0.35
+  if (screens >= 10) return 0.2
   return 0
 }
+
+// The rungs above, for UI that nudges ("add 2 more screens to unlock 20% off").
+// Kept next to volumeDiscount so the two can never drift apart.
+export const VOLUME_RUNGS = [10, 20] as const
 
 export interface QuoteOptions {
   isHost?: boolean // host advertising elsewhere → 20% off

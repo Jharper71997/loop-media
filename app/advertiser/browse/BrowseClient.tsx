@@ -15,6 +15,7 @@ import { formatCents } from '@/lib/format'
 import {
   quoteCart,
   volumeDiscount,
+  VOLUME_RUNGS,
   MIN_MONTHLY_CENTS,
   type PriceTier,
   type QuoteOptions,
@@ -304,7 +305,7 @@ export function BrowseClient({
 
   // ---- Step 2: tap businesses on the map ------------------------------------
   const activeCatName = activeCat ? categories.find((c) => c.id === activeCat)?.name : null
-  const nextTierAt = [5, 10, 15, 25].find((n) => cartVenues.length < n)
+  const nextTierAt = VOLUME_RUNGS.find((n) => cartVenues.length < n)
   const nextPct = nextTierAt ? volumeDiscount(nextTierAt) : null
 
   // Rank every mappable venue by distance from the advertiser, then keep the ones

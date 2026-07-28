@@ -12,7 +12,6 @@ import { formatCents } from '@/lib/format'
 import { estMonthlyReachOf } from '@/lib/analytics'
 import {
   quoteCart,
-  TIER_LABEL,
   MIN_MONTHLY_CENTS,
   type QuoteOptions,
   type PricingConfig,
@@ -89,7 +88,6 @@ export function ReviewStep({
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <div className="truncate font-medium">{v.name}</div>
-                  <div className="text-xs text-muted-foreground">{TIER_LABEL[v.tier]}</div>
                   {v.openHours && (
                     <div className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
                       <Clock className="size-3 shrink-0" />
