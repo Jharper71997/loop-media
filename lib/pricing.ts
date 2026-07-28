@@ -25,9 +25,9 @@ export interface PricingConfig {
 }
 
 // Fallback pricing used ONLY when the pricing_config DB row can't be read. Keep
-// this in sync with the live pricing_config row (currently a $50 screen floor /
-// $200 minimum) so a missing or unreadable row can't silently bill a different
-// rate. Admins tune the live values at /admin/pricing.
+// this in sync with the live pricing_config row (currently a $50 screen floor and
+// NO account minimum) so a missing or unreadable row can't silently bill a
+// different rate. Admins tune the live values at /admin/pricing.
 export const DEFAULT_PRICING_CONFIG: PricingConfig = {
   tierPriceCents: {
     premium: 12000,
@@ -35,7 +35,10 @@ export const DEFAULT_PRICING_CONFIG: PricingConfig = {
     standard: 8500,
     local: 5000,
   },
-  minMonthlyCents: 20000, // $200/mo account minimum
+  // No account minimum: one screen at a local venue bills $50 and nothing else.
+  // Selling a single TV with no floor is the wedge against bundle-only networks,
+  // so the floor stays at zero unless an admin deliberately raises it.
+  minMonthlyCents: 0,
   hostDiscount: 0.2,
   loyalty12moDiscount: 0.05,
   maxDiscount: 0.35,
