@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ImageOff, MapPin, BarChart3 } from 'lucide-react'
+import { ImageOff, MapPin, BarChart3, CalendarDays } from 'lucide-react'
 import { requireProfile } from '@/lib/auth'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -25,6 +25,7 @@ import {
 import { isWithinOpenHours } from '@/lib/openHours'
 import { CampaignControls } from './CampaignControls'
 import { BackLink } from './BackLink'
+import { AdvertiseLink } from '@/components/app/AdvertiseLink'
 import { ReplaceCreative } from './ReplaceCreative'
 import { MembershipUpsell } from './MembershipUpsell'
 import CampaignMap from './CampaignMap'
@@ -305,14 +306,23 @@ export default async function CampaignDetail({
               )}
             </p>
             {c.ad_id && c.status !== 'canceled' && (
-              <ReplaceCreative
-                campaignId={c.id}
-                userId={profile.id}
-                qrTargetUrl={c.ad?.qr_target_url}
-                qrX={c.ad?.qr_x}
-                qrY={c.ad?.qr_y}
-                qrSize={c.ad?.qr_size}
-              />
+              <div className="space-y-2">
+                <ReplaceCreative
+                  campaignId={c.id}
+                  userId={profile.id}
+                  qrTargetUrl={c.ad?.qr_target_url}
+                  qrX={c.ad?.qr_x}
+                  qrY={c.ad?.qr_y}
+                  qrSize={c.ad?.qr_size}
+                />
+                {/* Swapping today is one button; planning the year is the other. */}
+                <AdvertiseLink
+                  to="/calendar"
+                  className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition hover:text-foreground"
+                >
+                  <CalendarDays className="size-3.5" /> Plan ahead on your content calendar
+                </AdvertiseLink>
+              </div>
             )}
             {showUpsell && <MembershipUpsell />}
           </CardContent>

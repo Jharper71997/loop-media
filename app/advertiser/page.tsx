@@ -1,5 +1,16 @@
 import Link from 'next/link'
-import { Plus, ImageOff, Lock, Gift, Sparkles, MapPin, Trash2, Archive, Rocket } from 'lucide-react'
+import {
+  Plus,
+  ImageOff,
+  Lock,
+  Gift,
+  Sparkles,
+  MapPin,
+  Trash2,
+  Archive,
+  Rocket,
+  CalendarDays,
+} from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { requireProfile } from '@/lib/auth'
 import { Badge } from '@/components/ui/badge'
@@ -272,9 +283,17 @@ export default async function AdvertiserDashboard({
           </p>
         </div>
         {hasCampaigns && (
-          <Link href="/advertiser/browse" className={cn(buttonVariants({ size: 'sm' }))}>
-            <Plus className="size-4" /> New
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/advertiser/calendar"
+              className={cn(buttonVariants({ size: 'sm', variant: 'outline' }))}
+            >
+              <CalendarDays className="size-4" /> Calendar
+            </Link>
+            <Link href="/advertiser/browse" className={cn(buttonVariants({ size: 'sm' }))}>
+              <Plus className="size-4" /> New
+            </Link>
+          </div>
         )}
       </div>
 
