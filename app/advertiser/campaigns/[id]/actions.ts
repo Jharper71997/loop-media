@@ -9,7 +9,7 @@ import { activatePlacementsIfReady } from '@/lib/placement'
 import { hasUnlimitedChanges, hasInsightsMembership } from '@/lib/membership'
 import { applyAdChange } from '@/lib/adChanges'
 import { applyScreenAdd } from '@/lib/screenAdds'
-import { setSubscriptionMonthlyCents } from '@/lib/stripeSubscription'
+import { setSubscriptionMonthlyCents, screenLabel } from '@/lib/stripeSubscription'
 import { isOwnCreativeUrl } from '@/lib/adCreative'
 import { categoriesConflict } from '@/lib/categoryConflicts'
 import {
@@ -810,9 +810,23 @@ export async function removeScreensFromCampaign(
   const subId = await stripeSubId(admin, id)
   if (subId && process.env.STRIPE_SECRET_KEY) {
     try {
-      await setSubscriptionMonthlyCents(subId, totalCents, 'create_prorations')
-    } catch {
-      /* best effort — targets + total are saved; an admin can reconcile in Stripe */
+      await setSubscriptionMonthlyCents(
+        subId,
+        totalCents,
+        'create_prorations',
+        screenLabel(remaining.length)
+      )
+    } catch (e) {
+      // Best effort — targets + total are saved. Log loudly: a silent catch here is
+      // what let a stale subscription amount go unnoticed for a full billing cycle.
+      console.error(
+        '[remove-screens] subscription amount update FAILED — campaign',
+        id,
+        'should now bill',
+        totalCents,
+        'cents/mo:',
+        e
+      )
     }
   }
 

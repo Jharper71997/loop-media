@@ -7,7 +7,7 @@
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { activatePlacementsIfReady } from '@/lib/placement'
-import { setSubscriptionMonthlyCents } from '@/lib/stripeSubscription'
+import { setSubscriptionMonthlyCents, screenLabel } from '@/lib/stripeSubscription'
 
 type Admin = ReturnType<typeof createAdminClient>
 
@@ -43,11 +43,18 @@ export async function applyScreenAdd(
     .eq('campaign_id', req.campaign_id)
     .maybeSingle()
   if (subRow?.stripe_subscription_id && process.env.STRIPE_SECRET_KEY) {
+    // Screen count AFTER the upsert above, so the invoice line reads the same way
+    // Checkout writes it at signup ("Loop Network: 2 screens").
+    const { count } = await admin
+      .from('campaign_targets')
+      .select('venue_id', { count: 'exact', head: true })
+      .eq('campaign_id', req.campaign_id)
     try {
       await setSubscriptionMonthlyCents(
         subRow.stripe_subscription_id,
         req.new_monthly_cents,
-        'none'
+        'none',
+        count ? screenLabel(count) : undefined
       )
     } catch (e) {
       // They HAVE paid for this add, so never withhold the screens over a Stripe
