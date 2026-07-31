@@ -4,6 +4,7 @@ import { stripe } from '@/lib/stripe'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { activatePlacementsIfReady } from '@/lib/placement'
 import { applyAdChange } from '@/lib/adChanges'
+import { applyScreenAdd } from '@/lib/screenAdds'
 import { notifyPaymentReceived, notifyPaymentFailed } from '@/lib/notifyAdvertiser'
 import { pauseCampaignForNonpayment, resumeCampaignAfterPayment } from '@/lib/campaignStatus'
 import { activateExclusiveSlots, releaseExclusiveSlots } from '@/lib/exclusivity'
@@ -128,6 +129,25 @@ async function handleEvent(
         currency: s.currency ?? 'usd',
         source: 'ad_change',
         advertiser_id: s.metadata?.advertiser_id ?? null,
+        stripe_customer_id: typeof s.customer === 'string' ? s.customer : null,
+        paid_at: now,
+      })
+      return
+    }
+
+    // Paid screen add: the increase is paid, so put the screens on the campaign
+    // and move the subscription to its new monthly total (applyScreenAdd is
+    // idempotent, so a webhook retry can't add them twice).
+    const screenAddId = s.metadata?.screen_add_id
+    if (screenAddId) {
+      await applyScreenAdd(supabase, screenAddId)
+      await recordPayment(supabase, {
+        stripe_ref: s.id,
+        amount_cents: s.amount_total ?? 0,
+        currency: s.currency ?? 'usd',
+        source: 'screen_add',
+        advertiser_id: s.metadata?.advertiser_id ?? null,
+        campaign_id: s.metadata?.campaign_id ?? null,
         stripe_customer_id: typeof s.customer === 'string' ? s.customer : null,
         paid_at: now,
       })

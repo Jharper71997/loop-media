@@ -8,6 +8,8 @@ import { stripe, appUrl } from '@/lib/stripe'
 import { activatePlacementsIfReady } from '@/lib/placement'
 import { hasUnlimitedChanges, hasInsightsMembership } from '@/lib/membership'
 import { applyAdChange } from '@/lib/adChanges'
+import { applyScreenAdd } from '@/lib/screenAdds'
+import { setSubscriptionMonthlyCents } from '@/lib/stripeSubscription'
 import { isOwnCreativeUrl } from '@/lib/adCreative'
 import { categoriesConflict } from '@/lib/categoryConflicts'
 import {
@@ -15,7 +17,6 @@ import {
   AD_CHANGE_FREE_EVERY_DAYS,
   UNLIMITED_CHANGES_CENTS,
   INSIGHTS_CENTS,
-  CREATIVE_REFRESH_CENTS,
 } from '@/lib/fees'
 import {
   resolveCartCents,
@@ -579,25 +580,34 @@ export async function startInsightsCheckout(basePath?: string): Promise<{
   }
 }
 
-// Add more screens to an existing ACTIVE campaign, prorating the subscription —
-// no new campaign, no fresh Checkout. The new screens join the same monthly
-// subscription; the difference prorates onto the next invoice.
+// Add more screens to an existing ACTIVE campaign. The increase is charged UP
+// FRONT in a one-time Checkout; only once that payment lands (webhook ->
+// applyScreenAdd) do the screens join the campaign and the subscription move to
+// the new monthly total. Nothing airs before the money moves.
 export async function addScreensToCampaign(
   id: string,
-  venueIds: string[]
-): Promise<{ error?: string; added?: number; newMonthlyCents?: number }> {
+  venueIds: string[],
+  basePath?: string
+): Promise<{
+  error?: string
+  added?: number
+  newMonthlyCents?: number
+  amountCents?: number
+  checkoutUrl?: string
+}> {
   const c = await ownCampaign(id)
   if (!c) return { error: 'Campaign not found.' }
   const ids = [...new Set((venueIds ?? []).filter(Boolean))]
   if (!ids.length) return { error: 'Pick at least one screen to add.' }
 
+  const profile = await requireProfile()
   const admin = createAdminClient()
   const advertiserId = c.advertiser_id
 
   // Must be live + paid to add to its subscription.
   const { data: camp } = await admin
     .from('campaigns')
-    .select('status, territory_id')
+    .select('status, territory_id, monthly_total_cents')
     .eq('id', id)
     .maybeSingle()
   if (!camp) return { error: 'Campaign not found.' }
@@ -651,56 +661,88 @@ export async function addScreensToCampaign(
   )
   if (!screenCents.length) return { error: 'Could not price those screens. Try again.' }
 
-  // Add the new targets (net-new only — PK is (campaign_id, venue_id)).
-  const { error: tErr } = await admin
-    .from('campaign_targets')
-    .insert(toAdd.map((venue_id) => ({ campaign_id: id, venue_id })))
-  if (tErr) return { error: 'Could not add those screens. Try again.' }
+  // What they owe NOW: the increase over what the campaign already bills. Pricing
+  // the union (not the new screens alone) means a volume rung crossed by this add
+  // discounts the whole cart, so the increase can be less than list — that lower
+  // number is what we charge.
+  const currentCents = camp.monthly_total_cents ?? 0
+  const amountCents = Math.max(0, totalCents - currentCents)
+  // Nothing to collect: a host running on a 100%-off perk, a Stripe-less dev
+  // environment, or a re-price that came out no higher than what they already pay.
+  const free = amountCents <= 0 || !process.env.STRIPE_SECRET_KEY
 
-  // Bump the Stripe subscription amount, prorated. The monthly charge is a single
-  // inline-price recurring item; swap it for a new inline price at the new total.
-  const subId = await stripeSubId(admin, id)
-  if (subId && process.env.STRIPE_SECRET_KEY) {
-    try {
-      const sub = await stripe().subscriptions.retrieve(subId)
-      const recurring = sub.items.data.filter((i) => i.price.recurring)
-      // With a creative-refresh add-on there are 2 recurring items; the screens
-      // item is the one that isn't the $20 refresh.
-      const item =
-        recurring.length <= 1
-          ? recurring[0] ?? sub.items.data[0]
-          : recurring.find((i) => i.price.unit_amount !== CREATIVE_REFRESH_CENTS) ?? recurring[0]
-      if (item) {
-        const product =
-          typeof item.price.product === 'string' ? item.price.product : item.price.product.id
-        await stripe().subscriptions.update(subId, {
-          items: [
-            {
-              id: item.id,
-              price_data: {
-                currency: 'usd',
-                product,
-                unit_amount: totalCents,
-                recurring: { interval: 'month' },
-              },
-            },
-          ],
-          proration_behavior: 'create_prorations',
-        })
-      }
-    } catch {
-      /* best effort — targets + total are saved; an admin can reconcile in Stripe */
-    }
+  // Stage the add. The screens are NOT on the campaign yet — this row is the only
+  // record of them until it's paid for and applied.
+  const { data: request, error: reqErr } = await admin
+    .from('screen_add_requests')
+    .insert({
+      campaign_id: id,
+      advertiser_id: advertiserId,
+      venue_ids: toAdd,
+      amount_cents: free ? 0 : amountCents,
+      new_monthly_cents: totalCents,
+      status: free ? 'waived' : 'pending_payment',
+    })
+    .select('id')
+    .single()
+  if (reqErr || !request) return { error: 'Could not add those screens. Try again.' }
+
+  if (free) {
+    await applyScreenAdd(admin, request.id)
+    revalidate(id)
+    return { added: toAdd.length, newMonthlyCents: totalCents, amountCents: 0 }
   }
 
-  // monthly_total_cents is action-owned (the webhook never writes it).
-  await admin.from('campaigns').update({ monthly_total_cents: totalCents }).eq('id', id)
-
-  // Place only the newly-added venues' screens (placeCampaign skips existing TVs).
-  await activatePlacementsIfReady(id, admin)
-
-  revalidate(id)
-  return { added: toAdd.length, newMonthlyCents: totalCents }
+  // Paid add: collect the increase in a one-time Checkout against the customer
+  // already on file from the campaign subscription. The webhook adds the screens
+  // and moves the monthly total once it's paid.
+  try {
+    const { data: subRow } = await admin
+      .from('subscriptions')
+      .select('stripe_customer_id')
+      .eq('campaign_id', id)
+      .maybeSingle()
+    const base = appUrl()
+    const prefix = basePath === '/host/advertise' ? '/host/advertise' : '/advertiser'
+    const session = await stripe().checkout.sessions.create({
+      mode: 'payment',
+      ...(subRow?.stripe_customer_id
+        ? { customer: subRow.stripe_customer_id }
+        : { customer_email: profile.email }),
+      line_items: [
+        {
+          quantity: 1,
+          price_data: {
+            currency: 'usd',
+            unit_amount: amountCents,
+            product_data: {
+              name: `Loop Network — ${toAdd.length} more screen${toAdd.length === 1 ? '' : 's'}`,
+            },
+          },
+        },
+      ],
+      metadata: {
+        screen_add_id: request.id,
+        campaign_id: id,
+        advertiser_id: advertiserId,
+      },
+      success_url: `${base}${prefix}/campaigns/${id}?screens=success`,
+      cancel_url: `${base}${prefix}/campaigns/${id}/add?screens=canceled`,
+    })
+    await admin
+      .from('screen_add_requests')
+      .update({ stripe_session_id: session.id })
+      .eq('id', request.id)
+    return {
+      checkoutUrl: session.url ?? undefined,
+      added: toAdd.length,
+      amountCents,
+      newMonthlyCents: totalCents,
+    }
+  } catch (e) {
+    await admin.from('screen_add_requests').update({ status: 'canceled' }).eq('id', request.id)
+    return { error: e instanceof Error ? e.message : 'Could not start checkout.' }
+  }
 }
 
 // Remove screens from an existing ACTIVE campaign, prorating the subscription DOWN.
@@ -768,30 +810,7 @@ export async function removeScreensFromCampaign(
   const subId = await stripeSubId(admin, id)
   if (subId && process.env.STRIPE_SECRET_KEY) {
     try {
-      const sub = await stripe().subscriptions.retrieve(subId)
-      const recurring = sub.items.data.filter((i) => i.price.recurring)
-      const item =
-        recurring.length <= 1
-          ? recurring[0] ?? sub.items.data[0]
-          : recurring.find((i) => i.price.unit_amount !== CREATIVE_REFRESH_CENTS) ?? recurring[0]
-      if (item) {
-        const product =
-          typeof item.price.product === 'string' ? item.price.product : item.price.product.id
-        await stripe().subscriptions.update(subId, {
-          items: [
-            {
-              id: item.id,
-              price_data: {
-                currency: 'usd',
-                product,
-                unit_amount: totalCents,
-                recurring: { interval: 'month' },
-              },
-            },
-          ],
-          proration_behavior: 'create_prorations',
-        })
-      }
+      await setSubscriptionMonthlyCents(subId, totalCents, 'create_prorations')
     } catch {
       /* best effort — targets + total are saved; an admin can reconcile in Stripe */
     }
