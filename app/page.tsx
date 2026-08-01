@@ -18,8 +18,9 @@ import { getProfile, homeForRole } from '@/lib/auth'
 import { buttonVariants } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
-import { formatCents } from '@/lib/format'
-import { BASE_SCREEN_CENTS, RATE_CARD } from '@/lib/pricing'
+import { formatCents, ordinal } from '@/lib/format'
+import { RATE_CARD, perScreenCents, type PricingConfig } from '@/lib/pricing'
+import { getPricingConfig } from '@/lib/pricing.server'
 import { ScrollDepth } from '@/components/analytics/ScrollDepth'
 
 function Wordmark({ className }: { className?: string }) {
@@ -30,21 +31,37 @@ function Wordmark({ className }: { className?: string }) {
   )
 }
 
-// The published rate card, derived from lib/pricing so the landing page can
-// never quote a number the checkout doesn't honor. Cheapest rung last — the
-// single screen anchors, the 5-screen rate closes.
-const RATE_ROWS = [
-  { label: '1 screen', eachCents: BASE_SCREEN_CENTS, count: 1, plus: false },
-  ...[...RATE_CARD]
-    .sort((a, b) => a.screens - b.screens)
-    .map((r, i, arr) => ({
-      label: `${r.screens}${i === arr.length - 1 ? '+' : ''} screens`,
-      eachCents: r.perScreenCents,
-      count: r.screens,
-      plus: i === arr.length - 1,
-    })),
-]
-const LOWEST_RATE_CENTS = RATE_ROWS[RATE_ROWS.length - 1].eachCents
+// The published rate card, built from the LIVE pricing config (not a copy of it)
+// so this page can never quote a number checkout doesn't honor — the old copy
+// promised "no minimum" against a $200 minimum sitting in code. Cheapest rung
+// last: the single screen anchors, the top rung closes.
+//
+// `freeRung` is the "buy 4, the 5th is free" pitch. It isn't a promo — it falls
+// out of the ladder, because the top rung drops the rate by exactly enough that
+// 4 screens and 5 screens bill the same. Recomputed rather than written down, so
+// the claim removes itself if the card ever stops making it true.
+function rateCard(config: PricingConfig) {
+  const rows = [
+    { label: '1 screen', eachCents: config.tierPriceCents.local, count: 1, plus: false },
+    ...[...RATE_CARD]
+      .sort((a, b) => a.screens - b.screens)
+      .map((r, i, arr) => ({
+        label: `${r.screens}${i === arr.length - 1 ? '+' : ''} screens`,
+        eachCents: perScreenCents(r.screens, config),
+        count: r.screens,
+        plus: i === arr.length - 1,
+      })),
+  ]
+  const top = Math.max(...RATE_CARD.map((r) => r.screens))
+  return {
+    rows,
+    lowestCents: rows[rows.length - 1].eachCents,
+    freeRung:
+      (top - 1) * perScreenCents(top - 1, config) === top * perScreenCents(top, config)
+        ? top
+        : null,
+  }
+}
 
 // ---- StoryBrand content blocks ------------------------------------------------
 
@@ -143,6 +160,7 @@ export default async function Home() {
   if (profile) redirect(homeForRole(profile.role))
 
   const year = new Date().getFullYear()
+  const { rows: rateRows, lowestCents, freeRung } = rateCard(await getPricingConfig())
 
   return (
     <main className="flex flex-1 flex-col">
@@ -196,7 +214,10 @@ export default async function Home() {
           </Link>
           <div className="mt-5 flex flex-wrap justify-center gap-x-5 gap-y-1.5 text-xs text-muted-foreground">
             {[
-              `As low as ${formatCents(LOWEST_RATE_CENTS)} / screen / month`,
+              `As low as ${formatCents(lowestCents)} / screen / month`,
+              ...(freeRung
+                ? [`Buy ${freeRung - 1} screens, the ${ordinal(freeRung)} is free`]
+                : []),
               'Month to month',
               'Run a video or an image',
               'We can design your ad',
@@ -350,7 +371,7 @@ export default async function Home() {
             </p>
             <p className="font-heading text-4xl font-extrabold">
               <span className="text-xl font-bold text-muted-foreground">as low as </span>
-              {formatCents(LOWEST_RATE_CENTS)}
+              {formatCents(lowestCents)}
               <span className="text-xl font-bold text-muted-foreground"> / screen / month</span>
             </p>
 
@@ -358,7 +379,7 @@ export default async function Home() {
                 five-screen rate IS the pitch: the more screens, the cheaper every
                 one of them gets. */}
             <div className="grid w-full max-w-lg gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-3">
-              {RATE_ROWS.map((r) => (
+              {rateRows.map((r) => (
                 <div key={r.label} className="flex flex-col gap-0.5 bg-card px-4 py-4">
                   <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     {r.label}
@@ -374,11 +395,20 @@ export default async function Home() {
               ))}
             </div>
 
+            {freeRung && (
+              <p className="font-heading text-lg font-bold text-primary">
+                Buy {freeRung - 1} screens and the {ordinal(freeRung)} is free.
+              </p>
+            )}
+
             <p className="max-w-md text-sm text-muted-foreground">
               Every screen costs the same, so you pick by the businesses you want, not by tier. The
-              more screens you run, the less every one of them costs. No minimum, month to month,
-              cancel anytime, and we can design your ad if you need it. You always see the price
-              before you buy.
+              more screens you run, the less every one of them costs
+              {freeRung
+                ? `, and every screen past your ${ordinal(freeRung)} is ${formatCents(lowestCents)}`
+                : ''}
+              . No minimum, month to month, cancel anytime, and we can design your ad if you need
+              it. You always see the price before you buy.
             </p>
             <Link href="/signup" className={cn(buttonVariants({ size: 'lg' }))}>
               Start advertising

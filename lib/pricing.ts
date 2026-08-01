@@ -122,6 +122,11 @@ export function suggestTier(footTrafficMonthly: number): PriceTier {
 // top rung it's a flat $40 on every TV, which keeps the card explainable on a
 // phone call.
 //
+// The rungs are set so the LAST screen into each one is free: 2 screens and 3
+// screens both bill $150, 4 and 5 both bill $200. That's the pitch Stephen
+// sells ("buy 4, the 5th is free"), and it falls out of the card rather than
+// being a separate promo — see nextRungUpsell(), which is what the UI quotes.
+//
 // Rungs are highest-first so the loop returns the deepest one the cart earns.
 export const RATE_CARD = [
   { screens: 5, perScreenCents: 4000 },
@@ -216,6 +221,43 @@ export function quoteCart(
     discountedCents,
     floorApplied,
     totalCents,
+  }
+}
+
+// The next volume rung this cart can reach, priced through the SAME engine that
+// bills it (the cart is padded with base-priced screens and re-quoted), so host
+// / loyalty / free-screen credits are all reflected and the number the UI
+// promises is the number they'd actually be charged.
+//
+// `deltaCents` is the whole pitch: at 2 screens and at 4 screens it comes back
+// ZERO, because the rung drops the per-screen price by exactly enough to cover
+// the screen being added. That's what lets the cart say "your 5th screen is
+// free" without it being a promo we have to honor separately.
+//
+// Returns null for an empty cart, or once the cart is at/past the top rung.
+export interface RungUpsell {
+  screensNeeded: number // how many more screens to reach the rung
+  rungScreens: number // cart size at the rung
+  perScreenCents: number // what every screen costs there
+  deltaCents: number // extra per month to get there (0 = the last screen is free)
+  totalCents: number // the bill at the rung
+}
+export function nextRungUpsell(
+  screenCents: number[],
+  opts: QuoteOptions = {},
+  config: PricingConfig = DEFAULT_PRICING_CONFIG
+): RungUpsell | null {
+  const rung = VOLUME_RUNGS.find((n) => screenCents.length < n)
+  if (rung == null || screenCents.length === 0) return null
+  const screensNeeded = rung - screenCents.length
+  const filler = Array.from({ length: screensNeeded }, () => config.tierPriceCents.local)
+  const atRung = quoteCart([...screenCents, ...filler], opts, config)
+  return {
+    screensNeeded,
+    rungScreens: rung,
+    perScreenCents: perScreenCents(rung, config),
+    deltaCents: atRung.totalCents - quoteCart(screenCents, opts, config).totalCents,
+    totalCents: atRung.totalCents,
   }
 }
 

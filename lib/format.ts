@@ -12,6 +12,14 @@ export function formatNumber(n: number): string {
   return new Intl.NumberFormat('en-US').format(n)
 }
 
+// 1 -> "1st", 5 -> "5th". For the free-screen pitch ("your 5th screen is free").
+export function ordinal(n: number): string {
+  const rem100 = n % 100
+  if (rem100 >= 11 && rem100 <= 13) return `${n}th`
+  const suffix = { 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] ?? 'th'
+  return `${n}${suffix}`
+}
+
 export function formatDateTime(iso: string | null): string {
   if (!iso) return '—'
   return new Date(iso).toLocaleString('en-US', {

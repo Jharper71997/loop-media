@@ -8,13 +8,11 @@ import { buttonVariants } from '@/components/ui/button'
 import { StepHeader } from '@/components/app/StepHeader'
 import { StickyCta } from '@/components/app/StickyCta'
 import { useBasePath } from '@/lib/useBasePath'
-import { formatCents } from '@/lib/format'
+import { formatCents, ordinal } from '@/lib/format'
 import { estMonthlyReachOf } from '@/lib/analytics'
 import {
   quoteCart,
-  perScreenCents,
-  VOLUME_RUNGS,
-  BASE_SCREEN_CENTS,
+  nextRungUpsell,
   TIER_LABEL,
   MIN_MONTHLY_CENTS,
   type QuoteOptions,
@@ -72,28 +70,10 @@ export function ReviewStep({
   const reachPerMonth = useMemo(() => estMonthlyReachOf(cart), [cart])
 
   // Last call on the volume ladder before they move on to creative + checkout.
-  // The rung total is quoted through the SAME engine as the real cart (padding
-  // the cart with base-priced screens) so host/loyalty/free-screen credits are
-  // reflected and the promised number is the number they'd actually be billed.
-  const nextTierAt = VOLUME_RUNGS.find((n) => cart.length < n)
-  const upsell = useMemo(() => {
-    if (nextTierAt == null || cart.length === 0) return null
-    const need = nextTierAt - cart.length
-    const filler = Array.from(
-      { length: need },
-      () => pricingConfig?.tierPriceCents.local ?? BASE_SCREEN_CENTS
-    )
-    const atRung = quoteCart(
-      [...cart.map((v) => v.priceCents), ...filler],
-      quoteOpts,
-      pricingConfig
-    )
-    return {
-      need,
-      rateCents: perScreenCents(nextTierAt, pricingConfig),
-      deltaCents: atRung.totalCents - quote.totalCents,
-    }
-  }, [nextTierAt, cart, quoteOpts, pricingConfig, quote.totalCents])
+  const upsell = useMemo(
+    () => nextRungUpsell(cart.map((v) => v.priceCents), quoteOpts, pricingConfig),
+    [cart, quoteOpts, pricingConfig]
+  )
 
   // Persist the reconciled set so CreativeStep sends exactly what's shown here.
   useEffect(() => {
@@ -250,16 +230,19 @@ export function ReviewStep({
         >
           <span className="min-w-0 text-xs">
             <span className="block font-medium text-primary">
-              Add {upsell.need} more screen{upsell.need === 1 ? '' : 's'} and every screen drops to{' '}
-              {formatCents(upsell.rateCents)}/mo
+              {upsell.deltaCents <= 0
+                ? `Your ${ordinal(upsell.rungScreens)} screen is free`
+                : `Add ${upsell.screensNeeded} more screens and your ${ordinal(upsell.rungScreens)} is free`}
             </span>
             <span className="block text-muted-foreground">
               {upsell.deltaCents <= 0
-                ? `That's ${upsell.need} more screen${upsell.need === 1 ? '' : 's'} at no extra cost.`
-                : `${upsell.need} more screen${upsell.need === 1 ? '' : 's'} for ${formatCents(upsell.deltaCents)} more a month.`}
+                ? `Add ${upsell.screensNeeded} more and you still pay ${formatCents(upsell.totalCents)} a month.`
+                : `${formatCents(upsell.deltaCents)} more a month, and every screen drops to ${formatCents(upsell.perScreenCents)}.`}
             </span>
           </span>
-          <span className="shrink-0 text-xs font-medium text-primary">Pick them</span>
+          <span className="shrink-0 text-xs font-medium text-primary">
+            {upsell.deltaCents <= 0 ? 'Claim it' : 'Pick them'}
+          </span>
         </Link>
       ) : (
         <Link
