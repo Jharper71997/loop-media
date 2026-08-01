@@ -9,12 +9,14 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { StepHeader } from '@/components/app/StepHeader'
 import { StickyCta } from '@/components/app/StickyCta'
+import { RateLadder } from '@/components/app/RateLadder'
 import { VenueCard } from '@/components/app/VenueCard'
 import { distanceMiles, NEARBY_RADIUS_MI } from '@/lib/geo'
 import { formatCents, ordinal } from '@/lib/format'
 import {
   quoteCart,
   nextRungUpsell,
+  perLocationCents,
   MIN_MONTHLY_CENTS,
   type PriceTier,
   type QuoteOptions,
@@ -362,6 +364,8 @@ export function BrowseClient({
         backHref={homeFor(base)}
       />
 
+      <RateLadder count={cartVenues.length} config={pricingConfig} />
+
       {activeCatName ? (
         <p className="text-xs text-muted-foreground">
           You&apos;re advertising in{' '}
@@ -431,14 +435,6 @@ export function BrowseClient({
           </div>
 
           <div className="mt-4 space-y-2.5 lg:col-span-2 lg:mt-0">
-            {upsell && (
-              <p className="rounded-lg bg-primary/10 px-3 py-2 text-center text-xs text-primary">
-                {upsell.deltaCents <= 0
-                  ? `Tap ${upsell.locationsNeeded} more and your ${ordinal(upsell.rungLocations)} location is free — still ${formatCents(upsell.totalCents)}/mo`
-                  : `Tap ${upsell.locationsNeeded} more and your ${ordinal(upsell.rungLocations)} location is free — ${formatCents(upsell.perLocationCents)} each`}
-              </p>
-            )}
-
             {/* The sticky total floors up to the account minimum; without a note
                 that number reads as a bug when the cart is small. */}
             {quote.floorApplied && cartVenues.length > 0 && (
@@ -455,6 +451,7 @@ export function BrowseClient({
                 inCart={inCart(v.id)}
                 waitlisted={waitlisted.has(v.id)}
                 pending={pending}
+                discountPct={quote.discountPct}
                 onToggle={() => toggle(v.id)}
                 onNotify={() => notify(v)}
               />
@@ -467,11 +464,21 @@ export function BrowseClient({
         label={cartVenues.length ? 'Review' : 'Tap a business to start'}
         disabled={cartVenues.length === 0}
         href={`${base}/new`}
+        // The nudge rides in the fixed bar so it's still on screen at the bottom
+        // of a long venue list — the whole point is that it's visible at the
+        // moment they're deciding whether to tap one more.
+        note={
+          upsell
+            ? upsell.deltaCents <= 0
+              ? `Tap ${upsell.locationsNeeded} more and your ${ordinal(upsell.rungLocations)} location is FREE — still ${formatCents(upsell.totalCents)}/mo`
+              : `Tap ${upsell.locationsNeeded} more and every location drops to ${formatCents(upsell.perLocationCents)} — your ${ordinal(upsell.rungLocations)} is free`
+            : undefined
+        }
         priceTop={
           cartVenues.length
-            ? `${cartVenues.length} location${cartVenues.length === 1 ? '' : 's'}${
-                quote.discountPct > 0 ? ` · ${Math.round(quote.discountPct * 100)}% off` : ''
-              }`
+            ? `${cartVenues.length} location${cartVenues.length === 1 ? '' : 's'} · ${formatCents(
+                perLocationCents(cartVenues.length, pricingConfig)
+              )} each`
             : undefined
         }
         priceMain={cartVenues.length ? `${formatCents(quote.totalCents)}/mo` : undefined}

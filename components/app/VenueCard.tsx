@@ -38,6 +38,7 @@ export function VenueCard({
   inCart,
   waitlisted,
   pending,
+  discountPct = 0,
   onToggle,
   onNotify,
 }: {
@@ -45,6 +46,14 @@ export function VenueCard({
   inCart: boolean
   waitlisted: boolean
   pending?: boolean
+  // The cart's current combined discount. Every card shows what it would cost
+  // AT THAT RATE with the list price struck through, so adding a business
+  // visibly drops the price of every other one — the discount stops being a
+  // line of text and becomes something they watch happen.
+  //
+  // Safe to show on cards not yet in the cart: the rungs only ever go down, so
+  // the quoted rate can never turn out worse than what they end up billed.
+  discountPct?: number
   onToggle: () => void
   onNotify: () => void
 }) {
@@ -93,7 +102,12 @@ export function VenueCard({
           </p>
         )}
         <div className="mt-1 font-heading text-lg font-bold tabular-nums">
-          {formatCents(venue.priceCents)}
+          {discountPct > 0 && (
+            <span className="mr-1.5 text-sm font-normal text-muted-foreground line-through">
+              {formatCents(venue.priceCents)}
+            </span>
+          )}
+          {formatCents(Math.round(venue.priceCents * (1 - discountPct)))}
           <span className="text-xs font-normal text-muted-foreground">/mo</span>
         </div>
       </div>

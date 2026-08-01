@@ -7,12 +7,14 @@ import { Card, CardContent } from '@/components/ui/card'
 import { buttonVariants } from '@/components/ui/button'
 import { StepHeader } from '@/components/app/StepHeader'
 import { StickyCta } from '@/components/app/StickyCta'
+import { RateLadder } from '@/components/app/RateLadder'
 import { useBasePath } from '@/lib/useBasePath'
 import { formatCents, ordinal } from '@/lib/format'
 import { estMonthlyReachOf } from '@/lib/analytics'
 import {
   quoteCart,
   nextRungUpsell,
+  perLocationCents,
   TIER_LABEL,
   MIN_MONTHLY_CENTS,
   type QuoteOptions,
@@ -111,6 +113,8 @@ export function ReviewStep({
   return (
     <div className="space-y-5">
       <StepHeader step={2} total={3} title="Review your locations" />
+
+      <RateLadder count={cart.length} config={pricingConfig} />
 
       <div className="space-y-2.5">
         {cart.map((v) => {
@@ -256,7 +260,18 @@ export function ReviewStep({
       <StickyCta
         label="Add your ad"
         href={`${base}/new/creative`}
-        priceTop={`${cart.length} location${cart.length === 1 ? '' : 's'}`}
+        // Last call, and it has to be in the bar that doesn't scroll — this is
+        // the final screen before creative and checkout.
+        note={
+          upsell
+            ? upsell.deltaCents <= 0
+              ? `Add ${upsell.locationsNeeded} more and your ${ordinal(upsell.rungLocations)} location is FREE — still ${formatCents(upsell.totalCents)}/mo`
+              : `Add ${upsell.locationsNeeded} more and every location drops to ${formatCents(upsell.perLocationCents)} — your ${ordinal(upsell.rungLocations)} is free`
+            : undefined
+        }
+        priceTop={`${cart.length} location${cart.length === 1 ? '' : 's'} · ${formatCents(
+          perLocationCents(cart.length, pricingConfig)
+        )} each`}
         priceMain={`${formatCents(totalCents)}/mo`}
       />
     </div>
