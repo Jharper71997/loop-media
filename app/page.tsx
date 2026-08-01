@@ -18,6 +18,8 @@ import { getProfile, homeForRole } from '@/lib/auth'
 import { buttonVariants } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
+import { formatCents } from '@/lib/format'
+import { BASE_SCREEN_CENTS, RATE_CARD } from '@/lib/pricing'
 import { ScrollDepth } from '@/components/analytics/ScrollDepth'
 
 function Wordmark({ className }: { className?: string }) {
@@ -27,6 +29,22 @@ function Wordmark({ className }: { className?: string }) {
     </span>
   )
 }
+
+// The published rate card, derived from lib/pricing so the landing page can
+// never quote a number the checkout doesn't honor. Cheapest rung last — the
+// single screen anchors, the 5-screen rate closes.
+const RATE_ROWS = [
+  { label: '1 screen', eachCents: BASE_SCREEN_CENTS, count: 1, plus: false },
+  ...[...RATE_CARD]
+    .sort((a, b) => a.screens - b.screens)
+    .map((r, i, arr) => ({
+      label: `${r.screens}${i === arr.length - 1 ? '+' : ''} screens`,
+      eachCents: r.perScreenCents,
+      count: r.screens,
+      plus: i === arr.length - 1,
+    })),
+]
+const LOWEST_RATE_CENTS = RATE_ROWS[RATE_ROWS.length - 1].eachCents
 
 // ---- StoryBrand content blocks ------------------------------------------------
 
@@ -178,7 +196,7 @@ export default async function Home() {
           </Link>
           <div className="mt-5 flex flex-wrap justify-center gap-x-5 gap-y-1.5 text-xs text-muted-foreground">
             {[
-              'From $50 / screen / month',
+              `As low as ${formatCents(LOWEST_RATE_CENTS)} / screen / month`,
               'Month to month',
               'Run a video or an image',
               'We can design your ad',
@@ -331,13 +349,36 @@ export default async function Home() {
               Simple, public pricing
             </p>
             <p className="font-heading text-4xl font-extrabold">
-              <span className="text-xl font-bold text-muted-foreground">from </span>$50
+              <span className="text-xl font-bold text-muted-foreground">as low as </span>
+              {formatCents(LOWEST_RATE_CENTS)}
               <span className="text-xl font-bold text-muted-foreground"> / screen / month</span>
             </p>
+
+            {/* The whole ladder, published. Putting the single screen next to the
+                five-screen rate IS the pitch: the more screens, the cheaper every
+                one of them gets. */}
+            <div className="grid w-full max-w-lg gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-3">
+              {RATE_ROWS.map((r) => (
+                <div key={r.label} className="flex flex-col gap-0.5 bg-card px-4 py-4">
+                  <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    {r.label}
+                  </span>
+                  <span className="font-heading text-2xl font-bold">
+                    {formatCents(r.eachCents)}
+                    <span className="text-sm font-bold text-muted-foreground"> each</span>
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {formatCents(r.eachCents * r.count)}/mo{r.plus ? ` for ${r.count}` : ''}
+                  </span>
+                </div>
+              ))}
+            </div>
+
             <p className="max-w-md text-sm text-muted-foreground">
-              Pricing scales with each location&apos;s traffic, starting at $50/screen. Pay only for
-              the screens you pick, no minimum. Cancel anytime, and we can design your ad if you need
-              it. No long-term contracts, and you always see the price before you buy.
+              Every screen costs the same, so you pick by the businesses you want, not by tier. The
+              more screens you run, the less every one of them costs. No minimum, month to month,
+              cancel anytime, and we can design your ad if you need it. You always see the price
+              before you buy.
             </p>
             <Link href="/signup" className={cn(buttonVariants({ size: 'lg' }))}>
               Start advertising

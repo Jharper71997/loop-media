@@ -347,7 +347,8 @@ export default async function PricingPage() {
             </Table>
           </div>
           <p className="text-xs text-muted-foreground">
-            Volume discounts (more screens, lower rate) are fixed in code for now.
+            Volume discounts are fixed in code (lib/pricing RATE_CARD): 1-2 screens bill the rate
+            above, 3-4 screens bill $50 each, 5+ bill $40 each.
           </p>
         </section>
 

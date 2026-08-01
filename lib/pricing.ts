@@ -1,10 +1,10 @@
 // Loop Network — pricing engine (the spine).
 //
-// Per-TV à la carte: every venue has a price TIER; the advertiser taps venues
-// into a cart and the monthly bill is the sum of the picked venues' tier prices,
-// less a volume discount (more screens → lower rate), less host / loyalty
-// discounts, floored at the $200/mo account minimum. Free-screen credits earned
-// from loyalty milestones comp the advertiser's cheapest screens.
+// Per-TV à la carte: the advertiser taps venues into a cart and the monthly bill
+// is the sum of the picked screens' prices, less a volume discount (more screens
+// → lower rate per screen), less host / loyalty discounts. No account minimum.
+// Free-screen credits earned from loyalty milestones comp the advertiser's
+// cheapest screens.
 //
 // Everything in this file is PURE and client-safe (no server imports) so the
 // cart UI and the checkout action compute identical numbers. The DB resolver at
@@ -24,21 +24,36 @@ export interface PricingConfig {
   exclusivityPriceCents: number // default monthly upcharge to own a category at a venue
 }
 
+// The published base price for one screen, before any volume rung. Every tier
+// bills this same number — see the note on tierPriceCents below.
+export const BASE_SCREEN_CENTS = 7500
+
 // Fallback pricing used ONLY when the pricing_config DB row can't be read. Keep
-// this in sync with the live pricing_config row (currently a $50 screen floor /
-// $200 minimum) so a missing or unreadable row can't silently bill a different
-// rate. Admins tune the live values at /admin/pricing.
+// this in sync with the live pricing_config row (currently a flat $75 screen and
+// NO account minimum) so a missing or unreadable row can't silently bill a
+// different rate. Admins tune the live values at /admin/pricing.
 export const DEFAULT_PRICING_CONFIG: PricingConfig = {
+  // One rate for every screen. The four tiers still exist as an internal
+  // classification (admins band venues by foot traffic, and a per-venue
+  // price_cents_override still wins for negotiated accounts), but an advertiser
+  // pays the same $75 whichever screen they tap. Volume is the only thing that
+  // moves the price — see RATE_CARD.
   tierPriceCents: {
-    premium: 12000,
-    high: 9500,
-    standard: 8500,
-    local: 5000,
+    premium: BASE_SCREEN_CENTS,
+    high: BASE_SCREEN_CENTS,
+    standard: BASE_SCREEN_CENTS,
+    local: BASE_SCREEN_CENTS,
   },
-  minMonthlyCents: 20000, // $200/mo account minimum
+  // No account minimum: one screen bills $75 and nothing else. Selling a single
+  // TV with no floor is the wedge against bundle-only networks, so the floor
+  // stays at zero unless an admin deliberately raises it.
+  minMonthlyCents: 0,
   hostDiscount: 0.2,
   loyalty12moDiscount: 0.05,
-  maxDiscount: 0.35,
+  // Has to clear the top volume rung (46.7% at 5+ screens) with room for host +
+  // loyalty on top, or a 5-screen host would hit the cap and see their host
+  // discount silently vanish. 0.7 floors any screen at $22.50.
+  maxDiscount: 0.7,
   exclusivityPriceCents: 15000, // $150/mo to own a category at a venue (admin-tunable)
 }
 
@@ -95,14 +110,46 @@ export function suggestTier(footTrafficMonthly: number): PriceTier {
   return 'local'
 }
 
-// Volume discount by number of screens actively running (the "lower and lower"
-// curve). Capped at 25% so a brand-new tap still pays full price.
+// THE PUBLISHED RATE CARD, written as what one screen costs at each rung:
+//
+//    1-2 screens   $75 each
+//    3-4 screens   $50 each   ($150 for 3)
+//    5+  screens   $40 each   ($200 for 5, and $40 on every screen after that)
+//
+// A single screen is priced high on purpose: an extra screen on an already-
+// running TV costs the network nothing, so the ladder is built to push buyers
+// up to five rather than to sell ones. Nothing above 5 gets cheaper — past the
+// top rung it's a flat $40 on every TV, which keeps the card explainable on a
+// phone call.
+//
+// Rungs are highest-first so the loop returns the deepest one the cart earns.
+export const RATE_CARD = [
+  { screens: 5, perScreenCents: 4000 },
+  { screens: 3, perScreenCents: 5000 },
+] as const
+
+// The engine discounts by PERCENTAGE (so a venue carrying a negotiated
+// price_cents_override moves proportionally instead of snapping to the card),
+// so each rung's per-screen price is expressed as a fraction off the base.
 export function volumeDiscount(screens: number): number {
-  if (screens >= 25) return 0.25
-  if (screens >= 15) return 0.2
-  if (screens >= 10) return 0.15
-  if (screens >= 5) return 0.1
+  for (const rung of RATE_CARD) {
+    if (screens >= rung.screens) return 1 - rung.perScreenCents / BASE_SCREEN_CENTS
+  }
   return 0
+}
+
+// The rungs above, for UI that nudges ("add 1 more screen and every screen
+// drops to $40"). Kept next to volumeDiscount so the two can never drift apart.
+export const VOLUME_RUNGS: number[] = RATE_CARD.map((r) => r.screens).sort((a, b) => a - b)
+
+// What one screen costs at a given cart size. For UI COPY only — the real bill
+// runs through quoteCart, which also applies host/loyalty discounts and any
+// per-venue override on top.
+export function perScreenCents(
+  screens: number,
+  config: PricingConfig = DEFAULT_PRICING_CONFIG
+): number {
+  return Math.round(config.tierPriceCents.local * (1 - volumeDiscount(screens)))
 }
 
 export interface QuoteOptions {

@@ -31,7 +31,7 @@ async function updateConfig(patch: Record<string, number>) {
   // Read-modify-write upsert. A bare .update().eq('id','default') silently
   // matches 0 rows when the pricing_config row doesn't exist yet (fresh
   // deployment), so edits vanished. Read the current row (or fall back to the
-  // code default — flat $50), then upsert a COMPLETE row so a first write can't
+  // code default — flat $75), then upsert a COMPLETE row so a first write can't
   // inherit the table's column DEFAULTS for the fields we didn't touch.
   const { data: existing } = await supabase
     .from('pricing_config')
@@ -68,7 +68,7 @@ function clampPct(value: number | null): number {
 }
 
 // Tier price entered in dollars; stored as cents. Hard $25/screen floor (the
-// flat rate is $50/screen; the floor only stops fat-finger sub-$25 prices).
+// flat rate is $75/screen; the floor only stops fat-finger sub-$25 prices).
 export async function setTierPrice(tier: PriceTier, value: number | null) {
   await requireAdmin()
   if ((value ?? 0) < 25) return { error: "Screens can't be priced below $25." }

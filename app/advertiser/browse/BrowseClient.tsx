@@ -14,7 +14,8 @@ import { distanceMiles, NEARBY_RADIUS_MI } from '@/lib/geo'
 import { formatCents } from '@/lib/format'
 import {
   quoteCart,
-  volumeDiscount,
+  perScreenCents,
+  VOLUME_RUNGS,
   MIN_MONTHLY_CENTS,
   type PriceTier,
   type QuoteOptions,
@@ -304,8 +305,13 @@ export function BrowseClient({
 
   // ---- Step 2: tap businesses on the map ------------------------------------
   const activeCatName = activeCat ? categories.find((c) => c.id === activeCat)?.name : null
-  const nextTierAt = [5, 10, 15, 25].find((n) => cartVenues.length < n)
-  const nextPct = nextTierAt ? volumeDiscount(nextTierAt) : null
+  // The next volume rung within reach, and what every screen would cost there.
+  // Quoted in dollars rather than "% off" — "$40 a screen" is the number an
+  // advertiser can act on, and the rungs (3 and 5) are close enough to an empty
+  // cart that this nudge is live from the first tap.
+  const nextTierAt = VOLUME_RUNGS.find((n) => cartVenues.length < n)
+  const nextRateCents =
+    nextTierAt != null ? perScreenCents(nextTierAt, pricingConfig ?? undefined) : null
 
   // Rank every mappable venue by distance from the advertiser, then keep the ones
   // within the radius (closest first). Until we know where they are (locating /
@@ -422,11 +428,11 @@ export function BrowseClient({
           </div>
 
           <div className="mt-4 space-y-2.5 lg:col-span-2 lg:mt-0">
-            {nextPct != null && cartVenues.length > 0 && (
+            {nextRateCents != null && cartVenues.length > 0 && (
               <p className="rounded-lg bg-primary/10 px-3 py-2 text-center text-xs text-primary">
                 Add {nextTierAt! - cartVenues.length} more screen
-                {nextTierAt! - cartVenues.length === 1 ? '' : 's'} to unlock{' '}
-                {Math.round(nextPct * 100)}% off
+                {nextTierAt! - cartVenues.length === 1 ? '' : 's'} and every screen drops to{' '}
+                {formatCents(nextRateCents)}/mo
               </p>
             )}
 

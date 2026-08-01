@@ -12,6 +12,9 @@ import { formatCents } from '@/lib/format'
 import { estMonthlyReachOf } from '@/lib/analytics'
 import {
   quoteCart,
+  perScreenCents,
+  VOLUME_RUNGS,
+  BASE_SCREEN_CENTS,
   TIER_LABEL,
   MIN_MONTHLY_CENTS,
   type QuoteOptions,
@@ -67,6 +70,30 @@ export function ReviewStep({
   // value side of the price. Clearly an estimate (from venue foot traffic), never
   // a measured count.
   const reachPerMonth = useMemo(() => estMonthlyReachOf(cart), [cart])
+
+  // Last call on the volume ladder before they move on to creative + checkout.
+  // The rung total is quoted through the SAME engine as the real cart (padding
+  // the cart with base-priced screens) so host/loyalty/free-screen credits are
+  // reflected and the promised number is the number they'd actually be billed.
+  const nextTierAt = VOLUME_RUNGS.find((n) => cart.length < n)
+  const upsell = useMemo(() => {
+    if (nextTierAt == null || cart.length === 0) return null
+    const need = nextTierAt - cart.length
+    const filler = Array.from(
+      { length: need },
+      () => pricingConfig?.tierPriceCents.local ?? BASE_SCREEN_CENTS
+    )
+    const atRung = quoteCart(
+      [...cart.map((v) => v.priceCents), ...filler],
+      quoteOpts,
+      pricingConfig
+    )
+    return {
+      need,
+      rateCents: perScreenCents(nextTierAt, pricingConfig),
+      deltaCents: atRung.totalCents - quote.totalCents,
+    }
+  }, [nextTierAt, cart, quoteOpts, pricingConfig, quote.totalCents])
 
   // Persist the reconciled set so CreativeStep sends exactly what's shown here.
   useEffect(() => {
@@ -216,12 +243,32 @@ export function ReviewStep({
         </Card>
       )}
 
-      <Link
-        href={`${base}/browse`}
-        className="block text-center text-xs text-muted-foreground hover:text-foreground"
-      >
-        + Add more screens
-      </Link>
+      {upsell ? (
+        <Link
+          href={`${base}/browse`}
+          className="flex items-center justify-between gap-3 rounded-lg border border-primary/40 bg-primary/5 px-4 py-3 transition-colors hover:bg-primary/10"
+        >
+          <span className="min-w-0 text-xs">
+            <span className="block font-medium text-primary">
+              Add {upsell.need} more screen{upsell.need === 1 ? '' : 's'} and every screen drops to{' '}
+              {formatCents(upsell.rateCents)}/mo
+            </span>
+            <span className="block text-muted-foreground">
+              {upsell.deltaCents <= 0
+                ? `That's ${upsell.need} more screen${upsell.need === 1 ? '' : 's'} at no extra cost.`
+                : `${upsell.need} more screen${upsell.need === 1 ? '' : 's'} for ${formatCents(upsell.deltaCents)} more a month.`}
+            </span>
+          </span>
+          <span className="shrink-0 text-xs font-medium text-primary">Pick them</span>
+        </Link>
+      ) : (
+        <Link
+          href={`${base}/browse`}
+          className="block text-center text-xs text-muted-foreground hover:text-foreground"
+        >
+          + Add more screens
+        </Link>
+      )}
 
       <StickyCta
         label="Add your ad"
