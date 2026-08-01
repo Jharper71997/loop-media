@@ -81,7 +81,7 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
   }
 
   let venueIds = [...new Set((input.venue_ids ?? []).filter(Boolean))]
-  if (!venueIds.length) return { error: 'Your cart is empty. Pick at least one screen.' }
+  if (!venueIds.length) return { error: 'Your cart is empty. Pick at least one location.' }
 
   const supabase = await createClient()
 
@@ -102,7 +102,7 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
     )
     venueIds = venueIds.filter((id) => !blocked.has(id))
     if (!venueIds.length) {
-      return { error: "Those screens are in your own line of business, so competitors can't advertise there. Pick different screens." }
+      return { error: "Those businesses are in your own line of business, so competitors can't advertise there. Pick different ones." }
     }
   }
 
@@ -130,7 +130,7 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
     if (!venueIds.length) {
       return {
         error:
-          'Those screens are owned exclusively by another advertiser in your category. Pick different screens.',
+          'Those businesses are owned exclusively by another advertiser in your category. Pick different ones.',
       }
     }
     const requested = [...new Set((input.exclusive_venue_ids ?? []).filter(Boolean))].filter((id) =>
@@ -264,7 +264,7 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
     }
   }
 
-  const screenLabel = `${quote.totalScreens} screen${quote.totalScreens === 1 ? '' : 's'}`
+  const screenLabel = `${quote.totalLocations} location${quote.totalLocations === 1 ? '' : 's'}`
   // Return the buyer to the tree they bought from. Whitelisted to avoid an
   // open-redirect via a crafted base_path.
   const pathPrefix = input.base_path === '/host/advertise' ? '/host/advertise' : '/advertiser'
@@ -321,7 +321,7 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
       // against a perk that promises two. Over the cap we apply nothing and leave
       // the manual box — same as before this existed.
       const hostDiscountId =
-        profile.role === 'host' && quote.totalScreens <= HOST_COMP_MAX_SCREENS
+        profile.role === 'host' && quote.totalLocations <= HOST_COMP_MAX_SCREENS
           ? await hostCompPromotionId(await hostCompCodeForUser(admin, profile.id))
           : null
 

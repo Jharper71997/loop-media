@@ -19,7 +19,7 @@ import { buttonVariants } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { formatCents, ordinal } from '@/lib/format'
-import { RATE_CARD, perScreenCents, type PricingConfig } from '@/lib/pricing'
+import { RATE_CARD, perLocationCents, type PricingConfig } from '@/lib/pricing'
 import { getPricingConfig } from '@/lib/pricing.server'
 import { ScrollDepth } from '@/components/analytics/ScrollDepth'
 
@@ -34,30 +34,33 @@ function Wordmark({ className }: { className?: string }) {
 // The published rate card, built from the LIVE pricing config (not a copy of it)
 // so this page can never quote a number checkout doesn't honor — the old copy
 // promised "no minimum" against a $200 minimum sitting in code. Cheapest rung
-// last: the single screen anchors, the top rung closes.
+// last: the single location anchors, the top rung closes.
+//
+// Priced per LOCATION, not per TV — one price covers every screen in that
+// business, so the card counts businesses.
 //
 // `freeRung` is the "buy 4, the 5th is free" pitch. It isn't a promo — it falls
 // out of the ladder, because the top rung drops the rate by exactly enough that
-// 4 screens and 5 screens bill the same. Recomputed rather than written down, so
-// the claim removes itself if the card ever stops making it true.
+// 4 and 5 locations bill the same. Recomputed rather than written down, so the
+// claim removes itself if the card ever stops making it true.
 function rateCard(config: PricingConfig) {
   const rows = [
-    { label: '1 screen', eachCents: config.tierPriceCents.local, count: 1, plus: false },
+    { label: '1 location', eachCents: config.tierPriceCents.local, count: 1, plus: false },
     ...[...RATE_CARD]
-      .sort((a, b) => a.screens - b.screens)
+      .sort((a, b) => a.locations - b.locations)
       .map((r, i, arr) => ({
-        label: `${r.screens}${i === arr.length - 1 ? '+' : ''} screens`,
-        eachCents: perScreenCents(r.screens, config),
-        count: r.screens,
+        label: `${r.locations}${i === arr.length - 1 ? '+' : ''} locations`,
+        eachCents: perLocationCents(r.locations, config),
+        count: r.locations,
         plus: i === arr.length - 1,
       })),
   ]
-  const top = Math.max(...RATE_CARD.map((r) => r.screens))
+  const top = Math.max(...RATE_CARD.map((r) => r.locations))
   return {
     rows,
     lowestCents: rows[rows.length - 1].eachCents,
     freeRung:
-      (top - 1) * perScreenCents(top - 1, config) === top * perScreenCents(top, config)
+      (top - 1) * perLocationCents(top - 1, config) === top * perLocationCents(top, config)
         ? top
         : null,
   }
@@ -214,9 +217,9 @@ export default async function Home() {
           </Link>
           <div className="mt-5 flex flex-wrap justify-center gap-x-5 gap-y-1.5 text-xs text-muted-foreground">
             {[
-              `As low as ${formatCents(lowestCents)} / screen / month`,
+              `As low as ${formatCents(lowestCents)} / location / month`,
               ...(freeRung
-                ? [`Buy ${freeRung - 1} screens, the ${ordinal(freeRung)} is free`]
+                ? [`Buy ${freeRung - 1} locations, the ${ordinal(freeRung)} is free`]
                 : []),
               'Month to month',
               'Run a video or an image',
@@ -372,12 +375,12 @@ export default async function Home() {
             <p className="font-heading text-4xl font-extrabold">
               <span className="text-xl font-bold text-muted-foreground">as low as </span>
               {formatCents(lowestCents)}
-              <span className="text-xl font-bold text-muted-foreground"> / screen / month</span>
+              <span className="text-xl font-bold text-muted-foreground"> / location / month</span>
             </p>
 
-            {/* The whole ladder, published. Putting the single screen next to the
-                five-screen rate IS the pitch: the more screens, the cheaper every
-                one of them gets. */}
+            {/* The whole ladder, published. Putting the single location next to
+                the five-location rate IS the pitch: the more businesses you're
+                in, the cheaper every one of them gets. */}
             <div className="grid w-full max-w-lg gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-3">
               {rateRows.map((r) => (
                 <div key={r.label} className="flex flex-col gap-0.5 bg-card px-4 py-4">
@@ -397,15 +400,16 @@ export default async function Home() {
 
             {freeRung && (
               <p className="font-heading text-lg font-bold text-primary">
-                Buy {freeRung - 1} screens and the {ordinal(freeRung)} is free.
+                Buy {freeRung - 1} locations and the {ordinal(freeRung)} is free.
               </p>
             )}
 
             <p className="max-w-md text-sm text-muted-foreground">
-              Every screen costs the same, so you pick by the businesses you want, not by tier. The
-              more screens you run, the less every one of them costs
+              One price per business, and it covers every screen inside it, so a place with three
+              TVs costs the same as a place with one. Every location costs the same too, so you pick
+              by the businesses you want, not by tier
               {freeRung
-                ? `, and every screen past your ${ordinal(freeRung)} is ${formatCents(lowestCents)}`
+                ? `, and every location past your ${ordinal(freeRung)} is ${formatCents(lowestCents)}`
                 : ''}
               . No minimum, month to month, cancel anytime, and we can design your ad if you need
               it. You always see the price before you buy.

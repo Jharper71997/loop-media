@@ -99,10 +99,10 @@ export function ReviewStep({
       <div className="flex flex-col items-center gap-4 py-16 text-center">
         <h1 className="font-heading text-xl font-bold">Your cart is empty</h1>
         <p className="text-sm text-muted-foreground">
-          Head back to the map and tap the businesses you want a screen in.
+          Head back to the map and tap the businesses you want to be in.
         </p>
         <Link href={`${base}/browse`} className={buttonVariants({ size: 'lg' })}>
-          <MapPin className="size-4" /> Pick screens
+          <MapPin className="size-4" /> Pick locations
         </Link>
       </div>
     )
@@ -110,7 +110,7 @@ export function ReviewStep({
 
   return (
     <div className="space-y-5">
-      <StepHeader step={2} total={3} title="Review your screens" />
+      <StepHeader step={2} total={3} title="Review your locations" />
 
       <div className="space-y-2.5">
         {cart.map((v) => {
@@ -173,9 +173,9 @@ export function ReviewStep({
       <Card>
         <CardContent className="space-y-1.5 p-4 text-sm">
           <Row label="Subtotal" value={formatCents(quote.listCents)} />
-          {quote.freeScreens > 0 && (
+          {quote.freeLocations > 0 && (
             <Row
-              label={`Free screens (${quote.freeScreens})`}
+              label={`Free locations (${quote.freeLocations})`}
               value={`-${formatCents(quote.listCents - quote.subtotalCents)}`}
               good
             />
@@ -215,7 +215,7 @@ export function ReviewStep({
                 ~{reachPerMonth.toLocaleString()} people / month
               </p>
               <p className="text-xs text-muted-foreground">
-                Estimated reach across your screens, from each venue&apos;s foot traffic. An
+                Estimated reach across your locations, from each venue&apos;s foot traffic. An
                 estimate, not a measured count.
               </p>
             </div>
@@ -231,13 +231,13 @@ export function ReviewStep({
           <span className="min-w-0 text-xs">
             <span className="block font-medium text-primary">
               {upsell.deltaCents <= 0
-                ? `Your ${ordinal(upsell.rungScreens)} screen is free`
-                : `Add ${upsell.screensNeeded} more screens and your ${ordinal(upsell.rungScreens)} is free`}
+                ? `Your ${ordinal(upsell.rungLocations)} location is free`
+                : `Add ${upsell.locationsNeeded} more locations and your ${ordinal(upsell.rungLocations)} is free`}
             </span>
             <span className="block text-muted-foreground">
               {upsell.deltaCents <= 0
-                ? `Add ${upsell.screensNeeded} more and you still pay ${formatCents(upsell.totalCents)} a month.`
-                : `${formatCents(upsell.deltaCents)} more a month, and every screen drops to ${formatCents(upsell.perScreenCents)}.`}
+                ? `Add ${upsell.locationsNeeded} more and you still pay ${formatCents(upsell.totalCents)} a month.`
+                : `${formatCents(upsell.deltaCents)} more a month, and every location drops to ${formatCents(upsell.perLocationCents)}.`}
             </span>
           </span>
           <span className="shrink-0 text-xs font-medium text-primary">
@@ -249,14 +249,14 @@ export function ReviewStep({
           href={`${base}/browse`}
           className="block text-center text-xs text-muted-foreground hover:text-foreground"
         >
-          + Add more screens
+          + Add more locations
         </Link>
       )}
 
       <StickyCta
         label="Add your ad"
         href={`${base}/new/creative`}
-        priceTop={`${cart.length} screen${cart.length === 1 ? '' : 's'}`}
+        priceTop={`${cart.length} location${cart.length === 1 ? '' : 's'}`}
         priceMain={`${formatCents(totalCents)}/mo`}
       />
     </div>

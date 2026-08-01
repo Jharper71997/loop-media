@@ -35,12 +35,12 @@ const STEPS: Record<'advertiser' | 'host', { steps: Step[]; cta: string; href: s
       {
         icon: MapPin,
         title: 'Pick your spots',
-        body: 'Open the map and tap the businesses you want a screen in. Each one shows its own monthly price.',
+        body: 'Open the map and tap the businesses you want to be in. Each one shows its own monthly price, and covers every TV in that business.',
       },
       {
         icon: Tag,
         title: 'The more you add, the less you pay',
-        body: 'One screen is $75 a month. Pick 3 and every screen drops to $50, pick 5 and every screen drops to $40 — so buy 4 screens and the 5th is free.',
+        body: 'One location is $75 a month, however many TVs it has. Pick 3 and every location drops to $50, pick 5 and every location drops to $40 — so buy 4 and the 5th is free.',
       },
       {
         icon: Upload,

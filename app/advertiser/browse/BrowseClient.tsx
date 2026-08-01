@@ -282,7 +282,7 @@ export function BrowseClient({
                         return
                       }
                       toast.success(
-                        `Thanks — we'll review "${catQuery.trim()}" and add it. Browsing all screens for now.`
+                        `Thanks — we'll review "${catQuery.trim()}" and add it. Browsing everything for now.`
                       )
                       go({ cat: 'all' })
                     })
@@ -355,7 +355,9 @@ export function BrowseClient({
         total={3}
         title="Tap the businesses you want"
         subtitle={
-          knowsLoc ? 'Screens near you — tap any to add' : 'Tap any screen on the map or list to add it'
+          knowsLoc
+            ? 'Businesses near you — tap any to add'
+            : 'Tap any business on the map or list to add it'
         }
         backHref={homeFor(base)}
       />
@@ -364,7 +366,7 @@ export function BrowseClient({
         <p className="text-xs text-muted-foreground">
           You&apos;re advertising in{' '}
           <span className="font-medium text-foreground">{activeCatName}</span>, so we keep your ad
-          off screens that already run a competing {activeCatName} business.{' '}
+          off businesses that already run a competing {activeCatName}.{' '}
           <button
             onClick={() => router.push(`${base}/browse?pick=1`)}
             className="text-primary hover:underline"
@@ -385,15 +387,15 @@ export function BrowseClient({
           them and the list is scoped to nearby screens. */}
       {geoStatus === 'locating' && (
         <p className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Loader2 className="size-3.5 animate-spin" /> Finding screens near you…
+          <Loader2 className="size-3.5 animate-spin" /> Finding businesses near you…
         </p>
       )}
       {(geoStatus === 'idle' || geoStatus === 'denied' || geoStatus === 'unsupported') && (
         <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/40 px-3 py-2">
           <p className="text-xs text-muted-foreground">
             {geoStatus === 'idle'
-              ? 'See the screens closest to you first, or browse the whole map below.'
-              : 'Turn on location to see the screens closest to you. Showing everything for now.'}
+              ? 'See the businesses closest to you first, or browse the whole map below.'
+              : 'Turn on location to see the businesses closest to you. Showing everything for now.'}
           </p>
           <Button size="sm" variant="outline" className="shrink-0" onClick={locate}>
             <Navigation className="size-4" /> Use my location
@@ -403,14 +405,14 @@ export function BrowseClient({
       {knowsLoc && (
         <p className="text-xs text-muted-foreground">
           {within && within.length > 0
-            ? `${within.length} screen${within.length === 1 ? '' : 's'} within ${NEARBY_RADIUS_MI} miles, closest first. Zoom out to see the whole network.`
-            : `No screens within ${NEARBY_RADIUS_MI} miles yet — showing the closest first. Zoom out to see all.`}
+            ? `${within.length} location${within.length === 1 ? '' : 's'} within ${NEARBY_RADIUS_MI} miles, closest first. Zoom out to see the whole network.`
+            : `No locations within ${NEARBY_RADIUS_MI} miles yet — showing the closest first. Zoom out to see all.`}
         </p>
       )}
 
       {venues.length === 0 ? (
         <p className="rounded-xl border border-border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
-          No screens available yet. Check back soon.
+          No businesses available yet. Check back soon.
         </p>
       ) : (
         // Desktop: map on the left (sticky + tall) with the list beside it, so the
@@ -432,8 +434,8 @@ export function BrowseClient({
             {upsell && (
               <p className="rounded-lg bg-primary/10 px-3 py-2 text-center text-xs text-primary">
                 {upsell.deltaCents <= 0
-                  ? `Tap ${upsell.screensNeeded} more and your ${ordinal(upsell.rungScreens)} screen is free — still ${formatCents(upsell.totalCents)}/mo`
-                  : `Tap ${upsell.screensNeeded} more and your ${ordinal(upsell.rungScreens)} screen is free — ${formatCents(upsell.perScreenCents)} each`}
+                  ? `Tap ${upsell.locationsNeeded} more and your ${ordinal(upsell.rungLocations)} location is free — still ${formatCents(upsell.totalCents)}/mo`
+                  : `Tap ${upsell.locationsNeeded} more and your ${ordinal(upsell.rungLocations)} location is free — ${formatCents(upsell.perLocationCents)} each`}
               </p>
             )}
 
@@ -442,7 +444,7 @@ export function BrowseClient({
             {quote.floorApplied && cartVenues.length > 0 && (
               <p className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-center text-xs text-muted-foreground">
                 {formatCents(pricingConfig?.minMonthlyCents ?? MIN_MONTHLY_CENTS)}/mo account
-                minimum — add more screens to use it all.
+                minimum — add more locations to use it all.
               </p>
             )}
 
@@ -462,12 +464,12 @@ export function BrowseClient({
       )}
 
       <StickyCta
-        label={cartVenues.length ? 'Review' : 'Tap a screen to start'}
+        label={cartVenues.length ? 'Review' : 'Tap a business to start'}
         disabled={cartVenues.length === 0}
         href={`${base}/new`}
         priceTop={
           cartVenues.length
-            ? `${cartVenues.length} screen${cartVenues.length === 1 ? '' : 's'}${
+            ? `${cartVenues.length} location${cartVenues.length === 1 ? '' : 's'}${
                 quote.discountPct > 0 ? ` · ${Math.round(quote.discountPct * 100)}% off` : ''
               }`
             : undefined

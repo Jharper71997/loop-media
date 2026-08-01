@@ -145,8 +145,8 @@ export default async function PricingPage() {
         title="Pricing, packages & categories"
         description={
           t
-            ? `Packages, per-screen tier prices, ${activeName} overrides, and category caps. Edits go live immediately.`
-            : 'Packages, per-screen tier prices, the account minimum, discounts, and the category catalog. Edits go live immediately.'
+            ? `Packages, per-location tier prices, ${activeName} overrides, and category caps. Edits go live immediately.`
+            : 'Packages, per-location tier prices, the account minimum, discounts, and the category catalog. Edits go live immediately.'
         }
       />
 
@@ -347,8 +347,9 @@ export default async function PricingPage() {
             </Table>
           </div>
           <p className="text-xs text-muted-foreground">
-            Volume discounts are fixed in code (lib/pricing RATE_CARD): 1-2 screens bill the rate
-            above, 3-4 screens bill $50 each, 5+ bill $40 each.
+            Prices are per LOCATION (one venue = every TV in it), not per screen. Volume discounts are
+            fixed in code (lib/pricing RATE_CARD): 1-2 locations bill the rate above, 3-4 bill $50
+            each, 5+ bill $40 each.
           </p>
         </section>
 

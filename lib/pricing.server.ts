@@ -176,6 +176,6 @@ export function contextToQuoteOptions(ctx: AdvertiserContext): QuoteOptions {
   return {
     isHost: ctx.isHost,
     loyalty12mo: credits.loyalty12mo,
-    freeScreens: credits.freeScreens,
+    freeLocations: credits.freeLocations,
   }
 }

@@ -1,18 +1,19 @@
 -- Loop Network — the $75 / $50 / $40 rate card
 --
--- New published card (the rungs themselves live in lib/pricing.ts RATE_CARD,
--- since volume is applied in code, not from this table):
+-- Priced PER LOCATION (one venue = every TV in it), not per screen. The rungs
+-- themselves live in lib/pricing.ts RATE_CARD, since volume is applied in code,
+-- not from this table:
 --
---    1-2 screens   $75 each
---    3-4 screens   $50 each   ($150 for 3)
---    5+  screens   $40 each   ($200 for 5, $40 on every screen after)
+--    1-2 locations   $75 each
+--    3-4 locations   $50 each   ($150 for 3)
+--    5+  locations   $40 each   ($200 for 5, $40 each after)
 --
--- What changes here is the BASE screen price every tier bills, from the live
--- tiered card ($50 local / $75 standard / $100 high / $125 premium) to a flat
--- $75. Every active venue currently resolves to `local` (price_tier is null and
+-- What changes here is the BASE price every tier bills, from the live tiered
+-- card ($50 local / $75 standard / $100 high / $125 premium) to a flat $75.
+-- Every active venue currently resolves to `local` (price_tier is null and
 -- foot_traffic_estimate is 0 network-wide), so in practice this moves the real
--- price of one screen from $50 to $75, and volume is the only thing that moves
--- it back down.
+-- price of one location from $50 to $75, and volume is the only thing that
+-- moves it back down.
 --
 -- max_discount_pct has to clear the top volume rung (46.7% at 5+) with room for
 -- the 20% host discount and 5% loyalty on top, or a 5-screen host would hit the

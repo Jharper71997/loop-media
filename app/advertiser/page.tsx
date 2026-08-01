@@ -233,10 +233,10 @@ export default async function AdvertiserDashboard({
   const perks: { icon: typeof Lock; label: string }[] = []
   if (credits.rateLocked)
     perks.push({ icon: Lock, label: 'Founding Advertiser — your rates are locked in' })
-  if (credits.freeScreens > 0)
+  if (credits.freeLocations > 0)
     perks.push({
       icon: Gift,
-      label: `${credits.freeScreens} free screen${credits.freeScreens === 1 ? '' : 's'} on your next order`,
+      label: `${credits.freeLocations} free screen${credits.freeLocations === 1 ? '' : 's'} on your next order`,
     })
   if (credits.loyalty12mo)
     perks.push({ icon: Sparkles, label: 'Loyalty bonus — extra 5% off everything' })
