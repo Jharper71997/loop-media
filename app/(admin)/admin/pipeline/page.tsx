@@ -11,6 +11,7 @@ import { loadBoard } from '@/lib/opportunities'
 import { stagesFor, KIND_LABEL, wonLabel, lostLabel, type OpportunityKind } from '@/lib/pipeline'
 import { Board } from './Board'
 import { NewOpportunityDialog } from './NewOpportunityDialog'
+import { PipelineTabs } from './PipelineTabs'
 import { cn } from '@/lib/utils'
 
 // The pipeline board — the thing this admin was missing.
@@ -65,24 +66,9 @@ export default async function PipelinePage({
         }
       />
 
-      {/* Which pipeline. Two sales motions that feed each other: hosts create the
-          inventory advertisers buy. */}
-      <div className="flex gap-1 border-b border-border px-3 py-1.5 md:px-4">
-        {(['advertiser', 'host'] as OpportunityKind[]).map((k) => (
-          <Link
-            key={k}
-            href={`/admin/pipeline?kind=${k}`}
-            className={cn(
-              'rounded-md px-2.5 py-1 text-xs transition-colors',
-              k === kind
-                ? 'bg-primary/10 font-medium text-foreground'
-                : 'text-muted-foreground hover:bg-accent hover:text-foreground'
-            )}
-          >
-            {KIND_LABEL[k]}
-          </Link>
-        ))}
-      </div>
+      {/* Board vs dashboard, and which pipeline. Two sales motions that feed
+          each other: hosts create the inventory advertisers buy. */}
+      <PipelineTabs kind={kind} />
 
       <HudBody>
         {!board.ready ? (

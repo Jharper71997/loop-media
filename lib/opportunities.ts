@@ -341,6 +341,251 @@ export interface PipelineReport {
   bySource: { label: string; won: number; lost: number; open: number; wonCents: number }[]
 }
 
+// ---------------------------------------------------------------------------
+// The opportunity dashboard — the GHL screen, in this network's units.
+//
+// Every figure is stated against the SAME-LENGTH window immediately before it,
+// and every delta carries its raw previous value: at this size a "+300%" off a
+// base of 1 is noise, and a dashboard that shouts percentages at a four-deal
+// month is lying to you politely.
+// ---------------------------------------------------------------------------
+
+export interface Paired {
+  current: number
+  previous: number
+}
+
+export interface PipelineDashboard {
+  ready: boolean
+  days: number
+  // Headline counts.
+  opportunities: Paired
+  opened: Paired
+  won: Paired
+  lost: Paired
+  wonValueCents: Paired
+  lostValueCents: number
+  // Everything still open, regardless of age — the standing book of business.
+  openCount: number
+  openValueCents: number
+  conversionPct: number | null
+  // Average days from created to won, for deals won in this window.
+  avgDaysToWin: number | null
+  // 12 months of created vs won.
+  overTime: { label: string; created: number; won: number }[]
+  // Of the opportunities CREATED in this window, where did they end up.
+  byStatus: { label: string; count: number; slot: 1 | 2 | 3 }[]
+  // Attribution. `count` is everything attributed to the source; `won`/`cents`
+  // are what it actually produced in the window.
+  bySource: { key: string; label: string; count: number; won: number; lost: number; cents: number }[]
+  // True funnel: how many opportunities EVER reached each stage, reconstructed
+  // from the event log rather than from where a card happens to sit now.
+  funnels: {
+    kind: OpportunityKind
+    stages: { label: string; value: number; note?: string }[]
+    reachedEnd: number
+  }[]
+  // Open deals per stage right now.
+  stageNow: { kind: OpportunityKind; stages: { label: string; value: number }[] }[]
+  sparse: boolean
+}
+
+function monthKey(iso: string): string {
+  return iso.slice(0, 7)
+}
+
+export const loadPipelineDashboard = cache(
+  async (territoryId: string | null, days: number): Promise<PipelineDashboard> => {
+    const empty: PipelineDashboard = {
+      ready: false,
+      days,
+      opportunities: { current: 0, previous: 0 },
+      opened: { current: 0, previous: 0 },
+      won: { current: 0, previous: 0 },
+      lost: { current: 0, previous: 0 },
+      wonValueCents: { current: 0, previous: 0 },
+      lostValueCents: 0,
+      openCount: 0,
+      openValueCents: 0,
+      conversionPct: null,
+      avgDaysToWin: null,
+      overTime: [],
+      byStatus: [],
+      bySource: [],
+      funnels: [],
+      stageNow: [],
+      sparse: true,
+    }
+
+    const supabase = await createClient()
+    let q = supabase
+      .from('opportunities')
+      .select('id, kind, stage, status, monthly_cents, source, created_at, won_at, lost_at')
+    if (territoryId) q = q.eq('territory_id', territoryId)
+    const { data, error } = await q
+    if (error) {
+      if (!isMissingTable(error)) console.error('[pipeline] loadPipelineDashboard failed:', error)
+      return empty
+    }
+
+    type DRow = {
+      id: string
+      kind: string
+      stage: string
+      status: string
+      monthly_cents: number | null
+      source: string | null
+      created_at: string
+      won_at: string | null
+      lost_at: string | null
+    }
+    const all = (data ?? []) as DRow[]
+
+    const now = Date.now()
+    const winMs = days * 86_400_000
+    const startISO = new Date(now - winMs).toISOString()
+    const prevStartISO = new Date(now - winMs * 2).toISOString()
+
+    const inWindow = (iso: string | null) => !!iso && iso >= startISO
+    const inPrev = (iso: string | null) => !!iso && iso >= prevStartISO && iso < startISO
+
+    const cents = (rows: DRow[]) => rows.reduce((a, r) => a + (r.monthly_cents ?? 0), 0)
+
+    const createdNow = all.filter((r) => inWindow(r.created_at))
+    const createdPrev = all.filter((r) => inPrev(r.created_at))
+    const wonNow = all.filter((r) => r.status === 'won' && inWindow(r.won_at))
+    const wonPrev = all.filter((r) => r.status === 'won' && inPrev(r.won_at))
+    const lostNow = all.filter((r) => r.status === 'lost' && inWindow(r.lost_at))
+    const lostPrev = all.filter((r) => r.status === 'lost' && inPrev(r.lost_at))
+    const open = all.filter((r) => r.status === 'open')
+
+    // Days from first touch to signature, for deals won in this window. This is
+    // the number that tells you whether a "hot" deal is actually moving.
+    const winDurations = wonNow
+      .map((r) => (r.won_at ? (new Date(r.won_at).getTime() - new Date(r.created_at).getTime()) / 86_400_000 : null))
+      .filter((n): n is number => n != null && Number.isFinite(n) && n >= 0)
+
+    // ---- 12 months of created vs won ----
+    const months: string[] = []
+    const cursor = new Date()
+    cursor.setDate(1)
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(cursor)
+      d.setMonth(d.getMonth() - i)
+      months.push(d.toISOString().slice(0, 7))
+    }
+    const overTime = months.map((m) => ({
+      label: m.slice(5) + '/' + m.slice(2, 4),
+      created: all.filter((r) => monthKey(r.created_at) === m).length,
+      won: all.filter((r) => r.won_at && monthKey(r.won_at) === m).length,
+    }))
+
+    // ---- Where this window's new opportunities ended up ----
+    const byStatus: PipelineDashboard['byStatus'] = [
+      { label: 'Still open', count: createdNow.filter((r) => r.status === 'open').length, slot: 1 },
+      { label: 'Won', count: createdNow.filter((r) => r.status === 'won').length, slot: 3 },
+      { label: 'Lost', count: createdNow.filter((r) => r.status === 'lost').length, slot: 2 },
+    ]
+
+    // ---- Attribution ----
+    const srcKeys = [...new Set(all.map((r) => r.source ?? 'unknown'))]
+    const bySource = srcKeys
+      .map((key) => {
+        const mine = all.filter((r) => (r.source ?? 'unknown') === key)
+        const w = mine.filter((r) => r.status === 'won' && inWindow(r.won_at))
+        return {
+          key,
+          label: key === 'unknown' ? 'Unknown' : key,
+          count: mine.length,
+          won: w.length,
+          lost: mine.filter((r) => r.status === 'lost' && inWindow(r.lost_at)).length,
+          cents: cents(w),
+        }
+      })
+      .sort((a, b) => b.cents - a.cents || b.won - a.won || b.count - a.count)
+
+    // ---- The funnel, from the event log ----
+    // "Ever reached this stage" is the honest denominator. Reading current stage
+    // alone would show a deal that jumped straight to Proposal as never having
+    // been Contacted, and would erase every deal that has already closed.
+    const reached = new Map<string, Set<string>>() // stage key -> opportunity ids
+    const ids = all.map((r) => r.id)
+    if (ids.length) {
+      const { data: evData } = await supabase
+        .from('opportunity_events')
+        .select('opportunity_id, to_stage')
+        .in('opportunity_id', ids)
+        .not('to_stage', 'is', null)
+      for (const e of (evData ?? []) as { opportunity_id: string; to_stage: string }[]) {
+        if (!reached.has(e.to_stage)) reached.set(e.to_stage, new Set())
+        reached.get(e.to_stage)!.add(e.opportunity_id)
+      }
+    }
+    // Where a card sits now counts as reached, even if its move predates the log.
+    for (const r of all) {
+      if (!reached.has(r.stage)) reached.set(r.stage, new Set())
+      reached.get(r.stage)!.add(r.id)
+    }
+
+    const funnels = (['advertiser', 'host'] as OpportunityKind[])
+      .map((kind) => {
+        const mine = new Set(all.filter((r) => r.kind === kind).map((r) => r.id))
+        if (!mine.size) return null
+        const stages = stagesFor(kind).map((s) => {
+          const set = reached.get(s.key)
+          const value = set ? [...set].filter((id) => mine.has(id)).length : 0
+          return { label: s.label, value }
+        })
+        const wonCount = all.filter((r) => r.kind === kind && r.status === 'won').length
+        return {
+          kind,
+          stages: [
+            ...stages,
+            { label: kind === 'host' ? 'Live' : 'Won', value: wonCount, note: 'closed' },
+          ],
+          reachedEnd: wonCount,
+        }
+      })
+      .filter((f): f is NonNullable<typeof f> => f != null)
+
+    const stageNow = (['advertiser', 'host'] as OpportunityKind[])
+      .map((kind) => ({
+        kind,
+        stages: stagesFor(kind).map((s) => ({
+          label: s.label,
+          value: open.filter((r) => r.kind === kind && r.stage === s.key).length,
+        })),
+      }))
+      .filter((g) => g.stages.some((s) => s.value > 0))
+
+    const closedNow = wonNow.length + lostNow.length
+
+    return {
+      ready: true,
+      days,
+      opportunities: { current: all.length, previous: all.length - createdNow.length },
+      opened: { current: createdNow.length, previous: createdPrev.length },
+      won: { current: wonNow.length, previous: wonPrev.length },
+      lost: { current: lostNow.length, previous: lostPrev.length },
+      wonValueCents: { current: cents(wonNow), previous: cents(wonPrev) },
+      lostValueCents: cents(lostNow),
+      openCount: open.length,
+      openValueCents: cents(open),
+      conversionPct: closedNow > 0 ? Math.round((wonNow.length / closedNow) * 100) : null,
+      avgDaysToWin: winDurations.length
+        ? Math.round(winDurations.reduce((a, n) => a + n, 0) / winDurations.length)
+        : null,
+      overTime,
+      byStatus,
+      bySource,
+      funnels,
+      stageNow,
+      // Below this the charts are shapes, not signal, and the page says so.
+      sparse: all.length < 3,
+    }
+  }
+)
+
 export const loadPipelineReport = cache(
   async (territoryId: string | null, days: number): Promise<PipelineReport> => {
     const empty: PipelineReport = {

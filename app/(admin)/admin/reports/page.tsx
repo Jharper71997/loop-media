@@ -6,7 +6,6 @@ import { ExportCsvButton } from '@/components/admin/ExportCsvButton'
 import { formatCents } from '@/lib/format'
 import { loadAdminReports, RANGE_DAYS, DEFAULT_RANGE } from '@/lib/adminReports'
 import { loadPipelineReport } from '@/lib/opportunities'
-import { KIND_LABEL, sourceLabel } from '@/lib/pipeline'
 import { Delta, Meter, Columns, RankedBars, CategoryRows, Funnel } from '@/components/admin/charts'
 import { HudBody, StatStrip, Stat, Panel } from '@/components/admin/hud'
 import { cn } from '@/lib/utils'
@@ -169,84 +168,46 @@ export default async function ReportsPage({
           </Panel>
         </div>
 
-        {/* ---- The pipeline ----
-            This is the section the whole dashboard was shaped around. Until the
-            opportunities table existed these questions could only be answered
-            with inventory stand-ins; now they read the real board. */}
+        {/* ---- Pipeline, in one line ----
+            The full opportunity dashboard lives at /admin/pipeline/dashboard.
+            Repeating it here would mean two screens showing the same numbers and
+            eventually disagreeing, so this is a pointer, not a copy. */}
         {pipeline.ready && (
-          <div className="grid gap-3 lg:grid-cols-4">
-            <Panel title="Deals closed" note={`last ${RANGE_LABEL[days]}`}>
-              <div className="space-y-2">
-                <div className="flex items-baseline justify-between gap-2">
-                  <span className="text-xs text-muted-foreground">Won</span>
-                  <span className="font-mono text-lg font-semibold tabular-nums text-success">
-                    {pipeline.statusCounts.won}
-                  </span>
-                </div>
-                <div className="flex items-baseline justify-between gap-2">
-                  <span className="text-xs text-muted-foreground">Lost</span>
-                  <span className="font-mono text-lg font-semibold tabular-nums">
-                    {pipeline.statusCounts.lost}
-                  </span>
-                </div>
-                <div className="border-t border-border pt-2">
-                  <p className="text-xs text-muted-foreground">Conversion</p>
-                  <p className="font-mono text-xl font-semibold tabular-nums">
-                    {pipeline.conversionPct == null ? '—' : `${pipeline.conversionPct}%`}
-                  </p>
-                </div>
-              </div>
-            </Panel>
-
-            <Panel title="Value won vs lost" note="monthly recurring">
-              <div className="space-y-2">
-                <div>
-                  <p className="text-xs text-muted-foreground">Won</p>
-                  <p className="font-mono text-xl font-semibold tabular-nums text-success">
-                    {formatCents(pipeline.wonValueCents)}/mo
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Walked away</p>
-                  <p className="font-mono text-lg font-semibold tabular-nums text-muted-foreground">
-                    {formatCents(pipeline.lostValueCents)}/mo
-                  </p>
-                </div>
-                <p className="text-[11px] text-muted-foreground">
-                  Lost value is what the objections cost. It is not revenue you had.
-                </p>
-              </div>
-            </Panel>
-
-            <Panel title="Open by stage" note={`${pipeline.statusCounts.open} open`}>
-              {pipeline.stageCounts.length === 0 ? (
-                <p className="py-6 text-center text-xs text-muted-foreground">
-                  Nothing open on either board.
-                </p>
-              ) : (
-                <div className="space-y-3">
-                  {pipeline.stageCounts.map((g) => (
-                    <div key={g.kind}>
-                      <p className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">
-                        {KIND_LABEL[g.kind]}
-                      </p>
-                      <RankedBars data={g.stages} emptyText="None open." />
-                    </div>
-                  ))}
-                </div>
-              )}
-            </Panel>
-
-            <Panel title="Where deals come from" note="won in this window">
-              <RankedBars
-                data={pipeline.bySource.map((s) => ({
-                  label: `${sourceLabel(s.label === 'unknown' ? null : s.label)} · ${s.open} open`,
-                  value: s.won,
-                }))}
-                emptyText="Nothing closed yet, so there is no attribution to show."
+          <Panel
+            title="Pipeline"
+            action={
+              <Link
+                href="/admin/pipeline/dashboard"
+                className="text-[11px] text-primary hover:underline"
+              >
+                Full dashboard ›
+              </Link>
+            }
+          >
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <PipelineStat
+                label="Open"
+                value={String(pipeline.statusCounts.open)}
+                sub="deals being worked"
               />
-            </Panel>
-          </div>
+              <PipelineStat
+                label="Won"
+                value={String(pipeline.statusCounts.won)}
+                sub={`${formatCents(pipeline.wonValueCents)}/mo added`}
+                tone="good"
+              />
+              <PipelineStat
+                label="Lost"
+                value={String(pipeline.statusCounts.lost)}
+                sub={`${formatCents(pipeline.lostValueCents)}/mo walked`}
+              />
+              <PipelineStat
+                label="Conversion"
+                value={pipeline.conversionPct == null ? '—' : `${pipeline.conversionPct}%`}
+                sub="of what closed"
+              />
+            </div>
+          </Panel>
         )}
 
         {/* ---- Attribution ---- */}
@@ -267,5 +228,32 @@ export default async function ReportsPage({
         </div>
       </HudBody>
     </>
+  )
+}
+
+function PipelineStat({
+  label,
+  value,
+  sub,
+  tone,
+}: {
+  label: string
+  value: string
+  sub: string
+  tone?: 'good'
+}) {
+  return (
+    <div>
+      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p
+        className={cn(
+          'font-mono text-xl font-semibold tabular-nums',
+          tone === 'good' && 'text-success'
+        )}
+      >
+        {value}
+      </p>
+      <p className="truncate text-[10px] text-muted-foreground">{sub}</p>
+    </div>
   )
 }

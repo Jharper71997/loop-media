@@ -170,6 +170,96 @@ export function Columns({
 }
 
 // ---------------------------------------------------------------------------
+// GroupedColumns — two series over the same time axis (opportunities created vs
+// won). Side-by-side bars, ONE shared y-scale: both series count the same unit,
+// so a second axis would be a lie about their relative size. This is the chart
+// the dual-axis rule exists to prevent.
+//
+// Two series means a legend is mandatory, which also discharges the light-mode
+// contrast warning on categorical slot 3.
+// ---------------------------------------------------------------------------
+
+export function GroupedColumns({
+  data,
+  aLabel,
+  bLabel,
+  height = 96,
+}: {
+  data: { label: string; a: number; b: number }[]
+  aLabel: string
+  bLabel: string
+  height?: number
+}) {
+  if (data.length === 0) {
+    return <p className="py-6 text-center text-xs text-muted-foreground">No data in this range.</p>
+  }
+  const max = Math.max(1, ...data.flatMap((d) => [d.a, d.b]))
+  const W = 300
+  const groupGap = 3
+  const barGap = 1
+  const gw = (W - groupGap * (data.length - 1)) / data.length
+  const bw = (gw - barGap) / 2
+
+  return (
+    <div>
+      <div className="mb-1.5 flex items-center gap-3 text-[10px] text-muted-foreground">
+        <span className="inline-flex items-center gap-1">
+          <span className="size-2 rounded-full" style={{ background: 'var(--viz-cat-1)' }} aria-hidden />
+          {aLabel}
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <span className="size-2 rounded-full" style={{ background: 'var(--viz-cat-3)' }} aria-hidden />
+          {bLabel}
+        </span>
+      </div>
+      <svg
+        viewBox={`0 0 ${W} ${height}`}
+        preserveAspectRatio="none"
+        className="w-full"
+        style={{ height }}
+        role="img"
+        aria-label={data.map((d) => `${d.label}: ${aLabel} ${d.a}, ${bLabel} ${d.b}`).join('; ')}
+      >
+        {data.map((d, i) => {
+          const x = i * (gw + groupGap)
+          const ha = Math.max(d.a > 0 ? 2 : 0, (d.a / max) * (height - 2))
+          const hb = Math.max(d.b > 0 ? 2 : 0, (d.b / max) * (height - 2))
+          return (
+            <g key={i}>
+              <rect
+                x={x}
+                y={height - ha}
+                width={bw}
+                height={ha}
+                rx={Math.min(3, bw / 2)}
+                fill="var(--viz-cat-1)"
+              >
+                <title>{`${d.label} · ${aLabel}: ${d.a}`}</title>
+              </rect>
+              <rect
+                x={x + bw + barGap}
+                y={height - hb}
+                width={bw}
+                height={hb}
+                rx={Math.min(3, bw / 2)}
+                fill="var(--viz-cat-3)"
+              >
+                <title>{`${d.label} · ${bLabel}: ${d.b}`}</title>
+              </rect>
+            </g>
+          )
+        })}
+      </svg>
+      <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
+        <span>{data[0]?.label}</span>
+        <span className="tabular-nums">peak {max}</span>
+        <span>{data[data.length - 1]?.label}</span>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // RankedBars — magnitude across named things (scans per venue). Horizontal so
 // the names are readable without rotating text.
 // ---------------------------------------------------------------------------
@@ -222,43 +312,62 @@ export function RankedBars({
 
 export type Category = { label: string; count: number; cents: number; slot: 1 | 2 | 3 }
 
-export function CategoryRows({ data }: { data: Category[] }) {
-  const total = Math.max(1, data.reduce((a, d) => a + d.cents, 0))
+// `weight` says what the bar LENGTH means. 'money' is the billing mix, where a
+// single expensive account should outweigh several cheap ones. 'count' is for
+// sets where money is not the point (how this month's new opportunities ended
+// up) — passing counts through the cents field would otherwise print "9 · $0.09".
+export function CategoryRows({
+  data,
+  weight = 'money',
+  emptyText = 'Nothing here yet.',
+}: {
+  data: Category[]
+  weight?: 'money' | 'count'
+  emptyText?: string
+}) {
+  const value = (d: Category) => (weight === 'money' ? d.cents : d.count)
+  const total = Math.max(1, data.reduce((a, d) => a + value(d), 0))
   if (data.every((d) => d.count === 0)) {
-    return <p className="py-6 text-center text-xs text-muted-foreground">No live accounts yet.</p>
+    return <p className="py-6 text-center text-xs text-muted-foreground">{emptyText}</p>
   }
   return (
     <ul className="space-y-2.5">
-      {data.map((d) => (
-        <li key={d.label}>
-          <div className="flex items-baseline justify-between gap-2 text-xs">
-            <span className="inline-flex items-center gap-1.5">
-              <span
-                className="size-2 shrink-0 rounded-full"
-                style={{ background: `var(--viz-cat-${d.slot})` }}
-                aria-hidden
-              />
-              {d.label}
-            </span>
-            <span className="tabular-nums text-muted-foreground">
-              {d.count} · {money(d.cents)}/mo
-            </span>
-          </div>
-          <div
-            className="mt-1 h-1.5 overflow-hidden rounded-full"
-            style={{ background: 'var(--viz-track)' }}
-          >
+      {data.map((d) => {
+        const readout =
+          weight === 'money' ? `${d.count} · ${money(d.cents)}/mo` : String(d.count)
+        const tooltip =
+          weight === 'money'
+            ? `${d.label}: ${d.count} accounts, ${money(d.cents)}/mo`
+            : `${d.label}: ${d.count} (${Math.round((d.count / total) * 100)}%)`
+        return (
+          <li key={d.label}>
+            <div className="flex items-baseline justify-between gap-2 text-xs">
+              <span className="inline-flex items-center gap-1.5">
+                <span
+                  className="size-2 shrink-0 rounded-full"
+                  style={{ background: `var(--viz-cat-${d.slot})` }}
+                  aria-hidden
+                />
+                {d.label}
+              </span>
+              <span className="tabular-nums text-muted-foreground">{readout}</span>
+            </div>
             <div
-              className="h-full rounded-full"
-              style={{
-                width: `${(d.cents / total) * 100}%`,
-                background: `var(--viz-cat-${d.slot})`,
-              }}
-              title={`${d.label}: ${d.count} accounts, ${money(d.cents)}/mo`}
-            />
-          </div>
-        </li>
-      ))}
+              className="mt-1 h-1.5 overflow-hidden rounded-full"
+              style={{ background: 'var(--viz-track)' }}
+            >
+              <div
+                className="h-full rounded-full"
+                style={{
+                  width: `${(value(d) / total) * 100}%`,
+                  background: `var(--viz-cat-${d.slot})`,
+                }}
+                title={tooltip}
+              />
+            </div>
+          </li>
+        )
+      })}
     </ul>
   )
 }
