@@ -18,6 +18,7 @@ export function AdScreenPreview({
   qrY = 0.88,
   qrSize = QR_SIZE_DEFAULT,
   className,
+  eager = false,
 }: {
   creativeUrl: string | null
   creativeType: 'video' | 'image'
@@ -26,6 +27,15 @@ export function AdScreenPreview({
   qrY?: number
   qrSize?: number
   className?: string
+  /**
+   * Load this creative immediately instead of when it scrolls into view.
+   *
+   * Set it for the ONE preview that is above the fold (the home page hero) so it
+   * isn't deferred; leave it off everywhere else. /playing renders every running
+   * ad, which was 29.5 MB of creatives fetched at once — enough that cards down
+   * the page showed black until their turn in the queue came up.
+   */
+  eager?: boolean
 }) {
   const [qr, setQr] = useState<string | null>(null)
   useEffect(() => {
@@ -59,10 +69,29 @@ export function AdScreenPreview({
     >
       {creativeUrl ? (
         creativeType === 'video' ? (
-          <CreativeVideo src={creativeUrl} muted autoPlay loop playsInline />
+          // pausedFrameAt: ad creatives animate in, so frame 0 is often black.
+          // If autoplay doesn't run, park a third of the way in — by then every
+          // spot has its headline and logo up. The TV player renders CreativeVideo
+          // directly and never passes either of these, so playback there is
+          // unchanged.
+          <CreativeVideo
+            src={creativeUrl}
+            muted
+            autoPlay
+            loop
+            playsInline
+            pausedFrameAt={0.35}
+            playWhenVisible={!eager}
+          />
         ) : (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={creativeUrl} alt="Your ad" className="h-full w-full object-contain" />
+          <img
+            src={creativeUrl}
+            alt="Your ad"
+            loading={eager ? 'eager' : 'lazy'}
+            decoding="async"
+            className="h-full w-full object-contain"
+          />
         )
       ) : (
         <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">

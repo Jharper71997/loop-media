@@ -4,7 +4,7 @@ import { SiteHeader } from '@/components/site/SiteHeader'
 import { SiteFooter } from '@/components/site/SiteFooter'
 
 export const metadata: Metadata = {
-  title: "What's New | Loop Network",
+  title: "What's New",
   description: "Recent updates and improvements to the Loop Network platform.",
 };
 

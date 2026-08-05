@@ -9,7 +9,7 @@ import { SiteHeader } from '@/components/site/SiteHeader'
 import { SiteFooter } from '@/components/site/SiteFooter'
 
 export const metadata: Metadata = {
-  title: "Terms of Service | Loop Network",
+  title: "Terms of Service",
   description: "The terms that govern your use of the Loop Network platform.",
 };
 

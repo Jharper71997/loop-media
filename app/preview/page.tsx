@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils'
 export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
-  title: 'See your ad on a TV before you buy — Loop Network',
+  title: 'See your ad on a TV before you buy',
   description:
     'A free tool: drop in your logo, photo, or video and see exactly how it would look on a Loop Network screen in a local bar, gym, or shop. No account, nothing saved.',
 }

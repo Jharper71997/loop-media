@@ -13,10 +13,14 @@ import { cn } from '@/lib/utils'
 // Always current — this page's entire claim is "right now".
 export const dynamic = 'force-dynamic'
 
+// The brand is NOT in the title: the layout template already appends
+// " — Loop Network", so spelling it here rendered as "On the screens right now
+// — Loop Network — Loop Network" in the tab and in search results.
 export const metadata: Metadata = {
-  title: 'On the screens right now — Loop Network',
+  title: 'On the screens right now',
   description:
     'The real ads playing on Loop Network screens in local bars, gyms and shops around Jacksonville, NC, right now.',
+  alternates: { canonical: '/playing' },
 }
 
 export default async function PlayingPage() {
