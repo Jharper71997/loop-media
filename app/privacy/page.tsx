@@ -4,7 +4,7 @@ import { SiteHeader } from '@/components/site/SiteHeader'
 import { SiteFooter } from '@/components/site/SiteFooter'
 
 export const metadata: Metadata = {
-  title: "Privacy Policy | Loop Network",
+  title: "Privacy Policy",
   description: "How Loop Network collects, uses, and protects your information.",
 };
 

@@ -340,6 +340,9 @@ export default async function Home() {
                     creativeType={heroAd.creativeType}
                     qrUrl={heroAd.qrUrl}
                     className="rounded-none ring-0"
+                    // The one creative above the fold — it IS the hero, so it
+                    // loads immediately rather than waiting on an observer.
+                    eager
                   />
                 ) : (
                   <div className="flex aspect-video w-full items-center justify-center text-xs text-white/40">
