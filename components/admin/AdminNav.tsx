@@ -12,13 +12,8 @@ import {
   Users,
   DollarSign,
   Coins,
-  Map,
-  Activity,
-  Palette,
-  Gamepad2,
-  Mail,
+  Settings,
   Menu,
-  MonitorPlay,
   LogOut,
   UserCircle,
   type LucideIcon,
@@ -38,35 +33,58 @@ import type { Profile } from '@/lib/db.types'
 import type { TerritoryContext } from '@/lib/territory'
 import { setActiveTerritory } from '@/app/(admin)/admin/territory-actions'
 
-type NavItem = { href: string; label: string; icon: LucideIcon; exact?: boolean }
+// `match` lists the extra route prefixes that belong to a merged section, so the
+// sidebar entry stays lit while you move between that section's tabs (see
+// components/admin/SectionTabs.tsx). `href` is always the section's first tab.
+type NavItem = {
+  href: string
+  label: string
+  icon: LucideIcon
+  exact?: boolean
+  match?: string[]
+}
 type NavGroup = { label: string | null; items: NavItem[] }
 
+// Seven entries, grouped by what you're trying to DO — not by which table the
+// page reads. Sell/Advertisers/Money is the money-in path in the order you walk
+// it; Content and Screens are the two things that keep an existing account
+// running; Setup is the rarely-touched configuration.
 const GROUPS: NavGroup[] = [
-  { label: null, items: [{ href: '/admin', label: 'Overview', icon: LayoutDashboard, exact: true }] },
+  { label: null, items: [{ href: '/admin', label: 'Today', icon: LayoutDashboard, exact: true }] },
   {
-    label: 'Operations',
+    label: 'Grow',
     items: [
-      { href: '/admin/queue', label: 'Approval queue', icon: Inbox },
-      { href: '/admin/creative', label: 'Creative help', icon: Palette },
-      { href: '/admin/uptime', label: 'Uptime', icon: Activity },
-      { href: '/admin/house', label: 'House slides', icon: MonitorPlay },
-      { href: '/admin/trivia', label: 'Trivia', icon: Gamepad2 },
-      { href: '/admin/map', label: 'Map', icon: Map },
-    ],
-  },
-  {
-    label: 'Inventory',
-    items: [
-      { href: '/admin/venues', label: 'Venues & screens', icon: Store },
-      { href: '/admin/pricing', label: 'Pricing, packages & categories', icon: Coins },
-    ],
-  },
-  {
-    label: 'Business',
-    items: [
+      { href: '/admin/sell', label: 'Sell', icon: Coins, match: ['/admin/deals'] },
       { href: '/admin/advertisers', label: 'Advertisers', icon: Users },
-      { href: '/admin/revenue', label: 'Revenue', icon: DollarSign },
-      { href: '/admin/email', label: 'Emails', icon: Mail },
+      { href: '/admin/money', label: 'Money', icon: DollarSign, match: ['/admin/revenue'] },
+    ],
+  },
+  {
+    label: 'Run',
+    items: [
+      {
+        href: '/admin/queue',
+        label: 'Content',
+        icon: Inbox,
+        match: ['/admin/creative', '/admin/house', '/admin/trivia'],
+      },
+      {
+        href: '/admin/venues',
+        label: 'Screens',
+        icon: Store,
+        match: ['/admin/uptime', '/admin/map', '/admin/tvs'],
+      },
+    ],
+  },
+  {
+    label: null,
+    items: [
+      {
+        href: '/admin/pricing',
+        label: 'Setup',
+        icon: Settings,
+        match: ['/admin/packages', '/admin/categories', '/admin/email', '/admin/account'],
+      },
     ],
   },
 ]
@@ -88,8 +106,10 @@ function NavLinks({
               {group.label}
             </span>
           )}
-          {group.items.map(({ href, label, icon: Icon, exact }) => {
-            const active = exact ? pathname === href : pathname.startsWith(href)
+          {group.items.map(({ href, label, icon: Icon, exact, match }) => {
+            const active = exact
+              ? pathname === href
+              : pathname.startsWith(href) || (match ?? []).some((m) => pathname.startsWith(m))
             const n = counts?.[href] ?? 0
             return (
               <Link

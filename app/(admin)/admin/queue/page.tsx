@@ -2,6 +2,7 @@ import { requireAdmin } from '@/lib/auth'
 import { getTerritoryContext } from '@/lib/territory'
 import { createClient } from '@/lib/supabase/server'
 import { PageHeader } from '@/components/admin/PageHeader'
+import { SectionTabs, CONTENT_TABS } from '@/components/admin/SectionTabs'
 import type { Ad } from '@/lib/db.types'
 import { QueueBoard, type QueueItem } from './QueueBoard'
 
@@ -66,6 +67,7 @@ export default async function QueuePage() {
         title="Approval queue"
         description={`${ads.length} ad${ads.length === 1 ? '' : 's'} awaiting review`}
       />
+      <SectionTabs tabs={CONTENT_TABS} />
       <div className="p-5 md:p-6">
         <QueueBoard ads={items} nowMs={Date.now()} />
       </div>

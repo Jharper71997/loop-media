@@ -1,6 +1,7 @@
 import { requireAdmin } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { PageHeader } from '@/components/admin/PageHeader'
+import { SectionTabs, CONTENT_TABS } from '@/components/admin/SectionTabs'
 import { DeleteButton } from '@/components/admin/DeleteButton'
 import { Badge } from '@/components/ui/badge'
 import { TriviaDialog } from './TriviaDialog'
@@ -46,6 +47,7 @@ export default async function TriviaPage() {
         description="The phone-trivia bank. Global by default; scope a question to a market or a single venue. Order is shuffled fresh each day."
         action={<TriviaDialog territories={territories} venues={venues} />}
       />
+      <SectionTabs tabs={CONTENT_TABS} />
 
       <div className="space-y-3 p-5 md:p-6">
         {questions.length === 0 && (

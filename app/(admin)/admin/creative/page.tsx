@@ -1,6 +1,7 @@
 import { requireAdmin } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { PageHeader } from '@/components/admin/PageHeader'
+import { SectionTabs, CONTENT_TABS } from '@/components/admin/SectionTabs'
 import { Badge } from '@/components/ui/badge'
 import { formatDateTime } from '@/lib/format'
 import type { CreativeRequestStatus } from '@/lib/db.types'
@@ -46,6 +47,7 @@ export default async function CreativeQueuePage() {
         title="Creative help"
         description={`${openCount} request${openCount === 1 ? '' : 's'} to work. Advertisers who asked us to build their ad.`}
       />
+      <SectionTabs tabs={CONTENT_TABS} />
 
       <div className="space-y-4 p-5 md:p-6">
         {rows.length === 0 ? (

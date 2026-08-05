@@ -1,11 +1,16 @@
 import { requireAdmin } from '@/lib/auth'
 import { AccountScreen } from '@/components/app/AccountScreen'
 import { ResetDemoButton } from '@/components/admin/ResetDemoButton'
+import { PageHeader } from '@/components/admin/PageHeader'
+import { SectionTabs, SETUP_TABS } from '@/components/admin/SectionTabs'
 
 export default async function AdminAccountPage() {
   const profile = await requireAdmin()
   return (
-    <div className="mx-auto max-w-md space-y-6 p-5 md:p-6">
+    <>
+      <PageHeader title="Setup" description="Your admin login and the sales demo" />
+      <SectionTabs tabs={SETUP_TABS} />
+      <div className="mx-auto max-w-md space-y-6 p-5 md:p-6">
       <AccountScreen
         email={profile.email}
         role="admin"
@@ -23,6 +28,7 @@ export default async function AdminAccountPage() {
         </p>
         <ResetDemoButton />
       </div>
-    </div>
+      </div>
+    </>
   )
 }

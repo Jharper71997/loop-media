@@ -4,6 +4,7 @@ import { requireAdmin } from '@/lib/auth'
 import { getTerritoryContext } from '@/lib/territory'
 import { createClient } from '@/lib/supabase/server'
 import { PageHeader } from '@/components/admin/PageHeader'
+import { SectionTabs, SCREEN_TABS } from '@/components/admin/SectionTabs'
 import { LiveStatus } from '@/components/app/LiveStatus'
 import { AutoRefresh } from '@/components/app/AutoRefresh'
 import { Badge } from '@/components/ui/badge'
@@ -107,6 +108,7 @@ export default async function UptimePage() {
         title="Uptime"
         description={`${rows.length} paired screen${rows.length === 1 ? '' : 's'} · ${breaches} below SLA · ${downNow} down now`}
       />
+      <SectionTabs tabs={SCREEN_TABS} />
 
       <div className="space-y-4 p-5 md:p-6">
         {breaches > 0 && (

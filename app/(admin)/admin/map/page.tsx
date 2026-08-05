@@ -3,6 +3,7 @@ import { getTerritoryContext } from '@/lib/territory'
 import { createClient } from '@/lib/supabase/server'
 import { isTvLive } from '@/lib/format'
 import { PageHeader } from '@/components/admin/PageHeader'
+import { SectionTabs, SCREEN_TABS } from '@/components/admin/SectionTabs'
 import { AdminMap } from './AdminMap'
 import type { VenuePin } from './MapCanvas'
 
@@ -137,6 +138,7 @@ export default async function MapPage() {
           t ? territory.territories.find((x) => x.id === t)?.name : 'All territories'
         }
       />
+      <SectionTabs tabs={SCREEN_TABS} />
       <div className="p-6">
         {venues.length === 0 ? (
           <p className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
