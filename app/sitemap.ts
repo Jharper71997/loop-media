@@ -1,6 +1,7 @@
 import type { MetadataRoute } from 'next'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { absoluteUrl } from '@/lib/site'
+import { venueSlugMap } from '@/lib/venueSlug'
 
 // Replaces the hand-maintained public/sitemap.xml, whose lastmod dates went
 // stale the moment anyone shipped without remembering to edit it (the home page
@@ -35,29 +36,45 @@ const STATIC_ROUTES: {
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date()
 
-  // The freshest active venue stands in for "when did the network last change",
-  // which is what actually dates the home page and the directory.
-  let venuesChangedAt = now
+  let venues: { id: string; name: string; updated_at: string | null }[] = []
   try {
     const admin = createAdminClient()
     const { data } = await admin
       .from('venues')
-      .select('updated_at')
+      .select('id, name, updated_at')
       .eq('status', 'active')
       .eq('is_demo', false)
       .order('updated_at', { ascending: false })
-      .limit(1)
-    const latest = data?.[0]?.updated_at
-    if (latest) venuesChangedAt = new Date(latest)
+    venues = data ?? []
   } catch {
-    // A sitemap that still lists every URL beats a 500. Falling back to `now` is
-    // the honest answer when we can't read the real date.
+    // A sitemap that still lists the static routes beats a 500. The venue pages
+    // drop out of this response rather than taking the whole file down with them.
   }
 
-  return STATIC_ROUTES.map(({ path, changeFrequency, priority }) => ({
-    url: absoluteUrl(path),
-    lastModified: path === '/' || path === '/directory' ? venuesChangedAt : now,
-    changeFrequency,
-    priority,
+  // The freshest active venue stands in for "when did the network last change",
+  // which is what actually dates the home page and the directory.
+  const latest = venues[0]?.updated_at
+  const venuesChangedAt = latest ? new Date(latest) : now
+
+  const staticEntries: MetadataRoute.Sitemap = STATIC_ROUTES.map(
+    ({ path, changeFrequency, priority }) => ({
+      url: absoluteUrl(path),
+      lastModified: path === '/' || path === '/directory' ? venuesChangedAt : now,
+      changeFrequency,
+      priority,
+    })
+  )
+
+  // One entry per host venue. These are the pages most likely to actually rank —
+  // they name a real local business — so they carry a higher priority than the
+  // marketing pages that compete against national spend.
+  const slugs = venueSlugMap(venues)
+  const venueEntries: MetadataRoute.Sitemap = venues.map((v) => ({
+    url: absoluteUrl(`/directory/${slugs.get(v.id)}`),
+    lastModified: v.updated_at ? new Date(v.updated_at) : now,
+    changeFrequency: 'weekly' as const,
+    priority: 0.8,
   }))
+
+  return [...staticEntries, ...venueEntries]
 }
