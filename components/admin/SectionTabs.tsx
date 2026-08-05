@@ -66,6 +66,7 @@ export const CONTENT_TABS: SectionTab[] = [
 export const SETUP_TABS: SectionTab[] = [
   { href: '/admin/settings', label: 'Business settings' },
   { href: '/admin/pricing', label: 'Pricing & packages' },
+  { href: '/admin/messages', label: 'Templates' },
   { href: '/admin/email', label: 'Emails' },
   { href: '/admin/account', label: 'Account' },
 ]

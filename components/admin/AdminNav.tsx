@@ -89,6 +89,7 @@ const GROUPS: NavGroup[] = [
         icon: Settings,
         match: [
           '/admin/pricing',
+          '/admin/messages',
           '/admin/packages',
           '/admin/categories',
           '/admin/email',

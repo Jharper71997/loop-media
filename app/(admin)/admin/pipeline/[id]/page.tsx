@@ -19,6 +19,9 @@ import { HudBody, Panel } from '@/components/admin/hud'
 import { Badge } from '@/components/ui/badge'
 import { formatCents, formatDateTime, timeAgo } from '@/lib/format'
 import { loadOpportunity } from '@/lib/opportunities'
+import { loadThread, loadTemplates } from '@/lib/conversations'
+import { smsEnabled } from '@/lib/messaging'
+import { MessageThread } from '@/components/admin/MessageThread'
 import {
   stageLabel,
   wonLabel,
@@ -56,11 +59,19 @@ const EVENT_ICON: Record<EventKind, typeof MessageSquare> = {
 }
 
 export default async function OpportunityPage({ params }: { params: Promise<{ id: string }> }) {
-  await requireAdmin()
+  const profile = await requireAdmin()
   const { id } = await params
   const loaded = await loadOpportunity(id)
   if (!loaded) notFound()
   const { opportunity: o, events } = loaded
+
+  // The thread follows the business across conversion: once an opportunity has
+  // an advertiser account, messages sent before and after the sale are one
+  // history rather than two.
+  const [thread, templates] = await Promise.all([
+    loadThread({ opportunityId: o.id, advertiserId: o.advertiserId }),
+    loadTemplates(),
+  ])
 
   const cold = daysSince(o.lastTouchAt)
 
@@ -148,11 +159,34 @@ export default async function OpportunityPage({ params }: { params: Promise<{ id
         )}
 
         <div className="grid gap-3 lg:grid-cols-3">
+          <div className="grid content-start gap-3 lg:col-span-2">
+          {/* ---- Messages ---- */}
+          <Panel
+            title="Messages"
+            note={thread.messages.length > 0 ? `${thread.messages.length} in thread` : undefined}
+          >
+            <MessageThread
+              opportunityId={o.id}
+              advertiserId={o.advertiserId}
+              email={o.email}
+              phone={o.phone}
+              templates={templates.filter((t) => t.audience === 'any' || t.audience === o.kind)}
+              messages={thread.messages}
+              ready={thread.ready}
+              smsOn={smsEnabled()}
+              context={{
+                business: o.businessName,
+                contact: o.contactName,
+                city: o.city,
+                myName: profile.full_name,
+              }}
+            />
+          </Panel>
+
           {/* ---- Activity ---- */}
           <Panel
             title="Activity"
             note={`${events.length} entr${events.length === 1 ? 'y' : 'ies'}`}
-            className="lg:col-span-2"
           >
             <Composer id={o.id} />
 
@@ -201,6 +235,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ id
               )}
             </ul>
           </Panel>
+          </div>
 
           {/* ---- Who they are, what it's worth, what's next ---- */}
           <div className="grid content-start gap-3">

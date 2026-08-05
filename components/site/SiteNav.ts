@@ -1,5 +1,14 @@
 import type { LucideIcon } from 'lucide-react'
-import { HelpCircle, MonitorPlay, MapPin, Sparkles, Tag, Store, Newspaper } from 'lucide-react'
+import {
+  HelpCircle,
+  MonitorPlay,
+  MapPin,
+  Sparkles,
+  Tag,
+  Store,
+  Newspaper,
+  MessageSquare,
+} from 'lucide-react'
 
 // One source of truth for the PUBLIC site's tabs. The marketing pages used to
 // carry no navigation at all — every page rendered its own bare wordmark and a
@@ -53,6 +62,12 @@ export const SITE_TABS: SiteTab[] = [
 
 // Secondary links — sidebar drawer + footer only, never the desktop tab row.
 export const SITE_SECONDARY: SiteTab[] = [
+  {
+    href: '/advertise',
+    label: 'Talk to us',
+    icon: MessageSquare,
+    blurb: 'Ask a question before you buy anything.',
+  },
   {
     href: '/signup/host',
     label: 'Host a screen',

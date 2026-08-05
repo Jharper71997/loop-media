@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { placeCampaign } from '@/lib/placement'
+import { runAutomations } from '@/lib/automations'
 import { applyDueScheduledCreatives } from '@/lib/scheduledCreatives'
 
 // Nightly recompute: re-run the placement engine for every active campaign.
@@ -55,6 +56,15 @@ export async function GET(req: Request) {
   // advertiser's actual date.
   const scheduled = await applyDueScheduledCreatives(admin)
 
+  // Sales automations. Folded in here rather than given their own schedule:
+  // Vercel Hobby caps this project at three cron jobs and all three are taken,
+  // and registering a fourth silently breaks every future deploy. Failures are
+  // collected, never thrown — a broken rule must not stop ads being placed.
+  const automations = await runAutomations(admin)
+  if (automations.errors.length) {
+    console.error('[cron/place] automation errors:', automations.errors)
+  }
+
   const { data: campaigns } = await admin
     .from('campaigns')
     .select('id')
@@ -95,5 +105,5 @@ export async function GET(req: Request) {
     }
   }
 
-  return NextResponse.json({ ran: results.length, compsExpired, scheduled, results })
+  return NextResponse.json({ ran: results.length, compsExpired, scheduled, automations, results })
 }

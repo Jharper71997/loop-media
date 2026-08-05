@@ -16,6 +16,7 @@ export function PipelineTabs({ kind }: { kind: OpportunityKind }) {
   const params = useSearchParams()
   const range = params.get('range')
   const onDashboard = pathname.startsWith('/admin/pipeline/dashboard')
+  const onAutomations = pathname.startsWith('/admin/pipeline/automations')
 
   const suffix = (k: OpportunityKind) =>
     `?kind=${k}${range && onDashboard ? `&range=${range}` : ''}`
@@ -23,15 +24,18 @@ export function PipelineTabs({ kind }: { kind: OpportunityKind }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-1.5 md:px-4">
       <div className="flex gap-1">
-        <Tab href={`/admin/pipeline${suffix(kind)}`} active={!onDashboard}>
+        <Tab href={`/admin/pipeline${suffix(kind)}`} active={!onDashboard && !onAutomations}>
           Board
         </Tab>
         <Tab href={`/admin/pipeline/dashboard${suffix(kind)}`} active={onDashboard}>
           Dashboard
         </Tab>
+        <Tab href="/admin/pipeline/automations" active={onAutomations}>
+          Automations
+        </Tab>
       </div>
 
-      <div className="flex gap-1">
+      <div className={cn('flex gap-1', onAutomations && 'hidden')}>
         {(['advertiser', 'host'] as OpportunityKind[]).map((k) => (
           <Tab
             key={k}

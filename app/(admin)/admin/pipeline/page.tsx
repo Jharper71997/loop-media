@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { AlertTriangle, Upload, Trophy, XCircle } from 'lucide-react'
+import { AlertTriangle, Upload, Trophy, XCircle, Send } from 'lucide-react'
 import { requireAdmin } from '@/lib/auth'
 import { getTerritoryContext } from '@/lib/territory'
 import { createClient } from '@/lib/supabase/server'
@@ -55,6 +55,12 @@ export default async function PipelinePage({
         }
         action={
           <div className="flex items-center gap-2">
+            <Link
+              href={`/admin/pipeline/outreach?kind=${kind}`}
+              className={buttonVariants({ variant: 'outline', size: 'sm' })}
+            >
+              <Send className="size-4" /> Outreach
+            </Link>
             <Link
               href="/admin/pipeline/import"
               className={buttonVariants({ variant: 'outline', size: 'sm' })}
