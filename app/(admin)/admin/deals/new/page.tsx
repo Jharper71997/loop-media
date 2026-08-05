@@ -18,12 +18,16 @@ import type { Category } from '@/lib/db.types'
 export default async function NewDealPage({
   searchParams,
 }: {
-  searchParams: Promise<{ venue?: string; advertiser?: string }>
+  searchParams: Promise<{ venue?: string; advertiser?: string; opportunity?: string }>
 }) {
   const profile = await requireAdmin()
   const territory = await getTerritoryContext(profile)
   const t = territory.activeId
-  const { venue: presetVenue, advertiser: presetAdvertiser } = await searchParams
+  const {
+    venue: presetVenue,
+    advertiser: presetAdvertiser,
+    opportunity: presetOpportunity,
+  } = await searchParams
   const supabase = await createClient()
 
   const [inventory, config, { data: advData }, { data: catData }] = await Promise.all([
@@ -75,6 +79,30 @@ export default async function NewDealPage({
 
   const territoryId = t ?? territory.territories[0]?.id ?? ''
 
+  // Opened from a won opportunity: carry the prospect's details across so nothing
+  // is retyped. Silently ignored if the pipeline tables do not exist yet.
+  let presetNewAdvertiser: { fullName: string; email: string; phone: string } | null = null
+  if (presetOpportunity) {
+    const { data: opp } = await supabase
+      .from('opportunities')
+      .select('business_name, contact_name, email, phone')
+      .eq('id', presetOpportunity)
+      .maybeSingle()
+    const o = opp as {
+      business_name: string
+      contact_name: string | null
+      email: string | null
+      phone: string | null
+    } | null
+    if (o) {
+      presetNewAdvertiser = {
+        fullName: o.business_name,
+        email: o.email ?? '',
+        phone: o.phone ?? '',
+      }
+    }
+  }
+
   return (
     <>
       <PageHeader
@@ -103,6 +131,8 @@ export default async function NewDealPage({
             territoryId={territoryId}
             presetVenueId={presetVenue ?? null}
             presetAdvertiserId={presetAdvertiser ?? null}
+            presetOpportunityId={presetOpportunity ?? null}
+            presetNewAdvertiser={presetNewAdvertiser}
           />
         )}
       </div>

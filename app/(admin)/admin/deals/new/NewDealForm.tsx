@@ -24,6 +24,7 @@ import {
 import type { Category } from '@/lib/db.types'
 import { cn } from '@/lib/utils'
 import { createAdvertiser, createCreativeUploadUrl, createDeal, type DealBilling } from './actions'
+import { attachDealToOpportunity } from '../../pipeline/actions'
 
 export type DealAdvertiser = {
   id: string
@@ -58,6 +59,8 @@ export function NewDealForm({
   territoryId,
   presetVenueId,
   presetAdvertiserId,
+  presetOpportunityId = null,
+  presetNewAdvertiser = null,
 }: {
   advertisers: DealAdvertiser[]
   categories: Category[]
@@ -66,6 +69,11 @@ export function NewDealForm({
   territoryId: string
   presetVenueId: string | null
   presetAdvertiserId: string | null
+  // Set when this form was opened from a won opportunity. The account does not
+  // exist yet, so the form starts on "create new" with their details already in
+  // it, and on success the opportunity is linked to the campaign it became.
+  presetOpportunityId?: string | null
+  presetNewAdvertiser?: { fullName: string; email: string; phone: string } | null
 }) {
   const router = useRouter()
   const [saving, startSaving] = useTransition()
@@ -73,8 +81,10 @@ export function NewDealForm({
   // ---- Advertiser ----
   const [roster, setRoster] = useState(advertisers)
   const [advertiserId, setAdvertiserId] = useState<string | null>(presetAdvertiserId)
-  const [creatingNew, setCreatingNew] = useState(false)
-  const [newAdv, setNewAdv] = useState({ fullName: '', email: '', phone: '' })
+  const [creatingNew, setCreatingNew] = useState(!!presetNewAdvertiser)
+  const [newAdv, setNewAdv] = useState(
+    presetNewAdvertiser ?? { fullName: '', email: '', phone: '' }
+  )
   const [advPending, startAdv] = useTransition()
   const advertiser = roster.find((a) => a.id === advertiserId) ?? null
 
@@ -247,6 +257,16 @@ export function NewDealForm({
       const bits = [`Placed on ${res.screensPlaced ?? 0} screen${res.screensPlaced === 1 ? '' : 's'}`]
       if (res.needsCreative) bits.push('creative request logged')
       if (res.droppedVenues?.length) bits.push(`${res.droppedVenues.length} location(s) skipped`)
+      // Close the loop back to the pipeline card, so the board shows this as won
+      // and links to the live account instead of drifting out of date.
+      if (presetOpportunityId && res.campaignId) {
+        const link = await attachDealToOpportunity(
+          presetOpportunityId,
+          res.campaignId,
+          advertiserId
+        )
+        if (link.error) bits.push(`pipeline not linked: ${link.error}`)
+      }
       toast.success(`Deal created. ${bits.join(' · ')}.`)
       router.push(`/admin/advertisers/${advertiserId}`)
     })

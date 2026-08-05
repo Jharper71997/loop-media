@@ -5,6 +5,7 @@ import {
   Rocket,
   WifiOff,
   Palette,
+  PhoneCall,
   Plus,
   ChevronRight,
   CheckCircle2,
@@ -34,6 +35,7 @@ import { EditableValue } from '@/components/admin/EditableValue'
 const KIND_ICON: Record<InboxKind, LucideIcon> = {
   billing: DollarSign,
   activation: Rocket,
+  followup: PhoneCall,
   approval: Inbox,
   offline: WifiOff,
   creative: Palette,
@@ -43,6 +45,7 @@ const KIND_ICON: Record<InboxKind, LucideIcon> = {
 const KIND_TONE: Record<InboxKind, string> = {
   billing: 'text-destructive',
   activation: 'text-warning',
+  followup: 'text-primary',
   approval: 'text-primary',
   offline: 'text-warning',
   creative: 'text-muted-foreground',

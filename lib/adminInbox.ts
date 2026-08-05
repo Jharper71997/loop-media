@@ -13,8 +13,15 @@ import { createClient } from '@/lib/supabase/server'
 import { isTvLive } from '@/lib/format'
 import { resolveBilling, billingAction, type BillingState } from '@/lib/billing'
 import { getSetting } from '@/lib/settings.server'
+import { loadDueFollowUps } from '@/lib/opportunities'
 
-export type InboxKind = 'approval' | 'billing' | 'activation' | 'offline' | 'creative'
+export type InboxKind =
+  | 'approval'
+  | 'billing'
+  | 'activation'
+  | 'followup'
+  | 'offline'
+  | 'creative'
 
 export interface InboxItem {
   kind: InboxKind
@@ -35,19 +42,25 @@ export interface AdminInbox {
     creative: number
     billing: number
     activation: number
+    followup: number
     offline: number
     total: number
   }
 }
 
-// Ranked worst-first: money that was sold but never billed beats an ad waiting on
-// review, which beats a dark screen, which beats a creative request.
+// Ranked worst-first: money that was sold but never billed, then money taken for
+// something not yet on screen, then a follow-up you promised, then an ad waiting
+// on review, then a dark screen, then a creative request.
+//
+// Follow-ups sit above approvals because a promised call that does not happen is
+// how a deal quietly dies, and nothing else in this app will ever surface it.
 const RANK: Record<InboxKind, number> = {
   billing: 0,
   activation: 1,
-  approval: 2,
-  offline: 3,
-  creative: 4,
+  followup: 2,
+  approval: 3,
+  offline: 4,
+  creative: 5,
 }
 
 type CampaignRow = {
@@ -186,7 +199,7 @@ export const loadAdminInbox = cache(async (territoryId: string | null): Promise<
     .in('status', ['active', 'past_due'])
   if (t) draftPaidQ = draftPaidQ.eq('territory_id', t)
 
-  const [pendingRes, creativeRes, tvRes, draftPaidRes, billingRows] = await Promise.all([
+  const [pendingRes, creativeRes, tvRes, draftPaidRes, billingRows, dueFollowUps] = await Promise.all([
     pendingQ,
     supabase
       .from('creative_requests')
@@ -196,6 +209,9 @@ export const loadAdminInbox = cache(async (territoryId: string | null): Promise<
     tvQ,
     draftPaidQ,
     loadBillingRows(t),
+    // Returns [] when the pipeline tables do not exist yet, so Today keeps
+    // working exactly as before until migration 0068 is applied.
+    loadDueFollowUps(t),
   ])
 
   const items: InboxItem[] = []
@@ -230,6 +246,23 @@ export const loadAdminInbox = cache(async (territoryId: string | null): Promise<
       detail: 'Paid at checkout but still draft — nothing is on screen',
       href: '/admin/money',
       cta: 'Activate',
+    })
+  }
+
+  // ---- Follow-ups you promised ----
+  // The only item in this list that exists because YOU said you would do it,
+  // rather than because a customer or a device did something.
+  for (const f of dueFollowUps) {
+    items.push({
+      kind: 'followup',
+      rank: RANK.followup,
+      title: f.businessName,
+      detail: f.nextStep
+        ? `${f.overdue ? 'Overdue' : 'Due today'} · ${f.nextStep}`
+        : `${f.overdue ? 'Overdue' : 'Due today'} · follow up`,
+      href: `/admin/pipeline/${f.id}`,
+      cta: f.overdue ? 'Overdue' : 'Follow up',
+      at: f.nextStepAt,
     })
   }
 
@@ -298,6 +331,7 @@ export const loadAdminInbox = cache(async (territoryId: string | null): Promise<
     creative: creativeReqs.length,
     billing: items.filter((i) => i.kind === 'billing').length,
     activation: stuck.length,
+    followup: dueFollowUps.length,
     offline: darkTvs.length,
     total: items.length,
   }

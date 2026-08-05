@@ -14,6 +14,7 @@ import {
   Coins,
   BarChart3,
   Settings,
+  Target,
   Menu,
   LogOut,
   UserCircle,
@@ -55,6 +56,7 @@ const GROUPS: NavGroup[] = [
   {
     label: 'Grow',
     items: [
+      { href: '/admin/pipeline', label: 'Pipeline', icon: Target },
       { href: '/admin/sell', label: 'Sell', icon: Coins, match: ['/admin/deals'] },
       { href: '/admin/advertisers', label: 'Advertisers', icon: Users },
       { href: '/admin/money', label: 'Money', icon: DollarSign, match: ['/admin/revenue'] },
