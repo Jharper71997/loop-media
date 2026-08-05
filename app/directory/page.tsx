@@ -7,14 +7,28 @@ import { cn } from '@/lib/utils'
 import { SiteHeader } from '@/components/site/SiteHeader'
 import { SiteFooter } from '@/components/site/SiteFooter'
 import DirectoryMap, { type DirectoryMapVenue } from './DirectoryMap'
+import { JsonLd } from '@/components/site/JsonLd'
+import { SITE_REGION, absoluteUrl } from '@/lib/site'
 
 // Read at request time (service-role fetch, always current) — never baked at build.
 export const dynamic = 'force-dynamic'
 
+// Names the market in the title: "local businesses" alone matches nothing a
+// person would type, and this page's whole advantage is that it lists real
+// Jacksonville businesses by name.
 export const metadata: Metadata = {
-  title: 'Local businesses on Loop Network',
+  // Kept short on purpose: the layout template appends " — Loop Network", and
+  // Google truncates a title tag around 60 characters. This lands at 53.
+  title: `Where Your Ad Runs in ${SITE_REGION}`,
   description:
-    'The local businesses that make up the Loop Network — the bars, gyms, shops and restaurants with a Loop screen, ranked by how busy they are.',
+    `Every bar, gym, shop and restaurant with a Loop Network screen in ${SITE_REGION}, ranked by how busy they are. See the map and pick the screens your ad runs on.`,
+  alternates: { canonical: '/directory' },
+  openGraph: {
+    title: `Where Loop Screens Are in ${SITE_REGION}`,
+    description: `Every local business with a Loop Network screen in ${SITE_REGION}, on a map.`,
+    url: absoluteUrl('/directory'),
+    type: 'website',
+  },
 }
 
 type VenueRow = {
@@ -130,8 +144,48 @@ export default async function DirectoryPage({
   }))
   const busiest = listings[0]?.advertisers ?? 0
 
+  // The named local businesses, as structured data. This is the page's real
+  // search asset: eleven specific Jacksonville venues that no national
+  // competitor can list. Each is a Place with coordinates, which is what lets
+  // Google associate this page with those business names.
+  //
+  // Emitted in the ranked order the page renders, since ItemList position is
+  // meaningful and the default sort is by demand.
+  const directorySchema = {
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    name: `Local businesses with a Loop Network screen in ${SITE_REGION}`,
+    numberOfItems: listings.length,
+    itemListOrder: alpha
+      ? 'https://schema.org/ItemListOrderAscending'
+      : 'https://schema.org/ItemListOrderDescending',
+    itemListElement: listings.map((v, i) => ({
+      '@type': 'ListItem',
+      position: i + 1,
+      item: {
+        '@type': 'Place',
+        name: v.name,
+        ...(v.type ? { additionalType: v.type } : {}),
+        ...(v.place
+          ? {
+              address: {
+                '@type': 'PostalAddress',
+                addressLocality: v.place.split(',')[0]?.trim(),
+                addressRegion: v.place.split(',')[1]?.trim(),
+                addressCountry: 'US',
+              },
+            }
+          : {}),
+        ...(v.lat != null && v.lng != null
+          ? { geo: { '@type': 'GeoCoordinates', latitude: v.lat, longitude: v.lng } }
+          : {}),
+      },
+    })),
+  }
+
   return (
     <>
+      <JsonLd data={directorySchema} />
       <SiteHeader />
       <main className="flex flex-1 flex-col">
         <section className="bg-wash-radial">

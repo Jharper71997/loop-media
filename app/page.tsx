@@ -1,3 +1,4 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import {
@@ -30,10 +31,42 @@ import { LiveAdCard } from '@/components/site/LiveAdCard'
 import { InstallGallery } from '@/components/site/InstallGallery'
 import { TvFrame } from '@/components/site/TvFrame'
 import { AdScreenPreview } from '@/components/app/AdScreenPreview'
+import { JsonLd } from '@/components/site/JsonLd'
+import {
+  SITE_URL,
+  SITE_NAME,
+  SITE_CITY,
+  SITE_REGION,
+  SITE_DESCRIPTION,
+  SITE_ADDRESS,
+  absoluteUrl,
+} from '@/lib/site'
 
 // The hero and the "on the screens" strip show ads that are live at this moment,
 // so the page can't be statically cached.
 export const dynamic = 'force-dynamic'
+
+// The home page shipped with NO metadata of its own, so its title tag was the
+// bare layout default ("Loop Network") — a string with no city and no category,
+// which gives Google nothing to match a local query against. This is the single
+// highest-leverage tag on the site.
+//
+// Title leads with the service and the market, not the brand: nobody is
+// searching "Loop Network" yet, and the brand term itself is contested by Loop
+// Media (Nasdaq: LPTV), which operates 71,000+ screens in the same category.
+export const metadata: Metadata = {
+  title: {
+    absolute: `Indoor TV Advertising in ${SITE_REGION} | ${SITE_NAME}`,
+  },
+  description: SITE_DESCRIPTION,
+  alternates: { canonical: '/' },
+  openGraph: {
+    title: `Indoor TV Advertising in ${SITE_REGION}`,
+    description: SITE_DESCRIPTION,
+    url: SITE_URL,
+    type: 'website',
+  },
+}
 
 // The published rate card, built from the LIVE pricing config (not a copy of it)
 // so this page can never quote a number checkout doesn't honor — the old copy
@@ -183,8 +216,64 @@ export default async function Home() {
   // Skip the hero's ad — showing it again three inches lower reads as a bug.
   const stripAds = liveAds.slice(1, 4)
 
+  // Who we are and what we sell, in the vocabulary Google indexes. Typed as
+  // LocalBusiness rather than plain Organization because the buyer is local and
+  // the areaServed is the whole point — this is what makes the listing eligible
+  // for the local pack, alongside a Google Business Profile.
+  //
+  // `numberOfItems` is read off the live venue count instead of written down, so
+  // the claim can't go stale the way a hardcoded "11 locations" would.
+  const orgSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'LocalBusiness',
+    '@id': absoluteUrl('/#organization'),
+    name: SITE_NAME,
+    description: SITE_DESCRIPTION,
+    url: SITE_URL,
+    logo: absoluteUrl('/loop-network-logo.png'),
+    image: absoluteUrl('/loop-network-logo.png'),
+    address: {
+      '@type': 'PostalAddress',
+      streetAddress: SITE_ADDRESS.street,
+      addressLocality: SITE_ADDRESS.city,
+      addressRegion: SITE_ADDRESS.state,
+      postalCode: SITE_ADDRESS.postalCode,
+      addressCountry: SITE_ADDRESS.country,
+    },
+    areaServed: [
+      { '@type': 'City', name: `${SITE_CITY}, ${SITE_ADDRESS.state}` },
+      { '@type': 'AdministrativeArea', name: 'Onslow County, NC' },
+    ],
+    knowsAbout: [
+      'indoor TV advertising',
+      'digital out-of-home advertising',
+      'local business advertising',
+    ],
+    makesOffer: {
+      '@type': 'Offer',
+      name: 'Indoor TV advertising on local screens',
+      description: `Your ad on TVs in local bars, gyms, and shops around ${SITE_REGION}, with proof of every play.`,
+      priceCurrency: 'USD',
+      price: (lowestCents / 100).toFixed(2),
+      priceSpecification: {
+        '@type': 'UnitPriceSpecification',
+        price: (lowestCents / 100).toFixed(2),
+        priceCurrency: 'USD',
+        unitText: 'location per month',
+      },
+      availability: 'https://schema.org/InStock',
+      url: absoluteUrl('/signup'),
+    },
+    ...(venues.length
+      ? {
+          numberOfItems: venues.length,
+        }
+      : {}),
+  }
+
   return (
     <>
+      <JsonLd data={orgSchema} />
       <SiteHeader />
       <main className="flex flex-1 flex-col">
         <ScrollDepth page="marketing_home" />
