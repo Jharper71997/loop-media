@@ -7,7 +7,13 @@
 // they came from). Canonical URLs want the opposite — every copy of a page, on
 // every origin, must name the SAME production URL or Google treats previews as
 // duplicate content and splits the ranking signal between them.
-export const SITE_URL = 'https://loopnetwork.org'
+// MUST be the www host. The bare apex 308-redirects to www, so a canonical tag,
+// sitemap entry, or OG url naming the apex points every crawler at a redirect
+// rather than at the page that actually serves the content — which is the exact
+// signal dilution a canonical tag exists to prevent. Verified with:
+//   curl -s -o /dev/null -w '%{http_code} %{redirect_url}' https://loopnetwork.org/
+// If the apex is ever made to serve directly, change this and nothing else.
+export const SITE_URL = 'https://www.loopnetwork.org'
 
 export const SITE_NAME = 'Loop Network'
 
