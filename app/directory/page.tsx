@@ -9,6 +9,7 @@ import { SiteFooter } from '@/components/site/SiteFooter'
 import DirectoryMap, { type DirectoryMapVenue } from './DirectoryMap'
 import { JsonLd } from '@/components/site/JsonLd'
 import { SITE_REGION, absoluteUrl } from '@/lib/site'
+import { venueSlugMap } from '@/lib/venueSlug'
 
 // Read at request time (service-role fetch, always current) — never baked at build.
 export const dynamic = 'force-dynamic'
@@ -47,6 +48,7 @@ type VenueRow = {
 
 type Listing = {
   id: string
+  slug: string
   name: string
   logoUrl: string | null
   type: string | null
@@ -109,9 +111,14 @@ export default async function DirectoryPage({
     }
   }
 
+  // Built once over the whole set so duplicate names resolve consistently here
+  // and on the venue page (see lib/venueSlug.ts).
+  const slugs = venueSlugMap(rows)
+
   const listings: Listing[] = rows
     .map((v) => ({
       id: v.id,
+      slug: slugs.get(v.id) as string,
       name: v.name,
       logoUrl: v.logo_url,
       type: v.category?.name ?? v.venue_type,
@@ -165,6 +172,9 @@ export default async function DirectoryPage({
       item: {
         '@type': 'Place',
         name: v.name,
+        // Points at the venue's own page, which is what turns this list from a
+        // flat mention into eleven crawlable destinations.
+        url: absoluteUrl(`/directory/${v.slug}`),
         ...(v.type ? { additionalType: v.type } : {}),
         ...(v.place
           ? {
@@ -294,7 +304,10 @@ function DirectoryCard({
   hottest: boolean
 }) {
   return (
-    <div className="relative flex items-center gap-4 rounded-2xl border border-border bg-card p-4">
+    <Link
+      href={`/directory/${v.slug}`}
+      className="relative flex items-center gap-4 rounded-2xl border border-border bg-card p-4 transition hover:border-primary/40 hover:bg-accent/40"
+    >
       <div className="relative shrink-0">
         <div className="grid size-14 place-items-center overflow-hidden rounded-xl bg-muted">
           {v.logoUrl ? (
@@ -349,6 +362,6 @@ function DirectoryCard({
           </p>
         )}
       </div>
-    </div>
+    </Link>
   )
 }
