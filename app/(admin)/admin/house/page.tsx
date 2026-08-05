@@ -70,7 +70,7 @@ export default async function HouseSlidesPage() {
       />
       <SectionTabs tabs={CONTENT_TABS} />
 
-      <div className="space-y-5 p-5 md:p-6">
+      <div className="space-y-4 p-3 md:p-4">
         {SLIDES.map((slide) => {
           const forSlide = rows.filter((r) => r.kind === slide.kind)
           // What a screen in the current scope actually plays: a market-scoped

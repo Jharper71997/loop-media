@@ -25,6 +25,8 @@
 // what the advertiser's own report is built from — the account's whole history
 // disappears. Record a payment, or pause the campaign instead.
 
+import { DEFAULT_SETTINGS } from '@/lib/settings'
+
 export type BillingMethod = 'stripe' | 'manual' | 'comp' | 'unbilled'
 
 // How urgent this account is, worst-first. 'unbilled' outranks 'overdue' because
@@ -38,15 +40,17 @@ export const BILLING_METHOD_LABEL: Record<BillingMethod, string> = {
   unbilled: 'Not billed',
 }
 
-// A manual account inside this many days of its paid-through date needs an
-// invoice sent now, not on the day it lapses.
-export const DUE_SOON_DAYS = 10
-
-// The number the year is measured against: $4,000/mo recurring by 31 Dec 2026.
-// Shown on Today and Sell so every session opens against the actual target
-// rather than an unanchored dollar figure. Change it here and both move.
-export const MRR_GOAL_CENTS = 400_000
-export const MRR_GOAL_LABEL = 'Dec 31, 2026'
+// These three are admin-editable — the live values come from getSettings()
+// (lib/settings.server.ts), and what is re-exported here is the DEFAULT that
+// applies when nothing has been saved. They are aliased rather than redeclared
+// so the registry and the billing code can never drift to different numbers.
+//
+//   DUE_SOON_DAYS   a manual account inside this many days of its paid-through
+//                   date needs an invoice sent now, not on the day it lapses.
+//   MRR_GOAL_*      the number the year is measured against, and when it is due.
+export const DUE_SOON_DAYS = DEFAULT_SETTINGS.due_soon_days
+export const MRR_GOAL_CENTS = DEFAULT_SETTINGS.mrr_goal_cents
+export const MRR_GOAL_LABEL = DEFAULT_SETTINGS.mrr_goal_label
 
 export interface BillingInput {
   campaignStatus: string
@@ -84,7 +88,13 @@ export function addOneMonth(iso: string): string {
   return target.toISOString()
 }
 
-export function resolveBilling(input: BillingInput, nowMs = Date.now()): BillingState {
+export function resolveBilling(
+  input: BillingInput,
+  nowMs = Date.now(),
+  // Callers on the server pass the live setting; the default keeps this function
+  // pure and usable from a Client Component.
+  dueSoonDays: number = DUE_SOON_DAYS
+): BillingState {
   const method: BillingMethod = input.compUntil
     ? 'comp'
     : input.stripeSubscriptionId
@@ -112,7 +122,7 @@ export function resolveBilling(input: BillingInput, nowMs = Date.now()): Billing
       ? 'unbilled'
       : daysLeft < 0
         ? 'overdue'
-        : daysLeft <= DUE_SOON_DAYS
+        : daysLeft <= dueSoonDays
           ? 'due'
           : 'ok'
 

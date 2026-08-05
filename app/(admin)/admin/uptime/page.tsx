@@ -110,7 +110,7 @@ export default async function UptimePage() {
       />
       <SectionTabs tabs={SCREEN_TABS} />
 
-      <div className="space-y-4 p-5 md:p-6">
+      <div className="space-y-3 p-3 md:p-4">
         {breaches > 0 && (
           <div className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-warning">
             <AlertTriangle className="mt-0.5 size-4 shrink-0" />

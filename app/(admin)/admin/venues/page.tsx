@@ -149,7 +149,7 @@ export default async function VenuesPage({
       />
       <SectionTabs tabs={SCREEN_TABS} />
 
-      <div className="space-y-3 p-5 md:p-6">
+      <div className="space-y-3 p-3 md:p-4">
         <ListSearch
           placeholder="Search venues by name…"
           statusOptions={[

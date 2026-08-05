@@ -68,7 +68,7 @@ export default async function QueuePage() {
         description={`${ads.length} ad${ads.length === 1 ? '' : 's'} awaiting review`}
       />
       <SectionTabs tabs={CONTENT_TABS} />
-      <div className="p-5 md:p-6">
+      <div className="p-3 md:p-4">
         <QueueBoard ads={items} nowMs={Date.now()} />
       </div>
     </>

@@ -1,17 +1,17 @@
 import Link from 'next/link'
-import { Plus, Mail, Phone, Users } from 'lucide-react'
+import { Plus, Mail, Phone, User } from 'lucide-react'
 import { requireAdmin } from '@/lib/auth'
 import { getTerritoryContext } from '@/lib/territory'
 import { PageHeader } from '@/components/admin/PageHeader'
-import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
 import { ExportCsvButton } from '@/components/admin/ExportCsvButton'
+import { HudBody, StatStrip, Stat, Panel, Num } from '@/components/admin/hud'
 import { formatCents, formatNumber } from '@/lib/format'
 import { loadInventory } from '@/lib/inventory'
 import { loadBillingRows } from '@/lib/adminInbox'
-import { MRR_GOAL_CENTS, MRR_GOAL_LABEL } from '@/lib/billing'
-import { cn } from '@/lib/utils'
+import { getSettings } from '@/lib/settings.server'
+import { getPricingConfig } from '@/lib/pricing.server'
 
 // The page that answers "who do I call today".
 //
@@ -30,13 +30,24 @@ export default async function SellPage({
   const t = territory.activeId
   const { show } = await searchParams
 
-  const [inventory, billingRows] = await Promise.all([loadInventory(t), loadBillingRows(t)])
+  const [inventory, billingRows, settings, pricing] = await Promise.all([
+    loadInventory(t),
+    loadBillingRows(t),
+    getSettings(),
+    getPricingConfig(),
+  ])
   const { totals } = inventory
+
+  // "N more spots at $75" used to hardcode 7500. It now reads the live rate, so
+  // repricing a location on /admin/pricing moves the number of calls this page
+  // says the goal is worth.
+  const rateCents = pricing.tierPriceCents.standard
 
   const mrrCents = billingRows
     .filter((r) => r.billing.method !== 'comp' && r.billing.method !== 'unbilled')
     .reduce((a, r) => a + r.monthlyCents, 0)
-  const gapCents = Math.max(0, MRR_GOAL_CENTS - mrrCents)
+  const goalCents = settings.mrr_goal_cents
+  const gapCents = Math.max(0, goalCents - mrrCents)
 
   // Default view hides locations with nothing left to sell — they aren't a call.
   const showAll = show === 'all'
@@ -68,180 +79,160 @@ export default async function SellPage({
         action={
           <div className="flex items-center gap-2">
             <ExportCsvButton filename="loop-open-inventory.csv" rows={csvRows} />
-            <Link href="/admin/deals/new" className={buttonVariants()}>
+            <Link href="/admin/deals/new" className={buttonVariants({ size: 'sm' })}>
               <Plus className="size-4" /> New deal
             </Link>
           </div>
         }
       />
 
-      <div className="space-y-6 p-5 md:p-6">
+      <HudBody>
         {/* ---- The gap, stated plainly ---- */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Stat label="Open spots" value={formatNumber(totals.open)} sub={`${100 - totals.pctSold}% of the network`} />
+        <StatStrip cols={4}>
+          <Stat
+            label="Open spots"
+            value={formatNumber(totals.open)}
+            sub={`${100 - totals.pctSold}% of the network`}
+          />
           <Stat
             label="Open inventory"
             value={`${formatCents(totals.openValueCents)}/mo`}
             sub="if every spot sold at today's rate"
           />
-          <Stat label="Billed MRR" value={`${formatCents(mrrCents)}/mo`} sub={`${formatCents(totals.soldValueCents)}/mo placed`} />
           <Stat
-            label={`Gap to ${formatCents(MRR_GOAL_CENTS)}`}
+            label="Billed MRR"
+            value={`${formatCents(mrrCents)}/mo`}
+            sub={`${formatCents(totals.soldValueCents)}/mo placed`}
+            href="/admin/money"
+          />
+          <Stat
+            label={`Gap to ${formatCents(goalCents)}`}
             value={`${formatCents(gapCents)}/mo`}
             sub={
               gapCents === 0
-                ? `Goal met — ${MRR_GOAL_LABEL}`
-                : `${Math.ceil(gapCents / 7500)} more spots at $75 · by ${MRR_GOAL_LABEL}`
+                ? `Goal met — ${settings.mrr_goal_label}`
+                : `${Math.ceil(gapCents / rateCents)} more spots at ${formatCents(rateCents)} · by ${settings.mrr_goal_label}`
             }
             tone={gapCents > 0 ? 'warn' : 'good'}
           />
-        </div>
+        </StatStrip>
 
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-sm font-medium">
-            {showAll ? 'Every active location' : 'Locations with spots to sell'}
-          </h2>
-          <Link
-            href={showAll ? '/admin/sell' : '/admin/sell?show=all'}
-            className="text-xs text-muted-foreground hover:text-foreground"
-          >
-            {showAll
-              ? 'Hide sold-out locations'
-              : hidden > 0
-                ? `Show ${hidden} sold-out location${hidden === 1 ? '' : 's'}`
-                : 'Show all'}
-          </Link>
-        </div>
-
-        {rows.length === 0 ? (
-          <p className="rounded-xl border border-border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
-            {inventory.rows.length === 0
-              ? 'No venues yet. Add a location before you can sell against it.'
-              : 'Every active location is sold out. Time to add screens.'}
-          </p>
-        ) : (
-          <div className="space-y-2.5">
-            {rows.map((r) => (
-              <div key={r.venueId} className="rounded-xl border border-border bg-card p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Link href={`/admin/venues/${r.venueId}`} className="font-medium hover:underline">
-                        {r.name}
-                      </Link>
-                      {r.open > 0 ? (
-                        <Badge>{r.open} open</Badge>
-                      ) : (
-                        <Badge variant="secondary">Sold out</Badge>
-                      )}
-                      {r.liveScreens === 0 && r.screens.length > 0 && (
-                        <Badge variant="warning">No screen live</Badge>
-                      )}
-                      {r.screens.length === 0 && <Badge variant="warning">No screen yet</Badge>}
-                    </div>
-                    <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                      {r.city && <span>{r.city}</span>}
-                      <span className="font-medium text-primary">
-                        {formatCents(r.priceCents)}/mo · {r.tierLabel}
-                      </span>
-                      <span>{formatNumber(r.footTraffic)}/mo traffic</span>
-                      <span>
-                        {r.sold}/{r.totalSlots} spots sold on {r.screens.length} screen
-                        {r.screens.length === 1 ? '' : 's'}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-heading text-lg font-bold tabular-nums">
-                      {formatCents(r.openValueCents)}
-                    </p>
-                    <p className="text-xs text-muted-foreground">/mo available here</p>
-                  </div>
-                </div>
-
-                <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-border pt-3 text-xs">
-                  {/* Host protection: this is the one pitch that can never land here. */}
-                  {r.ownCategory && (
-                    <span className="text-muted-foreground">
-                      Can&apos;t sell{' '}
-                      <span className="font-medium text-foreground">{r.ownCategory}</span> here
-                    </span>
-                  )}
-                  {r.runningTitles.length > 0 && (
-                    <span className="min-w-0 truncate text-muted-foreground">
-                      Running: {r.runningTitles.join(', ')}
-                    </span>
-                  )}
-                  <span className="ml-auto flex flex-wrap items-center gap-3">
-                    {(r.contact.name || r.hostName) && (
-                      <span className="inline-flex items-center gap-1 text-muted-foreground">
-                        <Users className="size-3" />
-                        {r.contact.name ?? r.hostName}
-                      </span>
-                    )}
-                    {r.contact.email && (
-                      <a
-                        href={`mailto:${r.contact.email}`}
-                        className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
-                      >
-                        <Mail className="size-3" />
-                        {r.contact.email}
-                      </a>
-                    )}
-                    {r.contact.phone && (
-                      <a
-                        href={`tel:${r.contact.phone}`}
-                        className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
-                      >
-                        <Phone className="size-3" />
-                        {r.contact.phone}
-                      </a>
-                    )}
-                    {r.open > 0 && (
-                      <Link
-                        href={`/admin/deals/new?venue=${r.venueId}`}
-                        className={buttonVariants({ size: 'sm', variant: 'outline' })}
-                      >
-                        Sell this
-                      </Link>
-                    )}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </>
-  )
-}
-
-function Stat({
-  label,
-  value,
-  sub,
-  tone,
-}: {
-  label: string
-  value: string
-  sub: string
-  tone?: 'warn' | 'good'
-}) {
-  return (
-    <Card>
-      <CardContent className="p-5">
-        <p className="text-sm text-muted-foreground">{label}</p>
-        <p
-          className={cn(
-            'mt-1 font-heading text-2xl font-bold tabular-nums',
-            tone === 'warn' && 'text-warning',
-            tone === 'good' && 'text-primary'
-          )}
+        <Panel
+          title={showAll ? 'Every active location' : 'Locations with spots to sell'}
+          bodyClassName="p-0"
+          action={
+            <Link
+              href={showAll ? '/admin/sell' : '/admin/sell?show=all'}
+              className="text-[11px] text-muted-foreground hover:text-foreground"
+            >
+              {showAll
+                ? 'Hide sold-out'
+                : hidden > 0
+                  ? `Show ${hidden} sold-out`
+                  : 'Show all'}
+            </Link>
+          }
         >
-          {value}
-        </p>
-        <p className="mt-1 text-xs text-muted-foreground">{sub}</p>
-      </CardContent>
-    </Card>
+          {rows.length === 0 ? (
+            <p className="px-4 py-10 text-center text-sm text-muted-foreground">
+              {inventory.rows.length === 0
+                ? 'No venues yet. Add a location before you can sell against it.'
+                : 'Every active location is sold out. Time to add screens.'}
+            </p>
+          ) : (
+            <ul className="divide-y divide-border">
+              {rows.map((r) => (
+                <li key={r.venueId} className="px-3 py-2">
+                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                    <Link
+                      href={`/admin/venues/${r.venueId}`}
+                      className="text-[13px] font-medium hover:underline"
+                    >
+                      {r.name}
+                    </Link>
+                    {r.open > 0 ? (
+                      <Badge>{r.open} open</Badge>
+                    ) : (
+                      <Badge variant="secondary">Sold out</Badge>
+                    )}
+                    {r.liveScreens === 0 && r.screens.length > 0 && (
+                      <Badge variant="warning">No screen live</Badge>
+                    )}
+                    {r.screens.length === 0 && <Badge variant="warning">No screen yet</Badge>}
+
+                    <span className="ml-auto flex shrink-0 items-center gap-2">
+                      <Num className="text-sm font-semibold">
+                        {formatCents(r.openValueCents)}
+                      </Num>
+                      <span className="text-[11px] text-muted-foreground">/mo open</span>
+                      {r.open > 0 && (
+                        <Link
+                          href={`/admin/deals/new?venue=${r.venueId}`}
+                          className={buttonVariants({ size: 'sm', variant: 'outline' })}
+                        >
+                          Sell this
+                        </Link>
+                      )}
+                    </span>
+                  </div>
+
+                  <div className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[11px] text-muted-foreground">
+                    {r.city && <span>{r.city}</span>}
+                    <span className="font-medium text-primary">
+                      <Num>{formatCents(r.priceCents)}</Num>/mo · {r.tierLabel}
+                    </span>
+                    <span>
+                      <Num>{formatNumber(r.footTraffic)}</Num>/mo traffic
+                    </span>
+                    <span>
+                      <Num>
+                        {r.sold}/{r.totalSlots}
+                      </Num>{' '}
+                      sold on {r.screens.length} screen{r.screens.length === 1 ? '' : 's'}
+                    </span>
+                    {/* Host protection: the one pitch that can never land here. */}
+                    {r.ownCategory && (
+                      <span>
+                        no <span className="font-medium text-foreground">{r.ownCategory}</span>
+                      </span>
+                    )}
+                    {r.runningTitles.length > 0 && (
+                      <span className="min-w-0 truncate">Running: {r.runningTitles.join(', ')}</span>
+                    )}
+
+                    <span className="ml-auto flex shrink-0 flex-wrap items-center gap-2.5">
+                      {(r.contact.name || r.hostName) && (
+                        <span className="inline-flex items-center gap-1">
+                          <User className="size-3" />
+                          {r.contact.name ?? r.hostName}
+                        </span>
+                      )}
+                      {r.contact.email && (
+                        <a
+                          href={`mailto:${r.contact.email}`}
+                          className="inline-flex items-center gap-1 hover:text-foreground"
+                        >
+                          <Mail className="size-3" />
+                          {r.contact.email}
+                        </a>
+                      )}
+                      {r.contact.phone && (
+                        <a
+                          href={`tel:${r.contact.phone}`}
+                          className="inline-flex items-center gap-1 hover:text-foreground"
+                        >
+                          <Phone className="size-3" />
+                          {r.contact.phone}
+                        </a>
+                      )}
+                    </span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+      </HudBody>
+    </>
   )
 }

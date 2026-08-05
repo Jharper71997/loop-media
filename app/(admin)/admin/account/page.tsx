@@ -10,7 +10,7 @@ export default async function AdminAccountPage() {
     <>
       <PageHeader title="Setup" description="Your admin login and the sales demo" />
       <SectionTabs tabs={SETUP_TABS} />
-      <div className="mx-auto max-w-md space-y-6 p-5 md:p-6">
+      <div className="mx-auto max-w-md space-y-4 p-3 md:p-4">
       <AccountScreen
         email={profile.email}
         role="admin"

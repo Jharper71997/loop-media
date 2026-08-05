@@ -200,7 +200,7 @@ export default async function AdvertiserDetail({
             { label: 'QR scans · 30d', value: formatNumber(totalScans) },
           ].map((s) => (
             <Card key={s.label}>
-              <CardContent className="p-5">
+              <CardContent className="p-3">
                 <p className="text-sm text-muted-foreground">{s.label}</p>
                 <p className="mt-1 text-2xl font-semibold tabular-nums">{s.value}</p>
               </CardContent>
@@ -220,7 +220,7 @@ export default async function AdvertiserDetail({
           <h2 className="mb-3 text-lg font-medium">Campaigns</h2>
           {campaigns.length === 0 ? (
             <Card>
-              <CardContent className="p-5 text-sm text-muted-foreground">
+              <CardContent className="p-3 text-sm text-muted-foreground">
                 This advertiser hasn&apos;t created any campaigns yet.
               </CardContent>
             </Card>

@@ -123,7 +123,7 @@ export default async function VenueDetail({ params }: { params: Promise<{ id: st
         }
       />
 
-      <div className="space-y-6 p-5 md:p-6">
+      <div className="space-y-4 p-3 md:p-4">
         <AutoRefresh seconds={20} />
         <Link
           href="/admin/venues"
@@ -135,7 +135,7 @@ export default async function VenueDetail({ params }: { params: Promise<{ id: st
         {/* At-a-glance stats */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Card>
-            <CardContent className="p-5">
+            <CardContent className="p-3">
               <p className="text-sm text-muted-foreground">Screens live</p>
               <p className="mt-1 font-heading text-2xl font-bold tabular-nums">
                 {liveCount}/{tvs.length}
@@ -146,7 +146,7 @@ export default async function VenueDetail({ params }: { params: Promise<{ id: st
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="p-5">
+            <CardContent className="p-3">
               <p className="text-sm text-muted-foreground">Price / mo</p>
               <p className="mt-1 font-heading text-2xl font-bold tabular-nums">
                 {formatCents(venuePriceCents(venue.price_cents_override, tier, pricingConfig))}
@@ -157,7 +157,7 @@ export default async function VenueDetail({ params }: { params: Promise<{ id: st
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="p-5">
+            <CardContent className="p-3">
               <p className="text-sm text-muted-foreground">Monthly traffic</p>
               <p className="mt-1 font-heading text-2xl font-bold tabular-nums">
                 {formatNumber(venue.foot_traffic_estimate)}
@@ -165,7 +165,7 @@ export default async function VenueDetail({ params }: { params: Promise<{ id: st
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="p-5">
+            <CardContent className="p-3">
               <p className="text-sm text-muted-foreground">Category</p>
               <p className="mt-1 font-heading text-lg font-bold">{venue.category?.name ?? '—'}</p>
               <p className="text-xs text-muted-foreground">

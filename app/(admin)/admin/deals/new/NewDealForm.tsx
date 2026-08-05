@@ -629,7 +629,7 @@ function Step({
 }) {
   return (
     <Card>
-      <CardContent className="p-5">
+      <CardContent className="p-3">
         <div className="mb-4 flex items-center gap-2.5">
           <span
             className={cn(

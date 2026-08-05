@@ -246,7 +246,7 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
         }
       />
 
-      <div className="space-y-6 p-5 md:p-6">
+      <div className="space-y-4 p-3 md:p-4">
         <AutoRefresh seconds={20} />
         <Link
           href="/admin/venues"
@@ -258,7 +258,7 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
         {/* Status + live metrics */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Card>
-            <CardContent className="p-5">
+            <CardContent className="p-3">
               <p className="text-sm text-muted-foreground">Status</p>
               <div className="mt-2">
                 <LiveStatus
@@ -273,7 +273,7 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="p-5">
+            <CardContent className="p-3">
               <p className="text-sm text-muted-foreground">On today</p>
               <p className="mt-1 font-heading text-2xl font-bold tabular-nums">
                 {formatDuration(uptimeToday)}
@@ -281,7 +281,7 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="p-5">
+            <CardContent className="p-3">
               <p className="text-sm text-muted-foreground">Ads shown today</p>
               <p className="mt-1 font-heading text-2xl font-bold tabular-nums">
                 {formatNumber(playsTodayTotal)}
@@ -290,7 +290,7 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="p-5">
+            <CardContent className="p-3">
               <p className="text-sm text-muted-foreground">Slot fill</p>
               <p className="mt-1 font-heading text-2xl font-bold tabular-nums">
                 {occ.used}/{occ.total}

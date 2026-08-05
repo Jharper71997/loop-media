@@ -49,7 +49,7 @@ export default async function CreativeQueuePage() {
       />
       <SectionTabs tabs={CONTENT_TABS} />
 
-      <div className="space-y-4 p-5 md:p-6">
+      <div className="space-y-3 p-3 md:p-4">
         {rows.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border py-16 text-center text-muted-foreground">
             No creative-help requests yet.

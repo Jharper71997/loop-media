@@ -49,7 +49,7 @@ export default async function TriviaPage() {
       />
       <SectionTabs tabs={CONTENT_TABS} />
 
-      <div className="space-y-3 p-5 md:p-6">
+      <div className="space-y-3 p-3 md:p-4">
         {questions.length === 0 && (
           <div className="rounded-xl border border-border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
             No trivia questions yet. Add one to start the game between ads.

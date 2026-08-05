@@ -160,7 +160,7 @@ export default async function AdvertisersPage({
         description={`${advertisers.length} advertiser${advertisers.length === 1 ? '' : 's'}`}
       />
 
-      <div className="space-y-4 p-5 md:p-6">
+      <div className="space-y-3 p-3 md:p-4">
         <ListSearch
           placeholder="Search by name or email…"
           statusOptions={[

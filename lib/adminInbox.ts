@@ -12,6 +12,7 @@ import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { isTvLive } from '@/lib/format'
 import { resolveBilling, billingAction, type BillingState } from '@/lib/billing'
+import { getSetting } from '@/lib/settings.server'
 
 export type InboxKind = 'approval' | 'billing' | 'activation' | 'offline' | 'creative'
 
@@ -120,6 +121,11 @@ export const loadBillingRows = cache(async (territoryId: string | null): Promise
     if (!prev || p.paid_at > prev) lastPaidByCampaign.set(p.campaign_id, p.paid_at)
   }
 
+  // The "due soon" threshold is admin-editable, so read it rather than assuming
+  // the coded default.
+  const dueSoonDays = await getSetting('due_soon_days')
+  const now = Date.now()
+
   return campaigns
     .map((c) => {
       const sub = subByCampaign.get(c.id)
@@ -130,14 +136,18 @@ export const loadBillingRows = cache(async (territoryId: string | null): Promise
         advertiserName: adv?.full_name ?? adv?.email ?? 'Unknown',
         adTitle: one(c.ad)?.title ?? 'Untitled ad',
         monthlyCents: c.monthly_total_cents ?? 0,
-        billing: resolveBilling({
-          campaignStatus: c.status,
-          compUntil: c.comp_until,
-          stripeSubscriptionId: sub?.stripe_subscription_id ?? null,
-          subscriptionStatus: sub?.status ?? null,
-          currentPeriodEnd: sub?.current_period_end ?? null,
-          lastPaidAt: lastPaidByCampaign.get(c.id) ?? null,
-        }),
+        billing: resolveBilling(
+          {
+            campaignStatus: c.status,
+            compUntil: c.comp_until,
+            stripeSubscriptionId: sub?.stripe_subscription_id ?? null,
+            subscriptionStatus: sub?.status ?? null,
+            currentPeriodEnd: sub?.current_period_end ?? null,
+            lastPaidAt: lastPaidByCampaign.get(c.id) ?? null,
+          },
+          now,
+          dueSoonDays
+        ),
       }
     })
     .sort((a, b) => {

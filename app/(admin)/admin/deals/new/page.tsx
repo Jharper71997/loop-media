@@ -82,7 +82,7 @@ export default async function NewDealPage({
         description="Set up an advertiser you closed offline — account, creative, locations and billing"
       />
 
-      <div className="space-y-5 p-5 md:p-6">
+      <div className="space-y-4 p-3 md:p-4">
         <Link
           href="/admin/sell"
           className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"

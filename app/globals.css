@@ -308,3 +308,44 @@
   color: var(--foreground);
   border-color: var(--border);
 }
+
+/* ---- Chart tokens (admin reporting) ----------------------------------------
+ * Referenced by ROLE from components/admin/charts.tsx, never as raw hex, so the
+ * light/dark swap happens here only. Both modes are SELECTED and were checked
+ * with the data-viz validator against this app's real surfaces (light #ffffff,
+ * dark #181715) — dark is not an automatic flip of light.
+ *
+ *   --viz-mag        single-series magnitude (revenue, spots, scans, funnel).
+ *                    One hue, because those charts encode size, not identity.
+ *                    Contrast vs surface >= 3:1 in both modes.
+ *   --viz-cat-1..3   categorical, for the billing mix (Stripe / check / comp) —
+ *                    identity, not severity. This trio PASSES all six checks on
+ *                    the ALL-PAIRS list in both modes (worst CVD dE 9.2 light /
+ *                    9.4 dark; worst normal-vision 24.0 / 20.9).
+ *
+ * Two rules this encodes, both learned from the validator:
+ *   1. The app's STATUS tokens are NOT usable as a chart palette. In light mode
+ *      destructive vs warning is dE 1.8 for deuteranopes and warning vs muted is
+ *      11.3 even with full color vision — below the hard floor of 15. Status
+ *      colors stay where they belong: a single chip carrying one state, always
+ *      beside an icon and a text label, never as segments of one chart.
+ *   2. Light --viz-cat-3 sits at 2.82:1 on white (WARN, under 3:1), so anything
+ *      filled with it MUST carry a visible direct label. Every categorical mark
+ *      in charts.tsx is direct-labeled, which discharges that. */
+:root,
+.light {
+  --viz-mag: #7b510d; /* bronze — matches the light primary */
+  --viz-cat-1: #2a78d6;
+  --viz-cat-2: #eb6834;
+  --viz-cat-3: #1baf7a;
+  --viz-grid: oklch(0.9 0.004 85);
+  --viz-track: oklch(0.955 0.004 85);
+}
+.dark {
+  --viz-mag: #deba50; /* gold — matches the dark primary */
+  --viz-cat-1: #3987e5;
+  --viz-cat-2: #d95926;
+  --viz-cat-3: #199e70;
+  --viz-grid: oklch(1 0 0 / 12%);
+  --viz-track: oklch(1 0 0 / 8%);
+}

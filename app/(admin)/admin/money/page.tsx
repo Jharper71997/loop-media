@@ -1,15 +1,16 @@
 import Link from 'next/link'
-import { AlertCircle, DollarSign, TrendingUp, Users, Gift } from 'lucide-react'
+import { AlertCircle } from 'lucide-react'
 import { requireAdmin } from '@/lib/auth'
 import { getTerritoryContext } from '@/lib/territory'
 import { createClient } from '@/lib/supabase/server'
 import { PageHeader } from '@/components/admin/PageHeader'
-import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ExportCsvButton } from '@/components/admin/ExportCsvButton'
+import { HudBody, StatStrip, Stat, Panel, Num } from '@/components/admin/hud'
 import { formatCents, formatNumber, formatDateTime } from '@/lib/format'
 import { loadBillingRows } from '@/lib/adminInbox'
-import { BILLING_METHOD_LABEL, HEALTH_VARIANT, billingAction, MRR_GOAL_CENTS } from '@/lib/billing'
+import { BILLING_METHOD_LABEL, HEALTH_VARIANT, billingAction } from '@/lib/billing'
+import { getSettings } from '@/lib/settings.server'
 import { ActivateButton } from '../revenue/ActivateButton'
 import { AccountActions } from './AccountActions'
 
@@ -20,6 +21,10 @@ import { AccountActions } from './AccountActions'
 // paid, and a comp looked like revenue. This page derives how each account pays
 // (see lib/billing.ts) and puts the accounts that need chasing at the top, each
 // with the action that resolves it.
+//
+// The Collected-vs-MRR distinction used to be a paragraph under the numbers. It
+// is now the hover title on each stat: the definition is still one gesture away,
+// but it no longer costs three lines of the screen every time you load the page.
 
 export default async function MoneyPage() {
   const profile = await requireAdmin()
@@ -27,7 +32,7 @@ export default async function MoneyPage() {
   const t = territory.activeId
   const supabase = await createClient()
 
-  const rows = await loadBillingRows(t)
+  const [rows, settings] = await Promise.all([loadBillingRows(t), getSettings()])
 
   // Cash actually received, from the ledger the Stripe webhook and the
   // record-payment action both write to.
@@ -100,90 +105,84 @@ export default async function MoneyPage() {
         action={<ExportCsvButton filename="loop-accounts.csv" rows={csvRows} />}
       />
 
-      <div className="space-y-6 p-5 md:p-6">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <HudBody>
+        <StatStrip cols={5}>
           <Stat
-            label="Collected this month"
+            label="Collected"
             value={formatCents(thisMonth)}
             sub={
               momPct != null
                 ? `${momPct >= 0 ? '+' : ''}${momPct}% vs ${formatCents(lastMonth)} last month`
-                : 'No comparison yet'
+                : 'this month · no comparison yet'
             }
-            icon={DollarSign}
+            title="Money in the ledger since the 1st — Stripe webhooks and checks you logged."
           />
           <Stat
             label="Billed MRR"
             value={formatCents(mrr)}
-            sub={`${billed.length} paying account${billed.length === 1 ? '' : 's'} · ${Math.round((mrr / MRR_GOAL_CENTS) * 100)}% of goal`}
-            icon={TrendingUp}
+            sub={`${billed.length} paying · ${Math.round((mrr / settings.mrr_goal_cents) * 100)}% of goal`}
+            title="Recurring value of accounts that actually pay. Comps are counted separately so a free ad never reads as revenue."
+          />
+          <Stat
+            label="At risk"
+            value={formatCents(atRiskCents)}
+            sub={`${atRisk.length} account${atRisk.length === 1 ? '' : 's'} unbilled, overdue or due soon`}
+            tone={atRiskCents > 0 ? 'bad' : 'good'}
+            title="Live on screen but not paid up. Every one of these is on air costing you inventory."
           />
           <Stat
             label="Running comped"
             value={formatCents(compedMrr)}
             sub={`${byMethod.comp?.count ?? 0} account${(byMethod.comp?.count ?? 0) === 1 ? '' : 's'} on air for free`}
-            icon={Gift}
+            title="Deliberately excluded from MRR."
           />
           <Stat
-            label="Collected all-time"
+            label="All-time"
             value={formatCents(collectedAllTime)}
             sub={`${formatNumber(payingAdvertisers)} advertiser${payingAdvertisers === 1 ? '' : 's'} have paid`}
-            icon={Users}
           />
-        </div>
-
-        <p className="text-xs text-muted-foreground">
-          <span className="font-medium text-foreground">Collected</span> is money in the ledger —
-          Stripe webhooks and checks you logged.{' '}
-          <span className="font-medium text-foreground">Billed MRR</span> is the recurring value of
-          accounts that actually pay; comps are counted separately so a free ad never reads as
-          revenue.
-        </p>
+        </StatStrip>
 
         {/* ---- Paid but never activated ---- */}
         {stuck.length > 0 && (
-          <Card>
-            <CardContent className="p-5">
-              <div className="mb-3 flex items-center gap-2">
-                <AlertCircle className="size-4 text-warning" />
-                <p className="text-sm font-medium">Paid at checkout, never activated</p>
-              </div>
-              <p className="mb-3 text-xs text-muted-foreground">
-                These went through Stripe Checkout but their campaign is still draft — the webhook
-                probably never fired. Nothing is on screen until you activate.
-              </p>
-              <ul className="space-y-2">
-                {stuck.map((s) => (
-                  <li
-                    key={s.campaign_id}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border px-3 py-2"
-                  >
-                    <span className="text-sm">
-                      <span className="font-medium">{s.campaign?.ad?.title ?? 'Campaign'}</span>
-                      <span className="text-muted-foreground">
-                        {' · '}
-                        {formatCents(s.campaign?.monthly_total_cents ?? 0)}/mo
-                      </span>
+          <Panel
+            title="Paid at checkout, never activated"
+            note={`${stuck.length} stuck`}
+            bodyClassName="p-0"
+          >
+            <p className="border-b border-border px-3 py-1.5 text-[11px] text-muted-foreground">
+              <AlertCircle className="mr-1 inline size-3 text-warning" />
+              These went through Stripe Checkout but their campaign is still draft — the webhook
+              probably never fired. Nothing is on screen until you activate.
+            </p>
+            <ul className="divide-y divide-border">
+              {stuck.map((s) => (
+                <li
+                  key={s.campaign_id}
+                  className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5"
+                >
+                  <span className="text-[13px]">
+                    <span className="font-medium">{s.campaign?.ad?.title ?? 'Campaign'}</span>
+                    <span className="text-muted-foreground">
+                      {' · '}
+                      <Num>{formatCents(s.campaign?.monthly_total_cents ?? 0)}</Num>/mo
                     </span>
-                    {s.campaign_id && <ActivateButton campaignId={s.campaign_id} />}
-                  </li>
-                ))}
-              </ul>
-            </CardContent>
-          </Card>
+                  </span>
+                  {s.campaign_id && <ActivateButton campaignId={s.campaign_id} />}
+                </li>
+              ))}
+            </ul>
+          </Panel>
         )}
 
         {/* ---- Every live account ---- */}
-        <div>
-          <h2 className="mb-3 text-sm font-medium">
-            Live accounts
-            <span className="ml-2 font-normal text-muted-foreground">
-              worst first — unbilled, then overdue, then due soon
-            </span>
-          </h2>
-
+        <Panel
+          title="Live accounts"
+          note="worst first — unbilled, then overdue, then due soon"
+          bodyClassName="p-0"
+        >
           {rows.length === 0 ? (
-            <p className="rounded-xl border border-border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
+            <p className="px-4 py-10 text-center text-sm text-muted-foreground">
               No live campaigns yet.{' '}
               <Link href="/admin/deals/new" className="text-primary hover:underline">
                 Set up your first deal
@@ -191,19 +190,19 @@ export default async function MoneyPage() {
               .
             </p>
           ) : (
-            <div className="space-y-2">
+            <ul className="divide-y divide-border">
               {rows.map((r) => {
                 const cta = billingAction(r.billing)
                 return (
-                  <div
+                  <li
                     key={r.campaignId}
-                    className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card px-4 py-3"
+                    className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2"
                   >
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <Link
                           href={`/admin/advertisers/${r.advertiserId}`}
-                          className="truncate font-medium hover:underline"
+                          className="truncate text-[13px] font-medium hover:underline"
                         >
                           {r.advertiserName}
                         </Link>
@@ -211,17 +210,16 @@ export default async function MoneyPage() {
                           {BILLING_METHOD_LABEL[r.billing.method]}
                         </Badge>
                       </div>
-                      <p className="truncate text-xs text-muted-foreground">
+                      <p className="truncate text-[11px] text-muted-foreground">
                         {r.adTitle} · {r.billing.summary}
-                        {r.billing.paidThrough &&
-                          ` · through ${formatDateTime(r.billing.paidThrough)}`}
+                        {r.billing.paidThrough && ` · through ${formatDateTime(r.billing.paidThrough)}`}
                       </p>
                     </div>
-                    <span className="shrink-0 text-sm font-medium tabular-nums">
+                    <Num className="shrink-0 text-[13px] font-semibold">
                       {formatCents(r.monthlyCents)}/mo
-                    </span>
+                    </Num>
                     {cta && (
-                      <span className="hidden shrink-0 text-xs font-medium text-warning sm:inline">
+                      <span className="hidden shrink-0 text-[11px] font-medium text-warning sm:inline">
                         {cta}
                       </span>
                     )}
@@ -232,38 +230,13 @@ export default async function MoneyPage() {
                       method={r.billing.method}
                       paidThrough={r.billing.paidThrough}
                     />
-                  </div>
+                  </li>
                 )
               })}
-            </div>
+            </ul>
           )}
-        </div>
-      </div>
+        </Panel>
+      </HudBody>
     </>
-  )
-}
-
-function Stat({
-  label,
-  value,
-  sub,
-  icon: Icon,
-}: {
-  label: string
-  value: string
-  sub: string
-  icon: typeof DollarSign
-}) {
-  return (
-    <Card>
-      <CardContent className="p-5">
-        <div className="flex items-start justify-between gap-2">
-          <p className="text-sm text-muted-foreground">{label}</p>
-          <Icon className="size-4 shrink-0 text-muted-foreground" />
-        </div>
-        <p className="mt-1 font-heading text-2xl font-bold tabular-nums">{value}</p>
-        <p className="mt-1 text-xs text-muted-foreground">{sub}</p>
-      </CardContent>
-    </Card>
   )
 }

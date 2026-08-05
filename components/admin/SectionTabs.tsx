@@ -17,7 +17,7 @@ export type SectionTab = { href: string; label: string; badge?: number }
 export function SectionTabs({ tabs }: { tabs: SectionTab[] }) {
   const pathname = usePathname()
   return (
-    <div className="-mb-px flex gap-1 overflow-x-auto border-b border-border px-5 md:px-6">
+    <div className="-mb-px flex gap-1 overflow-x-auto border-b border-border px-3 md:px-4">
       {tabs.map((tab) => {
         // Exact match, or a child route (…/venues/<id> keeps "Venues" lit).
         const active = pathname === tab.href || pathname.startsWith(`${tab.href}/`)
@@ -26,7 +26,7 @@ export function SectionTabs({ tabs }: { tabs: SectionTab[] }) {
             key={tab.href}
             href={tab.href}
             className={cn(
-              'flex shrink-0 items-center gap-2 border-b-2 px-3 py-2.5 text-sm transition-colors',
+              'flex shrink-0 items-center gap-2 border-b-2 px-2.5 py-1.5 text-[13px] transition-colors',
               active
                 ? 'border-primary font-medium text-foreground'
                 : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -61,8 +61,10 @@ export const CONTENT_TABS: SectionTab[] = [
 ]
 
 // Packages and categories are already folded into the pricing page (both routes
-// redirect there), so they are not separate tabs.
+// redirect there), so they are not separate tabs. Business settings leads
+// because it is the one page that can change any number in the app.
 export const SETUP_TABS: SectionTab[] = [
+  { href: '/admin/settings', label: 'Business settings' },
   { href: '/admin/pricing', label: 'Pricing & packages' },
   { href: '/admin/email', label: 'Emails' },
   { href: '/admin/account', label: 'Account' },
