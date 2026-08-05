@@ -13,7 +13,18 @@ import { AdScreenPreview } from './AdScreenPreview'
 // (the SAME AdScreenPreview render the TV uses), with an optional QR to their site.
 // No account, no cart — pure proof-of-realness that hands off to /signup. Everything
 // stays in the browser (object URLs); nothing is uploaded here.
-export function PreviewStudio() {
+//
+// `sample` is a real ad that is on the network right now. The page used to open on
+// an empty black rectangle, which left a visitor with no idea what the page was for
+// — so the TV now arrives already PLAYING something real, and the upload prompt sits
+// over it as an invitation to swap it for their own.
+export type PreviewSample = {
+  creativeUrl: string
+  creativeType: 'video' | 'image'
+  title: string
+}
+
+export function PreviewStudio({ sample = null }: { sample?: PreviewSample | null }) {
   const [url, setUrl] = useState<string | null>(null)
   const [type, setType] = useState<'image' | 'video'>('image')
   const [site, setSite] = useState('')
@@ -58,6 +69,36 @@ export function PreviewStudio() {
               qrUrl={qrUrl}
               className="rounded-lg"
             />
+          ) : sample ? (
+            // A real ad from the live rotation, with the swap-it-for-yours prompt
+            // laid over it. The screen is never blank on arrival.
+            <button
+              type="button"
+              onClick={() => inputRef.current?.click()}
+              className="group relative block w-full overflow-hidden rounded-lg text-left"
+            >
+              <AdScreenPreview
+                creativeUrl={sample.creativeUrl}
+                creativeType={sample.creativeType}
+                qrUrl={null}
+                className="rounded-lg"
+              />
+              {/* The scrim has to beat whatever creative is behind it, and the
+                  live rotation is full of bright, busy artwork — hence the blur
+                  and the solid plate under the label rather than bare text. */}
+              <span className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/70 backdrop-blur-[2px] text-center transition group-hover:bg-black/60">
+                <span className="grid size-12 place-items-center rounded-full bg-primary/25 ring-1 ring-primary/50">
+                  <Upload className="size-6 text-primary" />
+                </span>
+                <span className="mx-4 rounded-xl bg-black/70 px-4 py-2 text-sm font-semibold text-white">
+                  Put your ad here instead
+                  <br />
+                  <span className="text-xs font-normal text-white/75">
+                    Tap to drop in your logo, photo, or video
+                  </span>
+                </span>
+              </span>
+            </button>
           ) : (
             <button
               type="button"
@@ -67,12 +108,10 @@ export function PreviewStudio() {
               <span className="grid size-12 place-items-center rounded-full bg-primary/10">
                 <Upload className="size-6 text-primary" />
               </span>
-              <span className="px-6 text-sm text-muted-foreground">
+              <span className="px-6 text-sm text-white/70">
                 Drop in your logo, photo, or video
                 <br />
-                <span className="text-xs text-muted-foreground/70">
-                  and watch it land on a Loop screen
-                </span>
+                <span className="text-xs text-white/50">and watch it land on a Loop screen</span>
               </span>
             </button>
           )}
@@ -80,22 +119,29 @@ export function PreviewStudio() {
         {/* Stand */}
         <div className="h-3 w-16 rounded-b-md bg-neutral-800" />
         <div className="h-1.5 w-40 rounded-full bg-neutral-800" />
-        {url && (
-          <p className="mt-4 text-center text-xs text-muted-foreground">
-            This is exactly what plays on the TV, letterboxing and all.
-          </p>
-        )}
+        <p className="mt-4 max-w-sm text-center text-xs text-muted-foreground">
+          {url ? (
+            'This is exactly what plays on the TV, letterboxing and all.'
+          ) : sample ? (
+            <>
+              That&apos;s <span className="font-medium text-foreground">{sample.title}</span>, a real
+              ad on a Loop screen right now. Swap it for yours.
+            </>
+          ) : (
+            'Whatever you drop in is framed exactly the way it airs on the TVs.'
+          )}
+        </p>
       </div>
 
       {/* Controls */}
       <div className="space-y-5">
         <div className="space-y-2">
-          <h2 className="font-heading text-2xl font-bold tracking-tight">
-            See your business on a real screen.
-          </h2>
+          {/* The page headline already makes the pitch — this one just tells them
+              what to do next, so the two don't say the same thing twice. */}
+          <h2 className="font-heading text-2xl font-bold tracking-tight">Now put yours up there.</h2>
           <p className="text-sm text-muted-foreground">
-            Upload anything and see it framed exactly the way it airs on Loop TVs around town. No
-            account needed.
+            A logo, a storefront photo, a clip off your phone. Anything works, and you can swap it as
+            many times as you like.
           </p>
         </div>
 

@@ -14,10 +14,12 @@
 export const THEMES = ['dark', 'light'] as const
 export type Theme = (typeof THEMES)[number]
 
-// Loop Network is a dark-first brand (near-black canvas + gold), so an absent
-// preference resolves to dark. This is also the value baked into :root in CSS,
-// which keeps the un-toggled first paint on-brand with no flash.
-export const DEFAULT_THEME: Theme = 'dark'
+// LIGHT is the default. The brand's near-black canvas is right for a TV in a dim
+// bar but reads heavy and moody on a marketing site a local owner opens on their
+// phone in daylight, so the site greets everyone bright and keeps dark behind the
+// toggle. Must stay in sync with the :root block in app/globals.css, which is
+// what paints before any class resolves.
+export const DEFAULT_THEME: Theme = 'light'
 
 export const THEME_COOKIE = 'theme'
 // Persist the choice long enough that returning visitors never re-flash.

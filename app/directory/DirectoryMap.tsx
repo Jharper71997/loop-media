@@ -10,7 +10,7 @@ export type { DirectoryMapVenue } from './DirectoryMapView'
 const View = dynamic(() => import('./DirectoryMapView'), {
   ssr: false,
   loading: () => (
-    <div className="grid h-[52vh] place-items-center rounded-2xl border border-border text-muted-foreground">
+    <div className="grid h-[36vh] min-h-56 place-items-center rounded-2xl border border-border text-muted-foreground sm:h-[50vh]">
       Loading map…
     </div>
   ),

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Trash2, MapPin, Lock, Clock, Users } from 'lucide-react'
+import { Trash2, MapPin, Clock, Users } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { buttonVariants } from '@/components/ui/button'
 import { StepHeader } from '@/components/app/StepHeader'
@@ -21,7 +21,7 @@ import {
   type PricingConfig,
 } from '@/lib/pricing'
 import { CART_KEY } from '../browse/BrowseClient'
-import { EXCL_KEY, type CartVenue } from './types'
+import { type CartVenue } from './types'
 
 export function ReviewStep({
   venues,
@@ -35,14 +35,11 @@ export function ReviewStep({
   const base = useBasePath()
   const byId = useMemo(() => new Map(venues.map((v) => [v.id, v])), [venues])
   const [cartIds, setCartIds] = useState<string[]>([])
-  const [exclIds, setExclIds] = useState<string[]>([])
 
   useEffect(() => {
     try {
       const raw = sessionStorage.getItem(CART_KEY)
       if (raw) setCartIds(JSON.parse(raw) as string[])
-      const rawExcl = sessionStorage.getItem(EXCL_KEY)
-      if (rawExcl) setExclIds(JSON.parse(rawExcl) as string[])
     } catch {}
   }, [])
 
@@ -55,16 +52,7 @@ export function ReviewStep({
     [cart, quoteOpts, pricingConfig]
   )
 
-  // Only count exclusivity for venues still in the cart AND still available.
-  const exclSet = useMemo(() => {
-    const inCart = new Set(cart.filter((v) => v.exclusivityAvailable).map((v) => v.id))
-    return new Set(exclIds.filter((id) => inCart.has(id)))
-  }, [exclIds, cart])
-  const exclusivityCents = useMemo(
-    () => cart.reduce((s, v) => s + (exclSet.has(v.id) ? v.exclusivityCents : 0), 0),
-    [cart, exclSet]
-  )
-  const totalCents = quote.totalCents + exclusivityCents
+  const totalCents = quote.totalCents
 
   // Estimated people your ad reaches each month across the picked screens — the
   // value side of the price. Clearly an estimate (from venue foot traffic), never
@@ -77,23 +65,12 @@ export function ReviewStep({
     [cart, quoteOpts, pricingConfig]
   )
 
-  // Persist the reconciled set so CreativeStep sends exactly what's shown here.
-  useEffect(() => {
-    try {
-      sessionStorage.setItem(EXCL_KEY, JSON.stringify([...exclSet]))
-    } catch {}
-  }, [exclSet])
-
   function remove(id: string) {
     const next = cartIds.filter((x) => x !== id)
     setCartIds(next)
     try {
       sessionStorage.setItem(CART_KEY, JSON.stringify(next))
     } catch {}
-  }
-
-  function toggleExclusive(id: string) {
-    setExclIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
   }
 
   if (cart.length === 0) {
@@ -117,61 +94,36 @@ export function ReviewStep({
       <RateLadder count={cart.length} config={pricingConfig} />
 
       <div className="space-y-2.5">
-        {cart.map((v) => {
-          const on = exclSet.has(v.id)
-          return (
-            <Card key={v.id}>
-              <CardContent className="space-y-2.5 p-3.5">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="truncate font-medium">{v.name}</div>
-                    <div className="text-xs text-muted-foreground">{TIER_LABEL[v.tier]}</div>
-                    {v.openHours && (
-                      <div className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
-                        <Clock className="size-3 shrink-0" />
-                        <span className="truncate">{v.openHours}</span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="font-heading font-bold tabular-nums">
-                      {formatCents(v.priceCents + (on ? v.exclusivityCents : 0))}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => remove(v.id)}
-                      className="text-muted-foreground hover:text-destructive"
-                      aria-label={`Remove ${v.name}`}
-                    >
-                      <Trash2 className="size-4" />
-                    </button>
-                  </div>
+        {cart.map((v) => (
+          <Card key={v.id}>
+            <CardContent className="p-3.5">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="truncate font-medium">{v.name}</div>
+                  {v.openHours && (
+                    <div className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+                      <Clock className="size-3 shrink-0" />
+                      <span className="truncate">{v.openHours}</span>
+                    </div>
+                  )}
                 </div>
-                {v.exclusivityAvailable && (
+                <div className="flex items-center gap-3">
+                  <span className="font-heading font-bold tabular-nums">
+                    {formatCents(v.priceCents)}
+                  </span>
                   <button
                     type="button"
-                    onClick={() => toggleExclusive(v.id)}
-                    aria-pressed={on}
-                    className={
-                      'flex w-full items-center justify-between gap-2 rounded-md border px-3 py-2 text-left text-xs transition-colors ' +
-                      (on
-                        ? 'border-primary/60 bg-primary/10 text-foreground'
-                        : 'border-border bg-muted/30 text-muted-foreground hover:border-primary/40')
-                    }
+                    onClick={() => remove(v.id)}
+                    className="text-muted-foreground hover:text-destructive"
+                    aria-label={`Remove ${v.name}`}
                   >
-                    <span className="flex items-center gap-1.5">
-                      <Lock className="size-3.5" />
-                      Own your category here — lock out competitors
-                    </span>
-                    <span className="font-medium tabular-nums">
-                      {on ? 'Added' : `+${formatCents(v.exclusivityCents)}/mo`}
-                    </span>
+                    <Trash2 className="size-4" />
                   </button>
-                )}
-              </CardContent>
-            </Card>
-          )
-        })}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
       <Card>
@@ -197,9 +149,6 @@ export function ReviewStep({
               value={`$${((pricingConfig?.minMonthlyCents ?? MIN_MONTHLY_CENTS) / 100).toFixed(0)}`}
               muted
             />
-          )}
-          {exclusivityCents > 0 && (
-            <Row label="Category exclusivity" value={`+${formatCents(exclusivityCents)}`} />
           )}
           <div className="flex items-center justify-between border-t border-border pt-2 font-heading text-base font-bold">
             <span>Total</span>

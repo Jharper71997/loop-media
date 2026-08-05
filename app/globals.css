@@ -86,10 +86,12 @@
  *     the name to THEMES in lib/theme.ts. Nothing else changes. <<<
  * ------------------------------------------------------------------------- */
 
-/* ---- DARK (brand default) --------------------------------------------------
- * Also assigned to :root so any un-classed render (e.g. a static error page)
- * stays on-brand and readable instead of flashing white. */
-:root,
+/* ---- DARK (opt-in) ---------------------------------------------------------
+ * No longer the default. The marketing site reads as heavy and moody in an all-
+ * black canvas, so LIGHT is the default (see the .light block below, which also
+ * claims :root). Dark stays a first-class theme behind the toggle, and the TV
+ * player pins itself to it with a literal `dark` class — a screen in a dim bar
+ * must never render on a white canvas. */
 .dark {
   color-scheme: dark;
   --background: oklch(0.155 0.004 80); /* near-black, faintly warm */
@@ -129,11 +131,22 @@
   --sidebar-accent-foreground: oklch(0.93 0.004 80);
   --sidebar-border: oklch(1 0 0 / 9%);
   --sidebar-ring: oklch(0.8 0.13 90);
+  /* Brushed-metal gradient stops for .text-gold-metallic — bright gold reads on
+     a near-black canvas. The light theme re-declares these far deeper (see below);
+     the raw gold would be invisible on white. */
+  --metal-a: #f9ecb0;
+  --metal-b: #dcb653;
+  --metal-c: #a9781a;
+  /* Warm page wash behind marketing sections. Near-invisible on dark. */
+  --wash: oklch(0.8 0.13 90 / 4%);
 }
 
-/* ---- LIGHT -----------------------------------------------------------------
+/* ---- LIGHT (brand default) -------------------------------------------------
  * The brand gold is too light to carry text on white, so `--primary` shifts to
- * a deep bronze (same hue family) that clears AA as both a fill and a link. */
+ * a deep bronze (same hue family) that clears AA as both a fill and a link.
+ * Also assigned to :root so any un-classed render (a static error page, a
+ * pre-hydration paint) lands on the default theme instead of flashing dark. */
+:root,
 .light {
   color-scheme: light;
   --background: oklch(0.99 0.004 85); /* warm off-white */
@@ -173,52 +186,22 @@
   --sidebar-accent-foreground: oklch(0.3 0.03 75);
   --sidebar-border: oklch(0.9 0.004 85);
   --sidebar-ring: oklch(0.47 0.095 72);
+  /* Bronze, not gold: the dark theme's #f9ecb0 top stop is invisible on white.
+     Darkest stop 7.9:1, lightest 4.5:1 on --background, so the gradient clears
+     AA across its whole run rather than only at the dark end. */
+  --metal-a: #9a6c14;
+  --metal-b: #7d5410;
+  --metal-c: #5f3f0a;
+  /* Warm page wash behind marketing sections — the thing that keeps the bright
+     theme from reading as sterile white boxes. */
+  --wash: oklch(0.9 0.06 85 / 45%);
 }
 
-/* Follow the OS when the visitor has no saved choice AND no class was rendered
- * (belt-and-suspenders: the server normally always sets a class). Pure CSS, no
- * JS. Keep these values in sync with the .light block above. */
-@media (prefers-color-scheme: light) {
-  :root:not(.dark):not(.light) {
-    color-scheme: light;
-    --background: oklch(0.99 0.004 85);
-    --foreground: oklch(0.205 0.006 80);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.205 0.006 80);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.205 0.006 80);
-    --primary: oklch(0.47 0.095 72);
-    --primary-foreground: oklch(0.99 0.01 90);
-    --secondary: oklch(0.96 0.006 85);
-    --secondary-foreground: oklch(0.28 0.006 80);
-    --muted: oklch(0.965 0.005 85);
-    --muted-foreground: oklch(0.47 0.01 80);
-    --accent: oklch(0.95 0.025 85);
-    --accent-foreground: oklch(0.3 0.03 75);
-    --destructive: oklch(0.53 0.21 27);
-    --destructive-foreground: oklch(0.99 0 0);
-    --success: oklch(0.52 0.13 155);
-    --success-foreground: oklch(0.99 0 0);
-    --warning: oklch(0.52 0.11 70);
-    --warning-foreground: oklch(0.99 0.01 90);
-    --border: oklch(0.9 0.004 85);
-    --input: oklch(0.64 0.006 85);
-    --ring: oklch(0.47 0.095 72);
-    --chart-1: oklch(0.55 0.11 72);
-    --chart-2: oklch(0.6 0.1 55);
-    --chart-3: oklch(0.5 0.09 45);
-    --chart-4: oklch(0.55 0.12 155);
-    --chart-5: oklch(0.45 0.08 260);
-    --sidebar: oklch(0.985 0.003 85);
-    --sidebar-foreground: oklch(0.205 0.006 80);
-    --sidebar-primary: oklch(0.47 0.095 72);
-    --sidebar-primary-foreground: oklch(0.99 0.01 90);
-    --sidebar-accent: oklch(0.95 0.025 85);
-    --sidebar-accent-foreground: oklch(0.3 0.03 75);
-    --sidebar-border: oklch(0.9 0.004 85);
-    --sidebar-ring: oklch(0.47 0.095 72);
-  }
-}
+/* No prefers-color-scheme fallback block: :root above IS the light theme, and the
+ * server always renders an explicit class from the cookie (lib/theme.ts), so an
+ * un-classed paint already lands on the default. Deliberately NOT following the
+ * OS here — a visitor on a dark phone should still meet the bright marketing
+ * site; dark remains one tap away on the toggle. */
 
 @layer base {
   * {
@@ -243,12 +226,22 @@
 }
 
 @layer utilities {
-  /* Brushed-gold gradient text for hero numerals + the wordmark. Use sparingly. */
+  /* Brushed-metal gradient text for hero words + the wordmark. Use sparingly.
+     Reads gold on dark and bronze on light — the stops are theme tokens, so this
+     one utility stays legible in both instead of vanishing on white. */
   .text-gold-metallic {
-    background: linear-gradient(160deg, #f9ecb0 0%, #dcb653 42%, #a9781a 100%);
+    background: linear-gradient(160deg, var(--metal-a) 0%, var(--metal-b) 42%, var(--metal-c) 100%);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
+  }
+  /* Warm section band for the marketing pages. */
+  .bg-wash {
+    background-color: var(--wash);
+  }
+  /* Soft brand glow behind hero art — a diffuse radial, not a hard edge. */
+  .bg-wash-radial {
+    background-image: radial-gradient(60% 55% at 50% 0%, var(--wash) 0%, transparent 70%);
   }
   /* Hide scrollbars on horizontal chip rows / map sheets. */
   .no-scrollbar::-webkit-scrollbar {
@@ -269,13 +262,20 @@
 .leaflet-container {
   background: var(--card) !important; /* tile gaps match the theme, no white flash */
   font: inherit;
+  /* Leaflet gives its panes z-index 400–700 and its controls 800–1000. The
+     container itself sets `position: relative` but no z-index, so it does NOT
+     form a stacking context and those values compete in the ROOT one — where
+     they beat any overlay we own (the sheet/dialog sit at z-50). The map then
+     renders straight through an open drawer. `z-index: 0` here creates the
+     stacking context that traps them. */
+  z-index: 0;
 }
 .leaflet-popup .leaflet-popup-content-wrapper,
 .leaflet-popup .leaflet-popup-tip {
   background: var(--popover);
   color: var(--popover-foreground);
   border: 1px solid var(--border);
-  box-shadow: 0 8px 28px rgb(0 0 0 / 0.55);
+  box-shadow: 0 8px 28px oklch(0 0 0 / 0.28);
 }
 .leaflet-popup .leaflet-popup-content-wrapper {
   border-radius: var(--radius-lg);
@@ -294,7 +294,9 @@
   color: var(--foreground);
 }
 .leaflet-container .leaflet-control-attribution {
-  background: rgb(0 0 0 / 0.5);
+  /* Theme surface, not a black scrim — on the light map a black strip was the
+     loudest thing on the page. */
+  background: var(--card);
   color: var(--muted-foreground);
 }
 .leaflet-container .leaflet-control-attribution a {

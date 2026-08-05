@@ -2,7 +2,8 @@
 
 import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
-import { MAP_TILE_URL, MAP_TILE_ATTRIBUTION } from '@/lib/mapTiles'
+import { MAP_TILE_ATTRIBUTION } from '@/lib/mapTiles'
+import { useMapTileUrl } from '@/components/app/useMapTiles'
 import { MapFitBounds } from '@/components/app/MapFitBounds'
 
 export type DirectoryMapVenue = {
@@ -22,6 +23,7 @@ export default function DirectoryMapView({
   venues: DirectoryMapVenue[]
   center: [number, number]
 }) {
+  const tileUrl = useMapTileUrl()
   const points = venues
     .filter((v) => v.lat != null && v.lng != null)
     .map((v) => [v.lat as number, v.lng as number] as [number, number])
@@ -30,20 +32,27 @@ export default function DirectoryMapView({
       center={center}
       zoom={12}
       scrollWheelZoom={false}
-      className="h-[52vh] w-full overflow-hidden rounded-2xl"
+      // 52vh is most of a phone screen for a map that's context, not the content.
+      className="h-[36vh] min-h-56 w-full overflow-hidden rounded-2xl sm:h-[50vh]"
     >
-      <TileLayer attribution={MAP_TILE_ATTRIBUTION} url={MAP_TILE_URL} />
+      <TileLayer attribution={MAP_TILE_ATTRIBUTION} url={tileUrl} />
       <MapFitBounds points={points} />
       {venues
         .filter((v) => v.lat != null && v.lng != null)
         .map((v) => {
-          const color = '#d4a333'
+          // Gold fill with a bronze stroke: the fill alone disappeared into the
+          // light basemap's warm land colour.
           return (
             <CircleMarker
               key={v.id}
               center={[v.lat as number, v.lng as number]}
-              radius={11}
-              pathOptions={{ color, fillColor: color, fillOpacity: 0.7, weight: 2 }}
+              radius={10}
+              pathOptions={{
+                color: '#5f3f0a',
+                fillColor: '#d4a333',
+                fillOpacity: 0.85,
+                weight: 2,
+              }}
             >
               <Popup>
                 <strong>{v.name}</strong>

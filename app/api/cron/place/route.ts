@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { placeCampaign } from '@/lib/placement'
+import { applyDueScheduledCreatives } from '@/lib/scheduledCreatives'
 
 // Nightly recompute: re-run the placement engine for every active campaign.
 // Placement is target-driven — an ad only fills the screens the advertiser
@@ -47,6 +48,13 @@ export async function GET(req: Request) {
     /* comp_until column not present yet — nothing to expire */
   }
 
+  // Content calendar: push any creative whose scheduled date has arrived. Runs
+  // BEFORE placement so a swapped ad is the one placement sees tonight. Each
+  // scheduled swap still goes to admin review like a manual one — submitting a
+  // day early (SCHEDULE_LEAD_DAYS) is what gets it approved and airing on the
+  // advertiser's actual date.
+  const scheduled = await applyDueScheduledCreatives(admin)
+
   const { data: campaigns } = await admin
     .from('campaigns')
     .select('id')
@@ -87,5 +95,5 @@ export async function GET(req: Request) {
     }
   }
 
-  return NextResponse.json({ ran: results.length, compsExpired, results })
+  return NextResponse.json({ ran: results.length, compsExpired, scheduled, results })
 }

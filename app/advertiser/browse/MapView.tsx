@@ -4,9 +4,9 @@ import { MapContainer, TileLayer, CircleMarker, Marker, Popup } from 'react-leaf
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { Clock } from 'lucide-react'
-import { MAP_TILE_URL, MAP_TILE_ATTRIBUTION } from '@/lib/mapTiles'
+import { MAP_TILE_ATTRIBUTION } from '@/lib/mapTiles'
+import { useMapTileUrl } from '@/components/app/useMapTiles'
 import { formatCents } from '@/lib/format'
-import { TIER_LABEL } from '@/lib/pricing'
 import { US_CENTER, US_ZOOM } from '@/lib/geo'
 import { MapFitBounds } from '@/components/app/MapFitBounds'
 import { Button } from '@/components/ui/button'
@@ -68,6 +68,7 @@ export default function MapView({
   // network — the box only sets where the map opens. Null → frame all venues.
   frameBounds?: [[number, number], [number, number]] | null
 }) {
+  const tileUrl = useMapTileUrl()
   const venuePoints = venues
     .filter((v) => v.lat != null && v.lng != null)
     .map((v) => [v.lat as number, v.lng as number] as [number, number])
@@ -93,7 +94,7 @@ export default function MapView({
       scrollWheelZoom={false}
       className="h-[40vh] min-h-64 w-full overflow-hidden rounded-xl lg:h-[calc(100dvh-9rem)]"
     >
-      <TileLayer attribution={MAP_TILE_ATTRIBUTION} url={MAP_TILE_URL} />
+      <TileLayer attribution={MAP_TILE_ATTRIBUTION} url={tileUrl} />
       <MapFitBounds points={framePoints} />
       {userLoc && (
         <>
@@ -138,7 +139,6 @@ export default function MapView({
                   )}
                   <div>
                     <p className="font-heading text-sm font-semibold text-foreground">{v.name}</p>
-                    <p className="text-xs text-muted-foreground">{TIER_LABEL[v.tier]}</p>
                   </div>
                 </div>
                 <p className="text-foreground">

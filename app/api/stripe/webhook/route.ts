@@ -4,6 +4,7 @@ import { stripe } from '@/lib/stripe'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { activatePlacementsIfReady } from '@/lib/placement'
 import { applyAdChange } from '@/lib/adChanges'
+import { applyScreenAdd } from '@/lib/screenBilling'
 import { notifyPaymentReceived, notifyPaymentFailed } from '@/lib/notifyAdvertiser'
 import { pauseCampaignForNonpayment, resumeCampaignAfterPayment } from '@/lib/campaignStatus'
 import { activateExclusiveSlots, releaseExclusiveSlots } from '@/lib/exclusivity'
@@ -117,6 +118,24 @@ async function handleEvent(
     // Only act on a session that actually paid. Without this, an unpaid/abandoned
     // or test session could flip campaigns/memberships to active.
     if (s.payment_status !== 'paid') return
+
+    // Paid screen add: the venues, the new monthly rate and the placements all
+    // land here, not in the server action — this is the moment the money cleared.
+    const screenAddId = s.metadata?.screen_add_id
+    if (screenAddId) {
+      await applyScreenAdd(supabase, screenAddId)
+      await recordPayment(supabase, {
+        stripe_ref: s.id,
+        amount_cents: s.amount_total ?? 0,
+        currency: s.currency ?? 'usd',
+        source: 'screen_add',
+        advertiser_id: s.metadata?.advertiser_id ?? null,
+        campaign_id: s.metadata?.campaign_id ?? null,
+        stripe_customer_id: typeof s.customer === 'string' ? s.customer : null,
+        paid_at: now,
+      })
+      return
+    }
 
     // Paid ad change ($10 one-time): apply the staged creative now that it's paid.
     const adChangeId = s.metadata?.ad_change_id

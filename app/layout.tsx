@@ -36,7 +36,9 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0d0c0a",
+  // Matches the light --background (the default theme); the phone browser chrome
+  // should blend into the page, not band it with the old near-black.
+  themeColor: "#fdfcfa",
   viewportFit: "cover",
 };
 

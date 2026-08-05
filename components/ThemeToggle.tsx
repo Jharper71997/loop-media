@@ -10,12 +10,12 @@ import { THEMES, THEME_COOKIE, THEME_COOKIE_MAX_AGE, type Theme } from '@/lib/th
 // revealed after mount to guarantee it matches the real theme — the colors
 // themselves are correct from first paint regardless of this component.
 function currentTheme(): Theme {
-  if (typeof document === 'undefined') return 'dark'
-  return document.documentElement.classList.contains('light') ? 'light' : 'dark'
+  if (typeof document === 'undefined') return 'light'
+  return document.documentElement.classList.contains('dark') ? 'dark' : 'light'
 }
 
 export function ThemeToggle({ className }: { className?: string }) {
-  const [theme, setTheme] = useState<Theme>('dark')
+  const [theme, setTheme] = useState<Theme>('light')
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {

@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Plus, ImageOff, MonitorPlay } from 'lucide-react'
+import { Plus, ImageOff, MonitorPlay, CalendarDays } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { requireProfile } from '@/lib/auth'
 import { Badge } from '@/components/ui/badge'
@@ -68,9 +68,17 @@ export default async function HostAdvertiseDashboard() {
           </p>
         </div>
         {hasCampaigns && (
-          <Link href="/host/advertise/browse" className={cn(buttonVariants({ size: 'sm' }))}>
-            <Plus className="size-4" /> New
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/host/advertise/calendar"
+              className={cn(buttonVariants({ size: 'sm', variant: 'outline' }))}
+            >
+              <CalendarDays className="size-4" /> Calendar
+            </Link>
+            <Link href="/host/advertise/browse" className={cn(buttonVariants({ size: 'sm' }))}>
+              <Plus className="size-4" /> New
+            </Link>
+          </div>
         )}
       </div>
 
