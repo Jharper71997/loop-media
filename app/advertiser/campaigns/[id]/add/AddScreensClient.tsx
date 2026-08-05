@@ -39,9 +39,15 @@ export function AddScreensClient({ campaignId, venues }: { campaignId: string; v
   const submit = () => {
     if (!selected.size) return
     start(async () => {
-      const res = await addScreensToCampaign(campaignId, [...selected])
+      const res = await addScreensToCampaign(campaignId, [...selected], base)
       if (res.error) {
         toast.error(res.error)
+        return
+      }
+      // Paid change: finish at Checkout. The webhook adds the screens once it
+      // clears, so there's nothing to update here.
+      if (res.checkoutUrl) {
+        window.location.href = res.checkoutUrl
         return
       }
       toast.success(
@@ -126,7 +132,7 @@ export function AddScreensClient({ campaignId, venues }: { campaignId: string; v
         <p className="mt-2 text-xs text-muted-foreground">
           {isHost
             ? 'These screens are added to your campaign right away.'
-            : "We'll prorate the difference onto your next invoice; your monthly total updates right away."}
+            : "You'll confirm the price at checkout before anything is charged. Screens go live once the payment clears."}
         </p>
       </div>
     </div>

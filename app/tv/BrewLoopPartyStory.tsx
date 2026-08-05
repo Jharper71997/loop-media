@@ -128,7 +128,7 @@ export function BrewLoopPartyStory({ qrImage }: { qrImage: string }) {
         @keyframes pty-street-out { 0%, 66% { opacity: 1 } 74%, 100% { opacity: 0 } }
         .pty-street-out { animation: pty-street-out 15s ease-out infinite both }
 
-        /* The pickup storefront. Its marquee reads YOUR CLOSEST BAR rather than a
+        /* The pickup storefront. Its marquee reads YOUR CLOSEST STOP rather than a
            name, because "you board at whichever partner bar is nearest your house"
            is the single most misunderstood part of the process and a caption alone
            doesn't fix that. It clears out when the route starts. */
@@ -325,7 +325,7 @@ export function BrewLoopPartyStory({ qrImage }: { qrImage: string }) {
         {/* The pickup: a partner bar with the rule on its marquee. Drawn before the
             figures so they stand in front of it. */}
         <g className="pty-pickup" transform="translate(760, 720)">
-          <BrickBar name="YOUR CLOSEST BAR" seed={2} />
+          <BrickBar name="YOUR CLOSEST STOP" seed={2} />
         </g>
 
         {/* Three friends on the curb, boarding one at a time. */}
@@ -372,8 +372,8 @@ export function BrewLoopPartyStory({ qrImage }: { qrImage: string }) {
       {/* The process, one step per beat, in the order a rider actually lives it. */}
       <div className="pty-caps">
         <div className="pty-cap pty-cap1">
-          <div className="pty-line">Start at the closest bar.</div>
-          <div className="pty-sub">Book a seat, then meet the shuttle at the partner bar nearest your house.</div>
+          <div className="pty-line">Start at the closest stop.</div>
+          <div className="pty-sub">Book a seat, then board at whichever bar on that night's route is closest to you.</div>
         </div>
         <div className="pty-cap pty-cap2">
           <div className="pty-line">Then we run the route.</div>

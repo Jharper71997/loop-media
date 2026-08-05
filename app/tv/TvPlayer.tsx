@@ -291,7 +291,7 @@ function Pairing({
   // Quiet status while a provisioned screen pairs itself (no keyboard involved).
   if (autoPairing) {
     return (
-      <div className="flex h-screen w-screen flex-col items-center justify-center bg-black text-white">
+      <div className="dark flex h-screen w-screen flex-col items-center justify-center bg-black text-white">
         <Image
           src="/loop-network-logo.png"
           alt="Loop Network"
@@ -306,7 +306,7 @@ function Pairing({
   }
 
   return (
-    <div className="flex h-screen w-screen flex-col items-center justify-center bg-black text-white">
+    <div className="dark flex h-screen w-screen flex-col items-center justify-center bg-black text-white">
       <Image
         src="/loop-network-logo.png"
         alt="Loop Network"
@@ -596,6 +596,18 @@ function Player({
   const playlist = useMemo(() => (manifest ? buildPlaylist(manifest) : []), [manifest])
   const slide = playlist.length ? playlist[index % playlist.length] : null
 
+  // Trivia state is polled HERE, in the player, rather than inside the trivia
+  // slide. The slide unmounts every time the loop moves on, so state that lived
+  // inside it came back null on the next cycle: the slide rendered its "no
+  // question yet" fallback for the few hundred ms the fetch took, then snapped
+  // into the question layout. That jump is the whole reason this is hoisted —
+  // the question is already in hand when the slide mounts, so it draws its final
+  // layout on the very first frame.
+  const trivia = useTriviaLive(
+    manifest?.trivia ? (manifest.venue?.id ?? '') : '',
+    slide?.kind === 'trivia'
+  )
+
   // How long this slide holds. Videos manage their own advance (own `ended`, capped
   // at the slot — see VideoAdSlide); everything else (images, filler, promo) uses the
   // admin-set seconds on the timer below.
@@ -664,7 +676,7 @@ function Player({
 
   return (
     <div
-      className="relative h-screen w-screen overflow-hidden bg-black text-white"
+      className="dark relative h-screen w-screen overflow-hidden bg-black text-white"
       onClick={() => {
         if (!document.fullscreenElement) goFullscreen()
         revealControls()
@@ -761,7 +773,9 @@ function Player({
         )
       ) : slide.kind === 'trivia' ? (
         <TriviaSlide
-          venueId={manifest.venue?.id ?? ''}
+          live={trivia.live}
+          leaderboard={trivia.leaderboard}
+          onExpire={trivia.refetch}
           qrImage={manifest.trivia?.qr_image ?? ''}
         />
       ) : slide.kind === 'clock' ? (
@@ -1094,11 +1108,28 @@ type TriviaLive = {
   correctIdx: number | null
 }
 
-function TriviaSlide({ venueId, qrImage }: { venueId: string; qrImage: string }) {
-  const [lb, setLb] = useState<{ name: string; score: number }[]>([])
+// Stable empty array, so a trivia-less screen doesn't hand the slide a fresh
+// reference on every render.
+const NO_LEADERS: { name: string; score: number }[] = []
+
+// Polls the live trivia state for a venue. This lives in the PLAYER, above the
+// slide, so the current question survives the slide unmounting between loop
+// cycles — see the call site for why that matters.
+//
+// `endsAt` is an ABSOLUTE local timestamp, not a duration, so a poll from 20s ago
+// still counts down correctly; staleness only bites once the round rolls over,
+// and the slide asks for a refetch the moment its clock hits zero. That's what
+// lets the background cadence be lazy: fast only while the question is on screen.
+function useTriviaLive(venueId: string, onScreen: boolean) {
+  const [leaderboard, setLeaderboard] = useState<{ name: string; score: number }[]>([])
   const [live, setLive] = useState<TriviaLive | null>(null)
-  const [secs, setSecs] = useState(0)
-  const refetch = useRef<(() => void) | null>(null)
+  const poll = useRef<() => void>(() => {})
+  // Read through a ref so moving between slides re-times the NEXT poll instead of
+  // tearing down and restarting the loop (which would refetch on every slide).
+  const onScreenRef = useRef(onScreen)
+  useEffect(() => {
+    onScreenRef.current = onScreen
+  }, [onScreen])
 
   useEffect(() => {
     if (!venueId) return
@@ -1111,7 +1142,7 @@ function TriviaSlide({ venueId, qrImage }: { venueId: string; qrImage: string })
         if (r.ok) {
           const d = await r.json()
           if (!alive) return
-          setLb(d.leaderboard ?? [])
+          setLeaderboard(d.leaderboard ?? [])
           if (d.question?.prompt) {
             setLive({
               round: d.round,
@@ -1126,42 +1157,64 @@ function TriviaSlide({ venueId, qrImage }: { venueId: string; qrImage: string })
       } catch {
         /* keep the last state on screen */
       } finally {
-        // Poll fast enough that the reveal + the next question show up promptly;
-        // the slide is only on screen ~20s per loop cycle, so this is a handful of
-        // reads, not a standing load.
-        if (alive) timer = setTimeout(tick, 2500)
+        // On screen: fast, so the reveal and the next question land on time.
+        // Off screen: slow — just enough to walk back on with a warm question and a
+        // current leaderboard, at a few reads per loop instead of a standing one.
+        if (alive) timer = setTimeout(tick, onScreenRef.current ? 2500 : 20000)
       }
     }
-    refetch.current = tick
+    poll.current = tick
     tick()
     return () => {
       alive = false
-      refetch.current = null
       if (timer) clearTimeout(timer)
     }
   }, [venueId])
 
-  // Local countdown off the server anchor. When a phase expires, pull fresh state
-  // right away rather than waiting out the poll interval.
+  // Gated on the way OUT rather than cleared in an effect: if a venue turns trivia
+  // off, the next manifest passes an empty id and the slide stops seeing a question
+  // on that same render, with no stale round left in state to flush.
+  return {
+    live: venueId ? live : null,
+    leaderboard: venueId ? leaderboard : NO_LEADERS,
+    refetch: useCallback(() => poll.current(), []),
+  }
+}
+
+function TriviaSlide({
+  live,
+  leaderboard,
+  onExpire,
+  qrImage,
+}: {
+  live: TriviaLive | null
+  leaderboard: { name: string; score: number }[]
+  onExpire: () => void
+  qrImage: string
+}) {
+  // The clock lives in state and `secs` is DERIVED from it, so the slide paints the
+  // right number on its first frame. (Storing the countdown itself meant a remount
+  // started at 0s with the time bar empty, then snapped to the real value a beat
+  // later — half of the jump this slide used to have.) Seeded from the current time
+  // so the first render is already correct, then advanced every 250ms.
+  const [nowMs, setNowMs] = useState(() => Date.now())
   useEffect(() => {
-    if (!live) return
-    // Only chase the rollover for an anchor that was still in the future when it
-    // arrived. An already-expired anchor (a poll that landed right on the boundary)
-    // would otherwise refetch, expire again, and spin the endpoint — let the normal
-    // poll pick that one up instead.
-    let fired = live.endsAt <= Date.now()
-    const t = () => {
-      const left = Math.max(0, Math.ceil((live.endsAt - Date.now()) / 1000))
-      setSecs(left)
-      if (left === 0 && !fired) {
-        fired = true
-        refetch.current?.()
-      }
-    }
-    t()
-    const id = setInterval(t, 250)
+    const id = setInterval(() => setNowMs(Date.now()), 250)
     return () => clearInterval(id)
-  }, [live])
+  }, [])
+
+  const secs = live ? Math.max(0, Math.ceil((live.endsAt - nowMs) / 1000)) : 0
+
+  // Pull fresh state the moment a phase runs out instead of waiting out the poll
+  // interval, so the reveal and the next question aren't late. Once per round: an
+  // anchor that's already expired would otherwise refetch, expire again, and spin
+  // the endpoint.
+  const chased = useRef<number | null>(null)
+  useEffect(() => {
+    if (!live || secs > 0 || chased.current === live.round) return
+    chased.current = live.round
+    onExpire()
+  }, [live, secs, onExpire])
 
   const reveal = live?.phase === 'results'
   const total = reveal ? ROUND_SECONDS - ANSWER_SECONDS : ANSWER_SECONDS
@@ -1344,9 +1397,9 @@ function TriviaSlide({ venueId, qrImage }: { venueId: string; qrImage: string })
           <div className="text-sm uppercase tracking-[0.2em] text-white/40">
             This Week&apos;s Leaders
           </div>
-          {lb.length ? (
+          {leaderboard.length ? (
             <ol className="mt-3 space-y-1.5">
-              {lb.slice(0, 3).map((p, i) => (
+              {leaderboard.slice(0, 3).map((p, i) => (
                 <li
                   key={i}
                   style={{ animationDelay: `${300 + i * 120}ms` }}

@@ -45,3 +45,6 @@ next-env.d.ts
 
 # agent worktrees (registered in .git/worktrees, never track their checkout)
 .claude/worktrees/
+
+.vercel
+.env*

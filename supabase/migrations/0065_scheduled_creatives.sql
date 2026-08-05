@@ -1,4 +1,9 @@
--- 0063_scheduled_creatives.sql
+-- 0065_scheduled_creatives.sql
+--
+-- Numbering note: 0063/0064 were used by house_creatives and rate_card_75_50_40,
+-- which shipped to main and were later superseded and removed. Those numbers may
+-- already be applied against prod, so this picks up at 0065 rather than reusing
+-- them. The 0063/0064 gap is deliberate.
 -- Content calendar: an advertiser plans their spots up to a year out instead of
 -- remembering to swap creative the week of. One row = "on this date, this
 -- campaign should start running this creative".
