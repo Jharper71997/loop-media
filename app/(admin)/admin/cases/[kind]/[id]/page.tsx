@@ -5,6 +5,7 @@ import { AdvertiserCase } from './AdvertiserCase'
 import { BillingCase } from './BillingCase'
 import { UnsoldCase } from './UnsoldCase'
 import { HostOwedCase } from './HostOwedCase'
+import { AiringAfterCancelCase } from './AiringAfterCancelCase'
 
 // One route for every case on the board, so a case link is always
 // /admin/cases/<what is wrong>/<who it is about> and never a page-specific URL
@@ -18,6 +19,7 @@ const KINDS = [
   'money-overdue',
   'unsold',
   'host-owed',
+  'airing-after-cancel',
 ] as const
 type Kind = (typeof KINDS)[number]
 
@@ -43,5 +45,7 @@ export default async function CasePage({
       return <UnsoldCase venueId={id} />
     case 'host-owed':
       return <HostOwedCase hostId={id} />
+    case 'airing-after-cancel':
+      return <AiringAfterCancelCase campaignId={id} />
   }
 }

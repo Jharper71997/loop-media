@@ -64,13 +64,64 @@ export default async function VenueDetail({ params }: { params: Promise<{ id: st
   const tvs = (tvData ?? []) as Tv[]
 
   const adsByTv = new Map<string, number>()
+  // Who actually runs here. The page counted placements per screen and stopped
+  // there, so the one question a host or a sales call always asks — "who is on
+  // my screens?" — could not be answered from the venue's own page.
+  type RunnerRow = {
+    tv_id: string
+    ad: { title: string; owner_kind: string } | null
+    campaign: {
+      status: string
+      deleted_at: string | null
+      monthly_total_cents: number | null
+      comp_until: string | null
+      advertiser: { id: string; full_name: string | null; email: string } | null
+    } | null
+  }
+  const runners: {
+    id: string
+    name: string
+    adTitle: string
+    monthlyCents: number
+    free: boolean
+    ownerKind: string
+  }[] = []
   if (tvs.length) {
     const { data: pl } = await supabase
       .from('ad_placements')
-      .select('tv_id')
+      .select(
+        'tv_id, ad:ads(title, owner_kind), campaign:campaigns(status, deleted_at, monthly_total_cents, comp_until, advertiser:profiles!advertiser_id(id, full_name, email))'
+      )
       .in('tv_id', tvs.map((t) => t.id))
       .eq('status', 'active')
-    for (const p of pl ?? []) adsByTv.set(p.tv_id, (adsByTv.get(p.tv_id) ?? 0) + 1)
+    const one = <T,>(v: T | T[] | null | undefined): T | null =>
+      Array.isArray(v) ? (v[0] ?? null) : (v ?? null)
+    const seen = new Set<string>()
+    for (const raw of (pl ?? []) as unknown as RunnerRow[]) {
+      adsByTv.set(raw.tv_id, (adsByTv.get(raw.tv_id) ?? 0) + 1)
+      const ad = one(raw.ad)
+      const campaign = one(raw.campaign)
+      const advertiser = one(campaign?.advertiser)
+      if (!advertiser) continue
+      // A placement can outlive its campaign — cancelling does not always pull
+      // the ad off the screen — so listing every active placement would show
+      // advertisers who left as if they were still customers here.
+      if (campaign?.deleted_at) continue
+      if (campaign?.status !== 'active' && campaign?.status !== 'paused') continue
+      // One line per advertiser, not one per screen they occupy here.
+      const key = `${advertiser.id}:${ad?.title ?? ''}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      runners.push({
+        id: advertiser.id,
+        name: advertiser.full_name ?? advertiser.email,
+        adTitle: ad?.title ?? 'Untitled ad',
+        monthlyCents: campaign?.monthly_total_cents ?? 0,
+        free: !!campaign?.comp_until || (campaign?.monthly_total_cents ?? 0) === 0,
+        ownerKind: ad?.owner_kind ?? 'advertiser',
+      })
+    }
+    runners.sort((a, b) => b.monthlyCents - a.monthlyCents)
   }
   const liveCount = tvs.filter((t) => !!t.device_id && isTvLive(t.last_heartbeat_at)).length
 
@@ -352,6 +403,42 @@ export default async function VenueDetail({ params }: { params: Promise<{ id: st
                   </div>
                 ))}
               </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Who is on these screens — previously unanswerable from this page. */}
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
+              Advertisers running here
+            </p>
+            {runners.length === 0 ? (
+              <p className="mt-2 text-sm text-muted-foreground">
+                Nobody is running here yet. Every spot on these screens is open.
+              </p>
+            ) : (
+              <ul className="mt-2 divide-y divide-border">
+                {runners.map((r, i) => (
+                  <li key={i} className="flex items-center gap-3 py-2">
+                    <div className="min-w-0 flex-1">
+                      <Link
+                        href={`/admin/advertisers/${r.id}`}
+                        className="truncate text-sm font-medium hover:underline"
+                      >
+                        {r.name}
+                      </Link>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {r.adTitle}
+                        {r.ownerKind === 'host' && ' · own-screen promo'}
+                      </p>
+                    </div>
+                    <span className="shrink-0 font-mono text-sm tabular-nums text-muted-foreground">
+                      {r.free ? 'free' : formatCents(r.monthlyCents)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
             )}
           </CardContent>
         </Card>

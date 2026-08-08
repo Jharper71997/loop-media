@@ -376,6 +376,72 @@ export const loadCases = cache(async (territoryId: string | null): Promise<CaseB
     })
   }
 
+  // ---- Ads still airing for a campaign that ended ---------------------------
+  // Cancelling a campaign does not reliably pull its ad off the screens. Those
+  // placements keep playing and keep occupying a sellable spot, so the loss is
+  // twice: delivery for someone who left, and inventory you cannot sell to
+  // anyone who would pay for it.
+  {
+    const { data: ghostRows } = await supabase
+      .from('ad_placements')
+      .select(
+        'tv_id, ad:ads(title), campaign:campaigns(id, status, deleted_at, monthly_total_cents, advertiser:profiles!advertiser_id(id, full_name, email))'
+      )
+      .eq('status', 'active')
+      .not('campaign_id', 'is', null)
+    type GhostRow = {
+      tv_id: string
+      ad: { title: string } | { title: string }[] | null
+      campaign:
+        | {
+            id: string
+            status: string
+            deleted_at: string | null
+            monthly_total_cents: number | null
+            advertiser: { id: string; full_name: string | null; email: string } | { id: string; full_name: string | null; email: string }[] | null
+          }
+        | null
+    }
+    const pick = <T,>(v: T | T[] | null | undefined): T | null =>
+      Array.isArray(v) ? (v[0] ?? null) : (v ?? null)
+
+    const byCampaign = new Map<
+      string,
+      { name: string; adTitle: string; screens: number; monthly: number; status: string }
+    >()
+    for (const raw of (ghostRows ?? []) as unknown as GhostRow[]) {
+      const c = pick(raw.campaign)
+      if (!c) continue
+      const dead = !!c.deleted_at || (c.status !== 'active' && c.status !== 'paused')
+      if (!dead) continue
+      const adv = pick(c.advertiser)
+      const cur = byCampaign.get(c.id) ?? {
+        name: adv?.full_name ?? adv?.email ?? 'Unknown advertiser',
+        adTitle: pick(raw.ad)?.title ?? 'Their ad',
+        screens: 0,
+        monthly: c.monthly_total_cents ?? 0,
+        status: c.deleted_at ? 'deleted' : c.status,
+      }
+      cur.screens++
+      byCampaign.set(c.id, cur)
+    }
+
+    for (const [campaignId, g] of byCampaign) {
+      cases.push({
+        id: `airing-after-cancel:${campaignId}`,
+        kind: 'airing-after-cancel',
+        severity: 'critical',
+        title: g.name,
+        summary: `"${g.adTitle}" is still on ${g.screens} screen${g.screens === 1 ? '' : 's'} after the campaign was ${g.status} — airing free and holding spots you could sell`,
+        moneyCents: g.monthly,
+        moneyNote: 'was paying, still airing',
+        since: null,
+        href: `/admin/cases/airing-after-cancel/${campaignId}`,
+        subjectId: campaignId,
+      })
+    }
+  }
+
   // ---- Hosts who are not getting what hosting earns them --------------------
   // Two free advertising screens for every screen they host. This is the deal,
   // not a favour, and it was going undelivered silently: the perk is a Stripe
@@ -512,6 +578,8 @@ export const loadCases = cache(async (territoryId: string | null): Promise<CaseB
       (c) =>
         c.kind === 'screen-dark' ||
         c.kind === 'money-overdue' ||
+        // Not counted: an ad airing after cancellation is inventory leaking,
+        // not revenue we still have a claim on.
         ((c.kind === 'under-delivery' || c.kind === 'no-results') && !isFree(c.subjectId))
     )
     .reduce((s, c) => s + c.moneyCents, 0)

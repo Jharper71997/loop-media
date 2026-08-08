@@ -13,6 +13,7 @@ export type CaseKind =
   | 'money-overdue'
   | 'unsold'
   | 'host-owed'
+  | 'airing-after-cancel'
   | 'task'
 
 // critical = money is actively bleeding or a customer is being short-changed.
