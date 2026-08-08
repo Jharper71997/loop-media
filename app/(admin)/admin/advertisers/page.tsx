@@ -35,11 +35,34 @@ export default async function AdvertisersPage() {
     .order('created_at', { ascending: false })
   if (t) q = q.eq('territory_id', t)
 
-  const [{ data }, billing, results, { cases }] = await Promise.all([
+  // Deactivated advertisers are a Supabase auth ban (our reversible "on hold"
+  // flag, stored on auth.users rather than in our schema).
+  //
+  // NOTE: this is an unpaginatable GoTrue call with a hard 1,000-user ceiling.
+  // The clean fix is a profiles.deactivated_at column, which needs a migration —
+  // so it waits until the queued ones are applied. Until then it at least runs
+  // alongside the rest instead of after them; it used to sit at the end of the
+  // chain, adding its whole round trip to the page's time on its own.
+  const deactivatedIds = createAdminClient()
+    .auth.admin.listUsers({ perPage: 1000 })
+    .then(({ data: authList }) => {
+      const nowMs = Date.now()
+      const out = new Set<string>()
+      for (const u of authList?.users ?? []) {
+        const banned = (u as { banned_until?: string | null }).banned_until
+        if (banned && new Date(banned).getTime() > nowMs) out.add(u.id)
+      }
+      return out
+    })
+    // If the lookup fails, show everyone as active rather than hard-fail.
+    .catch(() => new Set<string>())
+
+  const [{ data }, billing, results, { cases }, deactivated] = await Promise.all([
     q,
     loadBillingRows(t),
     loadAdResults(t),
     loadCases(t),
+    deactivatedIds,
   ])
   let advertisers = (data ?? []) as Profile[]
 
@@ -72,25 +95,6 @@ export default async function AdvertisersPage() {
       if (ad.status === 'active' || ad.status === 'approved') cur.live++
       adsByOwner.set(ad.owner_user_id, cur)
     }
-  }
-
-  // Deactivated advertisers are a Supabase auth ban (our reversible "on hold"
-  // flag, stored on auth.users rather than in our schema).
-  //
-  // NOTE: this is an unpaginatable GoTrue call with a hard 1,000-user ceiling,
-  // and it is the slowest thing on this page. The clean fix is a
-  // profiles.deactivated_at column, which needs a migration — so it waits until
-  // the queued ones are applied.
-  const deactivated = new Set<string>()
-  try {
-    const { data: authList } = await createAdminClient().auth.admin.listUsers({ perPage: 1000 })
-    const nowMs = Date.now()
-    for (const u of authList?.users ?? []) {
-      const banned = (u as { banned_until?: string | null }).banned_until
-      if (banned && new Date(banned).getTime() > nowMs) deactivated.add(u.id)
-    }
-  } catch {
-    /* if the lookup fails, show everyone as active rather than hard-fail */
   }
 
   // Billing is keyed by campaign; an advertiser can hold more than one. Take the

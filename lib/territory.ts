@@ -1,3 +1,4 @@
+import { cache } from 'react'
 import { cookies } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -11,19 +12,27 @@ export interface TerritoryContext {
   locked: boolean // true for city-scoped admins (cannot switch)
 }
 
-// Resolves which territory an admin is currently looking at.
-// - City admins (profile.territory_id set) are pinned to their territory.
-// - Global admins (territory_id null) read a cookie; "all" -> null (no filter).
-export async function getTerritoryContext(
-  profile: Profile
-): Promise<TerritoryContext> {
+// The city list, once per request. Every admin page resolves territory context,
+// and the layout resolves it again for the switcher, so this ran twice on every
+// navigation for a list that changes about once a quarter. Keyed on nothing
+// because it takes no arguments — cache() here is purely "ask the database once".
+const loadTerritories = cache(async (): Promise<Territory[]> => {
   const supabase = await createClient()
   const { data } = await supabase
     .from('territories')
     .select('*')
     .eq('is_holding', false)
     .order('name')
-  const territories = (data ?? []) as Territory[]
+  return (data ?? []) as Territory[]
+})
+
+// Resolves which territory an admin is currently looking at.
+// - City admins (profile.territory_id set) are pinned to their territory.
+// - Global admins (territory_id null) read a cookie; "all" -> null (no filter).
+export async function getTerritoryContext(
+  profile: Profile
+): Promise<TerritoryContext> {
+  const territories = await loadTerritories()
 
   if (profile.territory_id) {
     return { territories, activeId: profile.territory_id, locked: true }

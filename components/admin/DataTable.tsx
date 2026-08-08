@@ -304,6 +304,14 @@ export function DataTable<T>({
                   ref={(el) => {
                     rowRefs.current[i] = el
                   }}
+                  // Start fetching the record the moment the pointer lands on
+                  // its row. These pages are fully dynamic, so Next.js will not
+                  // prefetch them on its own, and the click was paying for the
+                  // whole round trip with nothing warmed up. Hover is typically
+                  // a few hundred milliseconds ahead of the click — enough to
+                  // have the shared layout and the route's data in flight.
+                  onMouseEnter={() => link && router.prefetch(link)}
+                  onFocus={() => link && router.prefetch(link)}
                   onClick={(e) => {
                     setFocus(i)
                     if (!link) return

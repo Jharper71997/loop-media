@@ -1,9 +1,18 @@
+import { cache } from 'react'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import type { Profile } from '@/lib/db.types'
 
 // Current signed-in profile (or null). Safe to call in Server Components.
-export async function getProfile(): Promise<Profile | null> {
+//
+// cache()d for the request, and that is not a micro-optimisation. `auth.getUser()`
+// is a full HTTPS round trip to Supabase's auth service — it does not read the
+// JWT locally, it asks GoTrue to validate it — and every admin page called this
+// TWICE per navigation: once in the layout to gate the area, once in the page to
+// scope the queries. With middleware's own refresh that made three auth round
+// trips plus two identical profile selects before a single row of the page's own
+// data was requested. Now the first caller pays, the rest are free.
+export const getProfile = cache(async (): Promise<Profile | null> => {
   const supabase = await createClient()
   const {
     data: { user },
@@ -15,7 +24,7 @@ export async function getProfile(): Promise<Profile | null> {
     .eq('id', user.id)
     .single()
   return (data as Profile) ?? null
-}
+})
 
 export async function requireProfile(): Promise<Profile> {
   const profile = await getProfile()

@@ -1,4 +1,3 @@
-import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { ImageOff, Tv as TvIcon } from 'lucide-react'
 import { requireAdmin } from '@/lib/auth'
@@ -10,12 +9,13 @@ import { RecordShell, RailPanel, RailFact } from '@/components/admin/RecordShell
 import {
   VerdictBlock,
   VerdictSkeleton,
+  StatusBadges,
+  BadgesSkeleton,
+  MoneyAndHostPanels,
+  RailSkeleton,
   ActivityBlock,
   ActivitySkeleton,
 } from './Streamed'
-import { loadBillingRows } from '@/lib/adminInbox'
-import { loadHostBenefits } from '@/lib/hostBenefit'
-import { HEALTH_VARIANT, BILLING_METHOD_LABEL } from '@/lib/billing'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { formatCents, formatNumber, formatDateTime } from '@/lib/format'
@@ -58,87 +58,101 @@ export default async function AdvertiserDetail({
   searchParams?: Promise<{ tab?: string }>
 }) {
   const profile = await requireAdmin()
-  const territory = await getTerritoryContext(profile)
   const { id } = await params
   const supabase = await createClient()
 
-  // No role filter. Hosts buy advertising too — two of the accounts running ads
-  // on real screens today are role='host' — and gating this page on
-  // role='advertiser' 404'd the very records the roster now links to.
-  const { data: advData } = await supabase.from('profiles').select('*').eq('id', id).maybeSingle()
-  if (!advData) notFound()
-  const advertiser = advData as Profile
+  // Everything that needs nothing but the id, at once.
+  //
+  // These used to run one after another — profile, then the auth lookup, then
+  // campaigns, then subscriptions — which cost four sequential round trips to
+  // paint a header. None of them depends on another's result, so the page is
+  // only as slow as the slowest one.
+  //
+  // No role filter on the profile. Hosts buy advertising too — two of the
+  // accounts running ads on real screens today are role='host' — and gating this
+  // page on role='advertiser' 404'd the very records the roster links to.
+  const [territory, advRes, deactivated, campRes, subRes, sp] = await Promise.all([
+    getTerritoryContext(profile),
+    supabase.from('profiles').select('*').eq('id', id).maybeSingle(),
+    // Deactivated = a Supabase auth ban (our reversible "on hold" flag, which
+    // lives on auth.users, not profiles). Treat a lookup failure as active so
+    // the page never hard-fails on it.
+    createAdminClient()
+      .auth.admin.getUserById(id)
+      .then(({ data }) => {
+        const until = (data?.user as { banned_until?: string | null } | undefined)?.banned_until
+        return !!until && new Date(until).getTime() > Date.now()
+      })
+      .catch(() => false),
+    supabase
+      .from('campaigns')
+      .select('*, ad:ads(*), package:packages(name, base_price_cents, screen_cap)')
+      .eq('advertiser_id', id)
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('subscriptions')
+      .select('*')
+      .eq('advertiser_id', id)
+      .order('created_at', { ascending: false }),
+    searchParams,
+  ])
 
-  // Deactivated = a Supabase auth ban (our reversible "on hold" flag, which lives on
-  // auth.users, not profiles). Read it via the admin API; treat a lookup failure as
-  // active so the page never hard-fails on it.
-  let deactivated = false
-  try {
-    const { data: authUser } = await createAdminClient().auth.admin.getUserById(id)
-    const bannedUntil = (authUser?.user as { banned_until?: string | null } | undefined)?.banned_until
-    deactivated = !!bannedUntil && new Date(bannedUntil).getTime() > Date.now()
-  } catch {
-    /* treat as active */
-  }
-
-  const { data: campData } = await supabase
-    .from('campaigns')
-    .select('*, ad:ads(*), package:packages(name, base_price_cents, screen_cap)')
-    .eq('advertiser_id', id)
-    .order('created_at', { ascending: false })
-  const campaigns = (campData ?? []) as unknown as CampaignRow[]
+  if (!advRes.data) notFound()
+  const advertiser = advRes.data as Profile
+  const campaigns = (campRes.data ?? []) as unknown as CampaignRow[]
 
   const campaignIds = campaigns.map((c) => c.id)
   const adIds = campaigns.map((c) => c.ad_id).filter((x): x is string => !!x)
 
-  // Subscriptions for this advertiser (mapped by campaign).
-  const { data: subData } = await supabase
-    .from('subscriptions')
-    .select('*')
-    .eq('advertiser_id', id)
-    .order('created_at', { ascending: false })
-  const subs = (subData ?? []) as Subscription[]
+  const subs = (subRes.data ?? []) as Subscription[]
   const subByCampaign = new Map<string, Subscription>()
   for (const s of subs) if (s.campaign_id && !subByCampaign.has(s.campaign_id)) subByCampaign.set(s.campaign_id, s)
+
+  // The two queries that genuinely need the campaign ids — so they wait, but
+  // only for each other.
+  const since = new Date()
+  since.setUTCDate(since.getUTCDate() - PERF_WINDOW_DAYS)
+  const [plRes, scanRes] = await Promise.all([
+    campaignIds.length
+      ? supabase
+          .from('ad_placements')
+          .select('campaign_id, tv:tvs(id, venue:venues(id, foot_traffic_estimate))')
+          .in('campaign_id', campaignIds)
+          .neq('status', 'ended')
+      : Promise.resolve({ data: [] }),
+    adIds.length
+      ? supabase
+          .from('qr_scans')
+          .select('ad_id')
+          .in('ad_id', adIds)
+          .eq('is_bot', false)
+          .gte('scanned_at', since.toISOString())
+      : Promise.resolve({ data: [] }),
+  ])
 
   // Active placements → distinct screens + distinct venues (for est impressions).
   const screensByCampaign = new Map<string, Set<string>>()
   const venuesByCampaign = new Map<string, Map<string, number>>()
-  if (campaignIds.length) {
-    const { data: plData } = await supabase
-      .from('ad_placements')
-      .select('campaign_id, tv:tvs(id, venue:venues(id, foot_traffic_estimate))')
-      .in('campaign_id', campaignIds)
-      .neq('status', 'ended')
-    type PRow = {
-      campaign_id: string | null
-      tv: { id: string; venue: { id: string; foot_traffic_estimate: number } | null } | null
-    }
-    for (const p of (plData ?? []) as unknown as PRow[]) {
-      if (!p.campaign_id || !p.tv) continue
-      const screens = screensByCampaign.get(p.campaign_id) ?? new Set<string>()
-      screens.add(p.tv.id)
-      screensByCampaign.set(p.campaign_id, screens)
-      if (p.tv.venue) {
-        const vmap = venuesByCampaign.get(p.campaign_id) ?? new Map<string, number>()
-        vmap.set(p.tv.venue.id, p.tv.venue.foot_traffic_estimate ?? 0)
-        venuesByCampaign.set(p.campaign_id, vmap)
-      }
+  type PRow = {
+    campaign_id: string | null
+    tv: { id: string; venue: { id: string; foot_traffic_estimate: number } | null } | null
+  }
+  for (const p of (plRes.data ?? []) as unknown as PRow[]) {
+    if (!p.campaign_id || !p.tv) continue
+    const screens = screensByCampaign.get(p.campaign_id) ?? new Set<string>()
+    screens.add(p.tv.id)
+    screensByCampaign.set(p.campaign_id, screens)
+    if (p.tv.venue) {
+      const vmap = venuesByCampaign.get(p.campaign_id) ?? new Map<string, number>()
+      vmap.set(p.tv.venue.id, p.tv.venue.foot_traffic_estimate ?? 0)
+      venuesByCampaign.set(p.campaign_id, vmap)
     }
   }
 
   // Measured QR scans over the window, counted per ad.
   const scansByAd = new Map<string, number>()
-  if (adIds.length) {
-    const since = new Date()
-    since.setUTCDate(since.getUTCDate() - PERF_WINDOW_DAYS)
-    const { data: scanData } = await supabase
-      .from('qr_scans')
-      .select('ad_id')
-      .in('ad_id', adIds)
-      .eq('is_bot', false)
-      .gte('scanned_at', since.toISOString())
-    for (const s of scanData ?? []) scansByAd.set(s.ad_id, (scansByAd.get(s.ad_id) ?? 0) + 1)
+  for (const s of ((scanRes.data ?? []) as { ad_id: string }[])) {
+    scansByAd.set(s.ad_id, (scansByAd.get(s.ad_id) ?? 0) + 1)
   }
 
   // Monthly price per campaign = the cart total frozen at checkout.
@@ -151,26 +165,8 @@ export default async function AdvertiserDetail({
   const totalScans = [...scansByAd.values()].reduce((a, b) => a + b, 0)
   const territoryName = (tid: string | null) =>
     tid ? territory.territories.find((x) => x.id === tid)?.name ?? '—' : '—'
-
-  // Everything the record needs to lead with a verdict and a history, from the
-  // same engines the board and the case pages use — so this page and Today can
-  // never tell you different things about the same account.
-  const [billing, benefits] = await Promise.all([
-    loadBillingRows(territory.activeId),
-    loadHostBenefits(territory.activeId),
-  ])
-  const theirBilling = billing.filter((b) => b.advertiserId === id)
-  const worstBilling = [...theirBilling].sort(
-    (a, b) =>
-      ({ unbilled: 0, overdue: 1, due: 2, ok: 3 })[a.billing.health] -
-      ({ unbilled: 0, overdue: 1, due: 2, ok: 3 })[b.billing.health]
-  )[0]
-  const hostBenefit = benefits.find((b) => b.hostId === id)
-  const tab = (await searchParams)?.tab ?? 'overview'
-
-  const healthyLine = worstBilling
-    ? `Nothing open. ${worstBilling.billing.summary}, ${formatCents(monthlySpend)}/mo across ${campaigns.filter((c) => c.status === 'active').length} live campaign${campaigns.filter((c) => c.status === 'active').length === 1 ? '' : 's'}.`
-    : 'Nothing open, and no live campaign either — this account has never been on a screen.'
+  const liveCampaigns = campaigns.filter((c) => c.status === 'active').length
+  const tab = sp?.tab ?? 'overview'
 
   return (
     <RecordShell
@@ -188,12 +184,9 @@ export default async function AdvertiserDetail({
       badges={
         <>
           {deactivated && <Badge variant="warning">On hold</Badge>}
-          {hostBenefit && <Badge variant="outline">Host</Badge>}
-          {worstBilling && (
-            <Badge variant={HEALTH_VARIANT[worstBilling.billing.health]}>
-              {worstBilling.billing.summary}
-            </Badge>
-          )}
+          <Suspense fallback={<BadgesSkeleton />}>
+            <StatusBadges advertiserId={id} territoryId={territory.activeId} />
+          </Suspense>
         </>
       }
       actions={
@@ -222,7 +215,8 @@ export default async function AdvertiserDetail({
           <VerdictBlock
             advertiserId={id}
             territoryId={territory.activeId}
-            healthyLine={healthyLine}
+            monthlyCents={monthlySpend}
+            liveCampaigns={liveCampaigns}
           />
         </Suspense>
       }
@@ -251,44 +245,18 @@ export default async function AdvertiserDetail({
             <RailFact label="Joined" value={formatDateTime(advertiser.created_at)} />
           </RailPanel>
 
-          <RailPanel title="Money">
-            <RailFact label="Monthly" value={formatCents(monthlySpend)} />
-            <RailFact label="Billing" value={worstBilling?.billing.summary ?? 'No live campaign'} />
-            <RailFact
-              label="Method"
-              value={worstBilling ? BILLING_METHOD_LABEL[worstBilling.billing.method] : null}
+          <Suspense fallback={<RailSkeleton />}>
+            <MoneyAndHostPanels
+              advertiserId={id}
+              territoryId={territory.activeId}
+              monthlyCents={monthlySpend}
             />
-            {worstBilling && (
-              <div className="mt-2">
-                <Link
-                  href={`/admin/money?campaign=${worstBilling.campaignId}`}
-                  className="text-xs text-primary hover:underline"
-                >
-                  Open in billing →
-                </Link>
-              </div>
-            )}
-          </RailPanel>
-
-          {hostBenefit && (
-            <RailPanel title="Host benefit">
-              <RailFact label="Screens hosted" value={hostBenefit.hostedTvs} />
-              <RailFact label="Free screens earned" value={hostBenefit.owed} />
-              <RailFact label="Using" value={hostBenefit.using} />
-              <RailFact label="Code" value={hostBenefit.compCode} />
-              <p className="mt-2 text-xs text-muted-foreground">
-                {hostBenefit.venueNames.join(', ')}
-              </p>
-            </RailPanel>
-          )}
+          </Suspense>
 
           <RailPanel title="Measured, 30 days">
             <RailFact label="QR scans" value={formatNumber(totalScans)} />
             <RailFact label="Campaigns" value={formatNumber(campaigns.length)} />
-            <RailFact
-              label="Live"
-              value={formatNumber(campaigns.filter((c) => c.status === 'active').length)}
-            />
+            <RailFact label="Live" value={formatNumber(liveCampaigns)} />
           </RailPanel>
         </>
       }
@@ -315,10 +283,7 @@ export default async function AdvertiserDetail({
             {[
               { label: 'Monthly', value: formatCents(monthlySpend) },
               { label: 'Campaigns', value: formatNumber(campaigns.length) },
-              {
-                label: 'Live',
-                value: formatNumber(campaigns.filter((c) => c.status === 'active').length),
-              },
+              { label: 'Live', value: formatNumber(liveCampaigns) },
               { label: 'Scans 30d', value: formatNumber(totalScans) },
             ].map((s) => (
               <div key={s.label} className="bg-card px-3 py-2.5">
