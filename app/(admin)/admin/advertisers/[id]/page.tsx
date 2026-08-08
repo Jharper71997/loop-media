@@ -1,11 +1,22 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft, ImageOff, Tv as TvIcon } from 'lucide-react'
+import { ImageOff, Tv as TvIcon } from 'lucide-react'
 import { requireAdmin } from '@/lib/auth'
 import { getTerritoryContext } from '@/lib/territory'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { PageHeader } from '@/components/admin/PageHeader'
+import {
+  RecordShell,
+  RecordVerdict,
+  RailPanel,
+  RailFact,
+  ActivityTimeline,
+} from '@/components/admin/RecordShell'
+import { loadVerdict } from '@/lib/verdict'
+import { loadActivity } from '@/lib/activity'
+import { loadBillingRows } from '@/lib/adminInbox'
+import { loadHostBenefits } from '@/lib/hostBenefit'
+import { HEALTH_VARIANT, BILLING_METHOD_LABEL } from '@/lib/billing'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { formatCents, formatNumber, formatDateTime } from '@/lib/format'
@@ -42,20 +53,20 @@ function statusBadge(campaign: CampaignRow): { label: string; variant: BadgeVari
 
 export default async function AdvertiserDetail({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>
+  searchParams?: Promise<{ tab?: string }>
 }) {
   const profile = await requireAdmin()
   const territory = await getTerritoryContext(profile)
   const { id } = await params
   const supabase = await createClient()
 
-  const { data: advData } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', id)
-    .eq('role', 'advertiser')
-    .maybeSingle()
+  // No role filter. Hosts buy advertising too — two of the accounts running ads
+  // on real screens today are role='host' — and gating this page on
+  // role='advertiser' 404'd the very records the roster now links to.
+  const { data: advData } = await supabase.from('profiles').select('*').eq('id', id).maybeSingle()
   if (!advData) notFound()
   const advertiser = advData as Profile
 
@@ -142,82 +153,190 @@ export default async function AdvertiserDetail({
   const territoryName = (tid: string | null) =>
     tid ? territory.territories.find((x) => x.id === tid)?.name ?? '—' : '—'
 
+  // Everything the record needs to lead with a verdict and a history, from the
+  // same engines the board and the case pages use — so this page and Today can
+  // never tell you different things about the same account.
+  const [verdict, activity, billing, benefits] = await Promise.all([
+    loadVerdict({ kind: 'advertiser', id }, territory.activeId),
+    loadActivity({ kind: 'advertiser', id }),
+    loadBillingRows(territory.activeId),
+    loadHostBenefits(territory.activeId),
+  ])
+  const theirBilling = billing.filter((b) => b.advertiserId === id)
+  const worstBilling = [...theirBilling].sort(
+    (a, b) =>
+      ({ unbilled: 0, overdue: 1, due: 2, ok: 3 })[a.billing.health] -
+      ({ unbilled: 0, overdue: 1, due: 2, ok: 3 })[b.billing.health]
+  )[0]
+  const hostBenefit = benefits.find((b) => b.hostId === id)
+  const tab = (await searchParams)?.tab ?? 'overview'
+
+  const healthyLine = worstBilling
+    ? `Nothing open. ${worstBilling.billing.summary}, ${formatCents(monthlySpend)}/mo across ${campaigns.filter((c) => c.status === 'active').length} live campaign${campaigns.filter((c) => c.status === 'active').length === 1 ? '' : 's'}.`
+    : 'Nothing open, and no live campaign either — this account has never been on a screen.'
+
   return (
-    <>
-      <PageHeader
-        title={advertiser.full_name ?? advertiser.email}
-        description={advertiser.email}
-        action={
-          <div className="flex items-center gap-2">
-            <EditAdvertiserDialog
-              id={advertiser.id}
-              fullName={advertiser.full_name}
-              phone={advertiser.phone}
-              territoryId={advertiser.territory_id}
-              territories={territory.territories.map((t) => ({ id: t.id, name: t.name }))}
+    <RecordShell
+      backHref="/admin/advertisers"
+      backLabel="All advertisers"
+      title={advertiser.full_name ?? advertiser.email}
+      subtitle={advertiser.email}
+      basePath={`/admin/advertisers/${id}`}
+      activeTab={tab}
+      tabs={[
+        { id: 'overview', label: 'Overview' },
+        { id: 'campaigns', label: 'Ads & campaigns', count: campaigns.length },
+        { id: 'activity', label: 'Activity', count: activity.length },
+      ]}
+      badges={
+        <>
+          {deactivated && <Badge variant="warning">On hold</Badge>}
+          {hostBenefit && <Badge variant="outline">Host</Badge>}
+          {worstBilling && (
+            <Badge variant={HEALTH_VARIANT[worstBilling.billing.health]}>
+              {worstBilling.billing.summary}
+            </Badge>
+          )}
+        </>
+      }
+      actions={
+        <>
+          <EditAdvertiserDialog
+            id={advertiser.id}
+            fullName={advertiser.full_name}
+            phone={advertiser.phone}
+            territoryId={advertiser.territory_id}
+            territories={territory.territories.map((t) => ({ id: t.id, name: t.name }))}
+          />
+          <AdvertiserStatusControls
+            id={advertiser.id}
+            deactivated={deactivated}
+            freeWeekCredit={!!(advertiser as { free_week_credit?: boolean }).free_week_credit}
+          />
+          <DeleteAdvertiserDialog
+            id={advertiser.id}
+            name={advertiser.full_name}
+            email={advertiser.email}
+          />
+        </>
+      }
+      verdict={
+        <RecordVerdict
+          cases={verdict.cases}
+          moneyCents={verdict.moneyCents}
+          healthyLine={healthyLine}
+        />
+      }
+      rail={
+        <>
+          <RailPanel title="Contact">
+            <RailFact
+              label="Email"
+              value={
+                <a href={`mailto:${advertiser.email}`} className="hover:underline">
+                  {advertiser.email}
+                </a>
+              }
             />
-            <AdvertiserStatusControls
-              id={advertiser.id}
-              deactivated={deactivated}
-              freeWeekCredit={!!(advertiser as { free_week_credit?: boolean }).free_week_credit}
+            <RailFact
+              label="Phone"
+              value={
+                advertiser.phone ? (
+                  <a href={`tel:${advertiser.phone}`} className="hover:underline">
+                    {advertiser.phone}
+                  </a>
+                ) : null
+              }
             />
-            <DeleteAdvertiserDialog
-              id={advertiser.id}
-              name={advertiser.full_name}
-              email={advertiser.email}
+            <RailFact label="Territory" value={territoryName(advertiser.territory_id)} />
+            <RailFact label="Joined" value={formatDateTime(advertiser.created_at)} />
+          </RailPanel>
+
+          <RailPanel title="Money">
+            <RailFact label="Monthly" value={formatCents(monthlySpend)} />
+            <RailFact label="Billing" value={worstBilling?.billing.summary ?? 'No live campaign'} />
+            <RailFact
+              label="Method"
+              value={worstBilling ? BILLING_METHOD_LABEL[worstBilling.billing.method] : null}
             />
-          </div>
-        }
-      />
+            {worstBilling && (
+              <div className="mt-2">
+                <Link
+                  href={`/admin/money?campaign=${worstBilling.campaignId}`}
+                  className="text-xs text-primary hover:underline"
+                >
+                  Open in billing →
+                </Link>
+              </div>
+            )}
+          </RailPanel>
 
-      <div className="space-y-6 p-6">
-        <Link
-          href="/admin/advertisers"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="size-4" /> All advertisers
-        </Link>
+          {hostBenefit && (
+            <RailPanel title="Host benefit">
+              <RailFact label="Screens hosted" value={hostBenefit.hostedTvs} />
+              <RailFact label="Free screens earned" value={hostBenefit.owed} />
+              <RailFact label="Using" value={hostBenefit.using} />
+              <RailFact label="Code" value={hostBenefit.compCode} />
+              <p className="mt-2 text-xs text-muted-foreground">
+                {hostBenefit.venueNames.join(', ')}
+              </p>
+            </RailPanel>
+          )}
 
-        {deactivated && (
-          <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
-            <p className="font-medium">This advertiser is deactivated</p>
-            <p className="text-muted-foreground">
-              Their login is blocked, billing is paused, and their ads are off screens. Use
-              Reactivate to restore everything, or Delete to remove them permanently.
-            </p>
-          </div>
-        )}
-
-        {/* Top stats */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {[
-            { label: 'Monthly spend', value: formatCents(monthlySpend) },
-            { label: 'Campaigns', value: formatNumber(campaigns.length) },
-            {
-              label: 'Active campaigns',
-              value: formatNumber(campaigns.filter((c) => c.status === 'active').length),
-            },
-            { label: 'QR scans · 30d', value: formatNumber(totalScans) },
-          ].map((s) => (
-            <Card key={s.label}>
-              <CardContent className="p-3">
-                <p className="text-sm text-muted-foreground">{s.label}</p>
-                <p className="mt-1 text-2xl font-semibold tabular-nums">{s.value}</p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        <div className="space-y-1">
-          <p className="text-xs text-muted-foreground">
-            Phone {advertiser.phone ?? '—'} · Territory {territoryName(advertiser.territory_id)} ·
-            Joined {formatDateTime(advertiser.created_at)}
+          <RailPanel title="Measured, 30 days">
+            <RailFact label="QR scans" value={formatNumber(totalScans)} />
+            <RailFact label="Campaigns" value={formatNumber(campaigns.length)} />
+            <RailFact
+              label="Live"
+              value={formatNumber(campaigns.filter((c) => c.status === 'active').length)}
+            />
+          </RailPanel>
+        </>
+      }
+    >
+      {deactivated && (
+        <div className="rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
+          <p className="font-medium">This advertiser is deactivated</p>
+          <p className="text-muted-foreground">
+            Their login is blocked, billing is paused, and their ads are off screens. Use
+            Reactivate to restore everything, or Delete to remove them permanently.
           </p>
         </div>
+      )}
 
-        {/* Campaigns */}
+      {tab === 'activity' && <ActivityTimeline events={activity} />}
+
+      {tab === 'overview' && (
+        <>
+          <div className="grid gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-4">
+            {[
+              { label: 'Monthly', value: formatCents(monthlySpend) },
+              { label: 'Campaigns', value: formatNumber(campaigns.length) },
+              {
+                label: 'Live',
+                value: formatNumber(campaigns.filter((c) => c.status === 'active').length),
+              },
+              { label: 'Scans 30d', value: formatNumber(totalScans) },
+            ].map((s) => (
+              <div key={s.label} className="bg-card px-3 py-2.5">
+                <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                  {s.label}
+                </p>
+                <p className="mt-0.5 font-mono text-xl font-semibold tabular-nums">{s.value}</p>
+              </div>
+            ))}
+          </div>
+          <div>
+            <h2 className="mb-2 text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
+              Recent activity
+            </h2>
+            <ActivityTimeline events={activity.slice(0, 8)} />
+          </div>
+        </>
+      )}
+
+      {tab === 'campaigns' && (
         <div>
-          <h2 className="mb-3 text-lg font-medium">Campaigns</h2>
           {campaigns.length === 0 ? (
             <Card>
               <CardContent className="p-3 text-sm text-muted-foreground">
@@ -312,7 +431,7 @@ export default async function AdvertiserDetail({
             </div>
           )}
         </div>
-      </div>
-    </>
+      )}
+    </RecordShell>
   )
 }
