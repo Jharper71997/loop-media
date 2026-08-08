@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { requireAdmin } from '@/lib/auth'
 import { getTerritoryContext } from '@/lib/territory'
 import { PageHeader } from '@/components/admin/PageHeader'
+import { SectionTabs, ADVERTISER_TABS } from '@/components/admin/SectionTabs'
 import { ExportCsvButton } from '@/components/admin/ExportCsvButton'
 import { formatCents } from '@/lib/format'
 import { loadAdminReports, RANGE_DAYS, DEFAULT_RANGE } from '@/lib/adminReports'
@@ -66,6 +67,7 @@ export default async function ReportsPage({
         description={`${scope} · last ${RANGE_LABEL[days]}, compared with the ${RANGE_LABEL[days]} before it`}
         action={<ExportCsvButton filename={`loop-reports-${days}d.csv`} rows={csvRows} />}
       />
+      <SectionTabs tabs={ADVERTISER_TABS} />
 
       {/* Range filter — one row above the charts, per the interaction spec. */}
       <div className="flex gap-1 border-b border-border px-5 py-2 md:px-6">

@@ -4,6 +4,7 @@ import { requireAdmin } from '@/lib/auth'
 import { getTerritoryContext } from '@/lib/territory'
 import { createClient } from '@/lib/supabase/server'
 import { PageHeader } from '@/components/admin/PageHeader'
+import { SectionTabs, ADVERTISER_TABS } from '@/components/admin/SectionTabs'
 import { HudBody, StatStrip, Stat, Panel } from '@/components/admin/hud'
 import { buttonVariants } from '@/components/ui/button'
 import { formatCents } from '@/lib/format'
@@ -74,6 +75,7 @@ export default async function PipelinePage({
 
       {/* Board vs dashboard, and which pipeline. Two sales motions that feed
           each other: hosts create the inventory advertisers buy. */}
+      <SectionTabs tabs={ADVERTISER_TABS} />
       <PipelineTabs kind={kind} />
 
       <HudBody>

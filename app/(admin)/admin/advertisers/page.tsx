@@ -4,6 +4,7 @@ import { getTerritoryContext } from '@/lib/territory'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { PageHeader } from '@/components/admin/PageHeader'
+import { SectionTabs, ADVERTISER_TABS } from '@/components/admin/SectionTabs'
 import { ListSearch } from '@/components/admin/ListSearch'
 import {
   Table,
@@ -159,6 +160,7 @@ export default async function AdvertisersPage({
         title="Advertisers"
         description={`${advertisers.length} advertiser${advertisers.length === 1 ? '' : 's'}`}
       />
+      <SectionTabs tabs={ADVERTISER_TABS} />
 
       <div className="space-y-3 p-3 md:p-4">
         <ListSearch

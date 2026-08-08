@@ -4,6 +4,7 @@ import { requireAdmin } from '@/lib/auth'
 import { getTerritoryContext } from '@/lib/territory'
 import { createClient } from '@/lib/supabase/server'
 import { PageHeader } from '@/components/admin/PageHeader'
+import { SectionTabs, MONEY_TABS } from '@/components/admin/SectionTabs'
 import { Badge } from '@/components/ui/badge'
 import { ExportCsvButton } from '@/components/admin/ExportCsvButton'
 import { HudBody, StatStrip, Stat, Panel, Num } from '@/components/admin/hud'
@@ -26,13 +27,31 @@ import { AccountActions } from './AccountActions'
 // is now the hover title on each stat: the definition is still one gesture away,
 // but it no longer costs three lines of the screen every time you load the page.
 
-export default async function MoneyPage() {
+export default async function MoneyPage({
+  searchParams,
+}: {
+  // `?campaign=` is how every case page hands off ("Convert them to paid",
+  // "Record the payment"). Without it the link landed on the full unfiltered
+  // list and you had to find the account again by eye.
+  searchParams?: Promise<{ campaign?: string }>
+}) {
   const profile = await requireAdmin()
   const territory = await getTerritoryContext(profile)
   const t = territory.activeId
   const supabase = await createClient()
+  const focusCampaign = (await searchParams)?.campaign ?? null
 
-  const [rows, settings] = await Promise.all([loadBillingRows(t), getSettings()])
+  const [allRows, settings] = await Promise.all([loadBillingRows(t), getSettings()])
+  // Keep the worst-first order, but float the account you were sent here for.
+  const rows = focusCampaign
+    ? [
+        ...allRows.filter((r) => r.campaignId === focusCampaign),
+        ...allRows.filter((r) => r.campaignId !== focusCampaign),
+      ]
+    : allRows
+  const focusName = focusCampaign
+    ? (allRows.find((r) => r.campaignId === focusCampaign)?.advertiserName ?? null)
+    : null
 
   // Cash actually received, from the ledger the Stripe webhook and the
   // record-payment action both write to.
@@ -104,6 +123,7 @@ export default async function MoneyPage() {
         }
         action={<ExportCsvButton filename="loop-accounts.csv" rows={csvRows} />}
       />
+      <SectionTabs tabs={MONEY_TABS} />
 
       <HudBody>
         <StatStrip cols={5}>
@@ -178,7 +198,18 @@ export default async function MoneyPage() {
         {/* ---- Every live account ---- */}
         <Panel
           title="Live accounts"
-          note="worst first — unbilled, then overdue, then due soon"
+          note={
+            focusName
+              ? `${focusName} first — worst first below`
+              : 'worst first — unbilled, then overdue, then due soon'
+          }
+          action={
+            focusCampaign ? (
+              <Link href="/admin/money" className="text-xs text-muted-foreground hover:underline">
+                Clear
+              </Link>
+            ) : undefined
+          }
           bodyClassName="p-0"
         >
           {rows.length === 0 ? (
@@ -196,7 +227,10 @@ export default async function MoneyPage() {
                 return (
                   <li
                     key={r.campaignId}
-                    className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2"
+                    className={
+                      'flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2' +
+                      (r.campaignId === focusCampaign ? ' bg-primary/10' : '')
+                    }
                   >
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">

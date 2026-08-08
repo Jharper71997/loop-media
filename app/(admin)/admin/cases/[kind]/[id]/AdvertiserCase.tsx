@@ -384,7 +384,7 @@ export async function AdvertiserCase({
                 detail={`This one is ${creativeAgeDays} day${creativeAgeDays === 1 ? '' : 's'} old${camp.ad.qr_target_url ? '' : ' and has no scan destination at all'}. A dated spot with no offer is the usual cause of a flat scan line.`}
               />
               <CaseAction
-                href={`/admin/advertisers/${camp.advertiser?.id ?? ''}`}
+                href={camp.advertiser?.id ? `/admin/advertisers/${camp.advertiser.id}` : '/admin/advertisers'}
                 label="Look at what they are asking people to do"
                 detail={
                   camp.ad.qr_target_url
@@ -411,7 +411,7 @@ export async function AdvertiserCase({
             />
           )}
           <CaseAction
-            href={`/admin/advertisers/${camp.advertiser?.id ?? ''}`}
+            href={camp.advertiser?.id ? `/admin/advertisers/${camp.advertiser.id}` : '/admin/advertisers'}
             label="Open the advertiser"
             detail={`Everything else they run with us · signed up ${timeAgo(camp.created_at)}`}
           />

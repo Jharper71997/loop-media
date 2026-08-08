@@ -203,7 +203,7 @@ export async function BillingCase({
             />
           )}
           <CaseAction
-            href={`/admin/advertisers/${camp.advertiser?.id ?? ''}`}
+            href={camp.advertiser?.id ? `/admin/advertisers/${camp.advertiser.id}` : '/admin/advertisers'}
             label="Open the advertiser"
             detail="Their whole history with us, in one place."
           />

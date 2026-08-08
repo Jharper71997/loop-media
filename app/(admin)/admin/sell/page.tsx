@@ -3,6 +3,7 @@ import { Plus, Mail, Phone, User } from 'lucide-react'
 import { requireAdmin } from '@/lib/auth'
 import { getTerritoryContext } from '@/lib/territory'
 import { PageHeader } from '@/components/admin/PageHeader'
+import { SectionTabs, ADVERTISER_TABS } from '@/components/admin/SectionTabs'
 import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
 import { ExportCsvButton } from '@/components/admin/ExportCsvButton'
@@ -85,6 +86,7 @@ export default async function SellPage({
           </div>
         }
       />
+      <SectionTabs tabs={ADVERTISER_TABS} />
 
       <HudBody>
         {/* ---- The gap, stated plainly ---- */}
