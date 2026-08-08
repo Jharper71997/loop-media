@@ -21,7 +21,7 @@ import {
 import { notifyCampaignCreated } from '@/lib/notifyAdvertiser'
 import { notifyAdminNewAd } from '@/lib/notifyAdmin'
 import { CREATIVE_SETUP_FEE_CENTS, CREATIVE_REFRESH_CENTS } from '@/lib/fees'
-import { hostCompCodeForUser, hostCompPromotionId, hostFreeScreenAllowance } from '@/lib/hostComp'
+import { hostCompPromotionId, hostFreeScreenUsage, ensureHostCompCode } from '@/lib/hostComp'
 import { QR_SIZE_DEFAULT, isOwnCreativeUrl, clampSpotSeconds } from '@/lib/adCreative'
 
 export interface NewCampaignInput {
@@ -316,16 +316,22 @@ export async function submitCampaign(input: NewCampaignInput): Promise<SubmitRes
       // rejects `discounts` alongside `allow_promotion_codes`, so it's one or the
       // other — a host without a usable code still gets the manual box.
       //
-      // Only up to what they have earned: two free screens per screen they host.
-      // The coupon is 100% off the ENTIRE order, so auto-applying it to a bigger
-      // cart would quietly comp every screen in it against a perk that covers
-      // fewer. Over the allowance we apply nothing and leave the manual box —
-      // same as before this existed.
-      const allowance =
-        profile.role === 'host' ? await hostFreeScreenAllowance(admin, profile.id) : 0
+      // Only up to what they have LEFT: two free screens per screen they host,
+      // minus the free screens they are already running. Gating on the full
+      // allowance would bound this one order and nothing else, so a host earning
+      // four screens could place four four-screen orders and take sixteen.
+      //
+      // The coupon is 100% off the ENTIRE order, so over the remainder we apply
+      // nothing and leave the manual promo box — same as before this existed.
+      // ensureHostCompCode also replaces a code whose redemption cap was minted
+      // when they hosted fewer screens.
+      const usage =
+        profile.role === 'host'
+          ? await hostFreeScreenUsage(admin, profile.id)
+          : { allowance: 0, using: 0, remaining: 0 }
       const hostDiscountId =
-        allowance > 0 && quote.totalLocations <= allowance
-          ? await hostCompPromotionId(await hostCompCodeForUser(admin, profile.id))
+        usage.remaining > 0 && quote.totalLocations <= usage.remaining
+          ? await hostCompPromotionId(await ensureHostCompCode(admin, profile.id))
           : null
 
       const session = await stripe().checkout.sessions.create({
