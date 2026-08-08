@@ -1,23 +1,13 @@
-import Link from 'next/link'
 import { AlertTriangle } from 'lucide-react'
 import { requireAdmin } from '@/lib/auth'
 import { getTerritoryContext } from '@/lib/territory'
 import { createClient } from '@/lib/supabase/server'
 import { PageHeader } from '@/components/admin/PageHeader'
 import { SectionTabs, SCREEN_TABS } from '@/components/admin/SectionTabs'
-import { LiveStatus } from '@/components/app/LiveStatus'
 import { AutoRefresh } from '@/components/app/AutoRefresh'
-import { Badge } from '@/components/ui/badge'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import { isTvLive, timeAgo } from '@/lib/format'
-import { summarizeUptime, venueBusinessHours } from '@/lib/uptime'
+import { summarizeUptime, venueBusinessHours, screenDownState } from '@/lib/uptime'
+import { loadBillingRows } from '@/lib/adminInbox'
+import { ScreenTable, type ScreenRow } from './ScreenTable'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,6 +26,7 @@ export default async function UptimePage() {
   const territory = await getTerritoryContext(profile)
   const t = territory.activeId
   const supabase = await createClient()
+  const billing = await loadBillingRows(t)
 
   let venueQ = supabase
     .from('venues')
@@ -68,17 +59,33 @@ export default async function UptimePage() {
   }
 
   // One row per paired screen, worst uptime first; unpaired screens excluded.
-  type Row = {
-    tvId: string
-    venueName: string
-    pct: number
-    breach: boolean
-    hasData: boolean
-    downNow: boolean
-    lastHeartbeat: string | null
-    paired: boolean
+  // What each screen is carrying: the monthly value of the campaigns placed on
+  // it, split across the screens each campaign runs on. A screen going dark is a
+  // different size of problem depending on who is on it, and the uptime page
+  // could never say which.
+  const atRiskByTv = new Map<string, number>()
+  const adsByTv = new Map<string, number>()
+  {
+    const { data: places } = await supabase
+      .from('ad_placements')
+      .select('campaign_id, tv_id')
+      .eq('status', 'active')
+    const tvsByCampaign = new Map<string, string[]>()
+    for (const p of (places ?? []) as { campaign_id: string | null; tv_id: string }[]) {
+      adsByTv.set(p.tv_id, (adsByTv.get(p.tv_id) ?? 0) + 1)
+      if (!p.campaign_id) continue
+      tvsByCampaign.set(p.campaign_id, [...(tvsByCampaign.get(p.campaign_id) ?? []), p.tv_id])
+    }
+    const monthlyByCampaign = new Map(billing.map((b) => [b.campaignId, b.monthlyCents]))
+    for (const [campaignId, ids] of tvsByCampaign) {
+      const monthly = monthlyByCampaign.get(campaignId) ?? 0
+      if (!monthly || !ids.length) continue
+      const share = Math.round(monthly / ids.length)
+      for (const tvId of ids) atRiskByTv.set(tvId, (atRiskByTv.get(tvId) ?? 0) + share)
+    }
   }
-  const rows: Row[] = []
+
+  const rows: ScreenRow[] = []
   for (const v of venues) {
     const bh = venueBusinessHours(v)
     for (const tv of v.tvs) {
@@ -86,20 +93,23 @@ export default async function UptimePage() {
       const summary = summarizeUptime(uptimeByTv.get(tv.id) ?? [], bh)
       rows.push({
         tvId: tv.id,
+        venueId: v.id,
         venueName: v.name,
         pct: summary.pct,
         breach: summary.breach,
         hasData: summary.hasData,
-        downNow: !isTvLive(tv.last_heartbeat_at),
+        // The honest "is it broken" rule: quiet during open hours, or quiet over
+        // a day. isTvLive's 95 seconds calls every closed venue an outage.
+        down: screenDownState(tv.last_heartbeat_at, v).down,
         lastHeartbeat: tv.last_heartbeat_at,
-        paired: true,
+        atRiskCents: atRiskByTv.get(tv.id) ?? 0,
+        adsHere: adsByTv.get(tv.id) ?? 0,
       })
     }
   }
-  rows.sort((a, b) => a.pct - b.pct)
 
   const breaches = rows.filter((r) => r.breach).length
-  const downNow = rows.filter((r) => r.downNow).length
+  const downNow = rows.filter((r) => r.down).length
 
   return (
     <>
@@ -122,61 +132,7 @@ export default async function UptimePage() {
           </div>
         )}
 
-        <div className="rounded-lg border border-border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Venue</TableHead>
-                <TableHead>Uptime · 30d</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Now</TableHead>
-                <TableHead className="text-right">Last seen</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
-                    No paired screens yet.
-                  </TableCell>
-                </TableRow>
-              )}
-              {rows.map((r) => (
-                <TableRow key={r.tvId}>
-                  <TableCell className="font-medium">
-                    <Link href={`/admin/tvs/${r.tvId}`} className="hover:underline">
-                      {r.venueName}
-                    </Link>
-                  </TableCell>
-                  <TableCell className="tabular-nums">
-                    {r.hasData ? (
-                      <span className={r.breach ? 'font-semibold text-warning' : ''}>
-                        {Math.round(r.pct * 100)}%
-                      </span>
-                    ) : (
-                      <span className="text-muted-foreground">No data</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {r.breach ? (
-                      <Badge variant="destructive">Below SLA</Badge>
-                    ) : r.hasData ? (
-                      <Badge variant="secondary">Meeting SLA</Badge>
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <LiveStatus lastHeartbeat={r.lastHeartbeat} paired={r.paired} />
-                  </TableCell>
-                  <TableCell className="text-right text-muted-foreground">
-                    {timeAgo(r.lastHeartbeat)}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+        <ScreenTable rows={rows} />
 
         <p className="text-xs text-muted-foreground">
           Uptime is measured on-time during each venue&apos;s set business hours over the last 30
