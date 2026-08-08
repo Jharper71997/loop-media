@@ -1,11 +1,10 @@
 'use client'
 
-import { useMemo, useState } from 'react'
 import Link from 'next/link'
-import { ChevronRight, CheckCircle2 } from 'lucide-react'
+import { ChevronRight } from 'lucide-react'
 import { formatCents, timeAgo } from '@/lib/format'
 import { SEVERITY_LABEL, SEVERITY_RANK, type Case, type Severity } from '@/lib/caseTypes'
-import { ListControls } from '@/components/admin/ListControls'
+import { DataTable, type Column, type SavedView } from '@/components/admin/DataTable'
 import { cn } from '@/lib/utils'
 
 // The board: every open problem, one row each, ranked.
@@ -13,6 +12,13 @@ import { cn } from '@/lib/utils'
 // A row has to answer three things before you click it — what is wrong, what it
 // is costing, and how long it has been like that. Anything that cannot answer
 // all three is a link, not a case.
+//
+// This is a feed, not a grid: the row is a designed object (severity dot, title,
+// age, summary, money, chevron) and chopping it into table cells would make the
+// one page that already works worse. So it runs DataTable in `renderRow` mode —
+// same views, search, sorting, keyboard and URL state as every other list in the
+// admin, its own row. The columns below exist only to declare what can be sorted
+// and exported; none of them is rendered.
 
 const DOT: Record<Severity, string> = {
   critical: 'bg-destructive',
@@ -28,122 +34,67 @@ const MONEY_TONE: Record<Severity, string> = {
   task: 'text-muted-foreground',
 }
 
-const SORTS = [
-  { value: 'money', label: 'Biggest money' },
-  { value: 'worst', label: 'Worst first' },
-  { value: 'oldest', label: 'Open longest' },
-  { value: 'newest', label: 'Newest' },
-  { value: 'name', label: 'A–Z' },
+const COLUMNS: Column<Case>[] = [
+  { key: 'money', header: 'Money', cell: () => null, value: (c) => c.moneyCents, numeric: true },
+  { key: 'severity', header: 'Worst first', cell: () => null, value: (c) => SEVERITY_RANK[c.severity] },
+  // Sorting ascending on this is "open longest", which is the question you ask
+  // when deciding what has been ignored too long.
+  { key: 'since', header: 'Age', cell: () => null, value: (c) => c.since },
+  { key: 'title', header: 'Name', cell: () => null, value: (c) => c.title },
 ]
 
-// Nulls last in both directions: a case with no start date has no age to rank.
-function byAge(a: Case, b: Case, dir: 1 | -1) {
-  if (!a.since && !b.since) return 0
-  if (!a.since) return 1
-  if (!b.since) return -1
-  return dir * a.since.localeCompare(b.since)
-}
+const VIEWS: SavedView<Case>[] = [
+  { id: 'all', label: 'Everything', match: () => true },
+  { id: 'critical', label: SEVERITY_LABEL.critical, match: (c) => c.severity === 'critical', tone: 'bad' },
+  { id: 'warning', label: SEVERITY_LABEL.warning, match: (c) => c.severity === 'warning', tone: 'warn' },
+  { id: 'opening', label: SEVERITY_LABEL.opening, match: (c) => c.severity === 'opening' },
+  { id: 'task', label: SEVERITY_LABEL.task, match: (c) => c.severity === 'task' },
+]
 
 export function CaseBoard({ cases }: { cases: Case[] }) {
-  const [query, setQuery] = useState('')
-  const [sort, setSort] = useState('money')
-  const [active, setActive] = useState<string[]>([])
-
-  const filters = useMemo(() => {
-    const order: Severity[] = ['critical', 'warning', 'opening', 'task']
-    return order
-      .map((s) => ({
-        value: s,
-        label: SEVERITY_LABEL[s],
-        count: cases.filter((c) => c.severity === s).length,
-      }))
-      .filter((f) => f.count > 0)
-  }, [cases])
-
-  const shown = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    const out = cases.filter((c) => {
-      if (active.length && !active.includes(c.severity)) return false
-      if (!q) return true
-      return c.title.toLowerCase().includes(q) || c.summary.toLowerCase().includes(q)
-    })
-    out.sort((a, b) => {
-      switch (sort) {
-        case 'worst':
-          return SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity] || b.moneyCents - a.moneyCents
-        case 'oldest':
-          return byAge(a, b, 1) || SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]
-        case 'newest':
-          return byAge(a, b, -1) || SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]
-        case 'name':
-          return a.title.localeCompare(b.title)
-        default:
-          return (
-            b.moneyCents - a.moneyCents || SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]
-          )
-      }
-    })
-    return out
-  }, [cases, query, sort, active])
-
   return (
-    <div className="space-y-3">
-      <ListControls
-        query={query}
-        onQuery={setQuery}
-        placeholder="Filter by business or problem…"
-        sorts={SORTS}
-        sort={sort}
-        onSort={setSort}
-        filters={filters}
-        activeFilters={active}
-        onToggleFilter={(v) =>
-          setActive((xs) => (xs.includes(v) ? xs.filter((x) => x !== v) : [...xs, v]))
-        }
-      />
-
-      {shown.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border py-14 text-center">
-          <CheckCircle2 className="size-6 text-success" />
-          <p className="text-sm text-muted-foreground">
-            {cases.length === 0
-              ? 'Nothing is broken, nothing is owed, and nothing is waiting on you.'
-              : 'Nothing matches that filter.'}
-          </p>
-        </div>
-      ) : (
-        <div className="divide-y divide-border overflow-hidden rounded-lg border border-border">
-          {shown.map((c) => (
-            <Link
-              key={c.id}
-              href={c.href}
-              className="flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-muted/50"
-            >
-              <span className={cn('size-1.5 shrink-0 rounded-full', DOT[c.severity])} />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-baseline gap-2">
-                  <span className="truncate text-sm font-medium">{c.title}</span>
-                  {c.since && (
-                    <span className="shrink-0 text-[11px] text-muted-foreground">
-                      {timeAgo(c.since)}
-                    </span>
-                  )}
-                </div>
-                <p className="truncate text-xs text-muted-foreground">{c.summary}</p>
-              </div>
-              {c.moneyCents > 0 && (
-                <div className="shrink-0 text-right">
-                  <div className={cn('font-mono text-sm tabular-nums', MONEY_TONE[c.severity])}>
-                    {formatCents(c.moneyCents)}
-                  </div>
-                  <div className="text-[10px] text-muted-foreground">{c.moneyNote}</div>
-                </div>
+    <DataTable
+      rows={cases}
+      rowId={(c) => c.id}
+      columns={COLUMNS}
+      views={VIEWS}
+      href={(c) => c.href}
+      defaultSort={{ key: 'money', dir: 'desc' }}
+      searchable={(c) => `${c.title} ${c.summary}`}
+      searchPlaceholder="Filter by business or problem…"
+      emptyTitle="Nothing is broken, nothing is owed, and nothing is waiting on you."
+      csvFilename="loop-open-problems.csv"
+      csvRow={(c) => ({
+        problem: c.kind,
+        severity: c.severity,
+        subject: c.title,
+        detail: c.summary,
+        monthly_usd: (c.moneyCents / 100).toFixed(2),
+        open_since: c.since ? c.since.slice(0, 10) : '',
+      })}
+      renderRow={(c) => (
+        <Link href={c.href} className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted/50">
+          <span className={cn('size-1.5 shrink-0 rounded-full', DOT[c.severity])} />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-baseline gap-2">
+              <span className="truncate text-sm font-medium">{c.title}</span>
+              {c.since && (
+                <span className="shrink-0 text-[11px] text-muted-foreground">{timeAgo(c.since)}</span>
               )}
-              <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
-            </Link>
-          ))}
-        </div>
+            </div>
+            <p className="truncate text-xs text-muted-foreground">{c.summary}</p>
+          </div>
+          {c.moneyCents > 0 && (
+            <div className="shrink-0 text-right">
+              <div className={cn('font-mono text-sm tabular-nums', MONEY_TONE[c.severity])}>
+                {formatCents(c.moneyCents)}
+              </div>
+              <div className="text-[10px] text-muted-foreground">{c.moneyNote}</div>
+            </div>
+          )}
+          <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+        </Link>
       )}
-    </div>
+    />
   )
 }

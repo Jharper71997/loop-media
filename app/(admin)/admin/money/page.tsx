@@ -4,7 +4,6 @@ import { requireAdmin } from '@/lib/auth'
 import { getTerritoryContext } from '@/lib/territory'
 import { createClient } from '@/lib/supabase/server'
 import { PageHeader } from '@/components/admin/PageHeader'
-import { SectionTabs, MONEY_TABS } from '@/components/admin/SectionTabs'
 import { Badge } from '@/components/ui/badge'
 import { ExportCsvButton } from '@/components/admin/ExportCsvButton'
 import { HudBody, StatStrip, Stat, Panel, Num } from '@/components/admin/hud'
@@ -123,7 +122,6 @@ export default async function MoneyPage({
         }
         action={<ExportCsvButton filename="loop-accounts.csv" rows={csvRows} />}
       />
-      <SectionTabs tabs={MONEY_TABS} />
 
       <HudBody>
         <StatStrip cols={5}>

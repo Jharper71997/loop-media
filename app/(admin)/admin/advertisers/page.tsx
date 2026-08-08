@@ -1,98 +1,29 @@
-import Link from 'next/link'
 import { requireAdmin } from '@/lib/auth'
 import { getTerritoryContext } from '@/lib/territory'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { PageHeader } from '@/components/admin/PageHeader'
 import { SectionTabs, ADVERTISER_TABS } from '@/components/admin/SectionTabs'
-import { ListSearch } from '@/components/admin/ListSearch'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import { Badge } from '@/components/ui/badge'
-import { ImageOff } from 'lucide-react'
-import { formatDateTime } from '@/lib/format'
-import { cn } from '@/lib/utils'
+import { HudBody } from '@/components/admin/hud'
+import { loadBillingRows } from '@/lib/adminInbox'
+import { loadAdResults, loadCases } from '@/lib/cases'
 import type { Profile } from '@/lib/db.types'
+import { AdvertiserTable, type AdvertiserRow } from './AdvertiserTable'
 
-// One creative row per advertiser: small thumbnails with a status dot, so admins
-// see what each advertiser is running at a glance (deep view is the detail page).
-type AdRow = {
-  owner_user_id: string
-  title: string | null
-  creative_url: string | null
-  creative_type: string | null
-  status: string
-  category_id: string | null
-}
+// The advertiser roster.
+//
+// Everything below the profile row already existed somewhere else in the admin
+// and was never joined to the account it describes: billing health lived on
+// Money keyed by campaign, measured delivery lived on the case pages keyed by
+// campaign, and open problems lived on Today keyed by whatever the case was
+// about. Three loaders, all React-cached, all already running elsewhere in the
+// request — assembling them here costs almost nothing and is the difference
+// between a contact list and a roster you can run a business from.
 
-const STATUS_DOT: Record<string, string> = {
-  active: 'bg-emerald-500',
-  approved: 'bg-emerald-500',
-  pending: 'bg-amber-500',
-  paused: 'bg-slate-400',
-  rejected: 'bg-red-500',
-}
-
-function AdThumbs({ ads }: { ads: AdRow[] }) {
-  if (ads.length === 0)
-    return <span className="text-xs text-muted-foreground">No ads yet</span>
-  const shown = ads.slice(0, 5)
-  return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      {shown.map((ad, i) => (
-        <div
-          key={i}
-          title={`${ad.title ?? 'Untitled'} · ${ad.status}`}
-          className="relative h-10 w-16 shrink-0 overflow-hidden rounded border border-border bg-black"
-        >
-          {ad.creative_url ? (
-            ad.creative_type === 'video' ? (
-              <video src={ad.creative_url} className="h-full w-full object-contain" muted />
-            ) : (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={ad.creative_url}
-                alt={ad.title ?? ''}
-                loading="lazy"
-                decoding="async"
-                className="h-full w-full object-contain"
-              />
-            )
-          ) : (
-            <div className="grid h-full w-full place-items-center">
-              <ImageOff className="size-4 text-muted-foreground" />
-            </div>
-          )}
-          <span
-            className={cn(
-              'absolute right-0.5 top-0.5 size-2 rounded-full ring-1 ring-black/40',
-              STATUS_DOT[ad.status] ?? 'bg-slate-400'
-            )}
-          />
-        </div>
-      ))}
-      {ads.length > shown.length && (
-        <span className="text-xs text-muted-foreground">+{ads.length - shown.length}</span>
-      )}
-    </div>
-  )
-}
-
-export default async function AdvertisersPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ q?: string; status?: string }>
-}) {
+export default async function AdvertisersPage() {
   const profile = await requireAdmin()
   const territory = await getTerritoryContext(profile)
   const t = territory.activeId
-  const { q: query, status } = await searchParams
   const supabase = await createClient()
 
   let q = supabase
@@ -103,182 +34,138 @@ export default async function AdvertisersPage({
     .eq('is_demo', false)
     .order('created_at', { ascending: false })
   if (t) q = q.eq('territory_id', t)
-  if (query?.trim()) q = q.or(`full_name.ilike.%${query.trim()}%,email.ilike.%${query.trim()}%`)
-  const { data } = await q
+
+  const [{ data }, billing, results, { cases }] = await Promise.all([
+    q,
+    loadBillingRows(t),
+    loadAdResults(t),
+    loadCases(t),
+  ])
   let advertisers = (data ?? []) as Profile[]
 
+  // Anyone with a live campaign belongs on this page, whatever their profile
+  // role says. Filtering on role='advertiser' alone hid two accounts that are
+  // running ads on real screens right now — they were created as hosts and then
+  // sold advertising, so the roster you use to run the business was missing the
+  // people you are actually running. Pull in whoever billing knows about.
+  const known = new Set(advertisers.map((a) => a.id))
+  const missing = [...new Set(billing.map((b) => b.advertiserId))].filter((id) => !known.has(id))
+  if (missing.length) {
+    const { data: extra } = await supabase.from('profiles').select('*').in('id', missing)
+    advertisers = [...advertisers, ...((extra ?? []) as Profile[]).filter((p) => !p.is_demo)]
+  }
+
   const ids = advertisers.map((a) => a.id)
-  const adsByOwner = new Map<string, AdRow[]>()
+
+  // Ad counts per owner.
+  const adsByOwner = new Map<string, { total: number; pending: number; live: number }>()
   if (ids.length) {
     const { data: ads } = await supabase
       .from('ads')
-      .select('owner_user_id, title, creative_url, creative_type, status, category_id')
+      .select('owner_user_id, status')
       .eq('owner_kind', 'advertiser')
       .in('owner_user_id', ids)
-      .order('created_at', { ascending: false })
-    for (const ad of (ads ?? []) as AdRow[]) {
-      const arr = adsByOwner.get(ad.owner_user_id) ?? []
-      arr.push(ad)
-      adsByOwner.set(ad.owner_user_id, arr)
+    for (const ad of (ads ?? []) as { owner_user_id: string; status: string }[]) {
+      const cur = adsByOwner.get(ad.owner_user_id) ?? { total: 0, pending: 0, live: 0 }
+      cur.total++
+      if (ad.status === 'pending') cur.pending++
+      if (ad.status === 'active' || ad.status === 'approved') cur.live++
+      adsByOwner.set(ad.owner_user_id, cur)
     }
   }
-  const countsFor = (arr: AdRow[]) => ({
-    total: arr.length,
-    active: arr.filter((x) => x.status === 'active').length,
-    pending: arr.filter((x) => x.status === 'pending').length,
-  })
-  const hasPending = (id: string) => (adsByOwner.get(id) ?? []).some((x) => x.status === 'pending')
 
-  // Deactivated advertisers are a Supabase auth ban (our reversible "on hold" flag,
-  // stored on auth.users). Pull the banned set so we can hide them by default and
-  // surface them under their own filter.
-  const deactivatedIds = new Set<string>()
+  // Deactivated advertisers are a Supabase auth ban (our reversible "on hold"
+  // flag, stored on auth.users rather than in our schema).
+  //
+  // NOTE: this is an unpaginatable GoTrue call with a hard 1,000-user ceiling,
+  // and it is the slowest thing on this page. The clean fix is a
+  // profiles.deactivated_at column, which needs a migration — so it waits until
+  // the queued ones are applied.
+  const deactivated = new Set<string>()
   try {
     const { data: authList } = await createAdminClient().auth.admin.listUsers({ perPage: 1000 })
     const nowMs = Date.now()
     for (const u of authList?.users ?? []) {
       const banned = (u as { banned_until?: string | null }).banned_until
-      if (banned && new Date(banned).getTime() > nowMs) deactivatedIds.add(u.id)
+      if (banned && new Date(banned).getTime() > nowMs) deactivated.add(u.id)
     }
   } catch {
     /* if the lookup fails, show everyone as active rather than hard-fail */
   }
 
-  // Status filter: deactivated get their own view; every other view HIDES them.
-  if (status === 'deactivated') {
-    advertisers = advertisers.filter((a) => deactivatedIds.has(a.id))
-  } else {
-    advertisers = advertisers.filter((a) => !deactivatedIds.has(a.id))
-    if (status === 'pending') advertisers = advertisers.filter((a) => hasPending(a.id))
-    else if (status === 'active')
-      advertisers = advertisers.filter((a) => countsFor(adsByOwner.get(a.id) ?? []).active > 0)
+  // Billing is keyed by campaign; an advertiser can hold more than one. Take the
+  // worst health, because that is the one that needs doing something about, and
+  // sum the money, because that is what the account is worth.
+  const HEALTH_ORDER = { unbilled: 0, overdue: 1, due: 2, ok: 3 } as const
+  const byAdvertiser = new Map<string, (typeof billing)[number][]>()
+  for (const row of billing) {
+    byAdvertiser.set(row.advertiserId, [...(byAdvertiser.get(row.advertiserId) ?? []), row])
   }
+
+  // Delivery is keyed by campaign too; roll it up the same way.
+  const deliveryByAdvertiser = new Map<string, { plays: number; scans: number; screens: number }>()
+  for (const r of results) {
+    const cur = deliveryByAdvertiser.get(r.advertiserId) ?? { plays: 0, scans: 0, screens: 0 }
+    cur.plays += r.plays
+    cur.scans += r.scans
+    cur.screens += r.screens
+    deliveryByAdvertiser.set(r.advertiserId, cur)
+  }
+
+  // Cases are keyed by whatever the problem is about — a campaign for the money
+  // and delivery kinds, a screen or venue for the rest. Only the campaign-keyed
+  // ones belong to an advertiser, so map through their campaigns.
+  const advertiserByCampaign = new Map(billing.map((b) => [b.campaignId, b.advertiserId]))
+  const casesByAdvertiser = new Map<string, number>()
+  for (const c of cases) {
+    const advertiserId = advertiserByCampaign.get(c.subjectId)
+    if (!advertiserId) continue
+    casesByAdvertiser.set(advertiserId, (casesByAdvertiser.get(advertiserId) ?? 0) + 1)
+  }
+
+  const rows: AdvertiserRow[] = advertisers.map((a) => {
+    const theirs = byAdvertiser.get(a.id) ?? []
+    const worst = [...theirs].sort(
+      (x, y) => HEALTH_ORDER[x.billing.health] - HEALTH_ORDER[y.billing.health]
+    )[0]
+    const counts = adsByOwner.get(a.id) ?? { total: 0, pending: 0, live: 0 }
+    const delivery = deliveryByAdvertiser.get(a.id) ?? { plays: 0, scans: 0, screens: 0 }
+    return {
+      id: a.id,
+      name: a.full_name ?? a.email,
+      email: a.email,
+      phone: a.phone,
+      joinedAt: a.created_at,
+      ads: counts.total,
+      pendingAds: counts.pending,
+      liveAds: counts.live,
+      screens: delivery.screens,
+      plays: delivery.plays,
+      scans: delivery.scans,
+      monthlyCents: theirs.reduce((s, r) => s + r.monthlyCents, 0),
+      method: worst?.billing.method ?? null,
+      health: worst?.billing.health ?? null,
+      billingSummary: worst?.billing.summary ?? null,
+      openCases: casesByAdvertiser.get(a.id) ?? 0,
+      deactivated: deactivated.has(a.id),
+    }
+  })
+
+  const live = rows.filter((r) => !r.deactivated)
+  const payingCents = live
+    .filter((r) => r.method && r.method !== 'comp' && r.method !== 'unbilled')
+    .reduce((s, r) => s + r.monthlyCents, 0)
 
   return (
     <>
       <PageHeader
         title="Advertisers"
-        description={`${advertisers.length} advertiser${advertisers.length === 1 ? '' : 's'}`}
+        description={`${live.length} account${live.length === 1 ? '' : 's'} · ${(payingCents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 })}/mo billed`}
       />
       <SectionTabs tabs={ADVERTISER_TABS} />
-
-      <div className="space-y-3 p-3 md:p-4">
-        <ListSearch
-          placeholder="Search by name or email…"
-          statusOptions={[
-            { value: 'pending', label: 'Has pending ad' },
-            { value: 'active', label: 'Has live ad' },
-            { value: 'deactivated', label: 'Deactivated' },
-          ]}
-        />
-
-        {/* Mobile cards */}
-        <div className="space-y-2.5 md:hidden">
-          {advertisers.length === 0 && (
-            <p className="rounded-xl border border-border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
-              No advertisers yet.
-            </p>
-          )}
-          {advertisers.map((a) => {
-            const ads = adsByOwner.get(a.id) ?? []
-            const counts = countsFor(ads)
-            return (
-              <Link
-                key={a.id}
-                href={`/admin/advertisers/${a.id}`}
-                className="block rounded-xl border border-border bg-card p-4"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="truncate font-medium">{a.full_name ?? '—'}</div>
-                    <div className="truncate text-xs text-muted-foreground">{a.email}</div>
-                  </div>
-                  <div className="flex shrink-0 flex-col items-end gap-1">
-                    {deactivatedIds.has(a.id) && <Badge variant="secondary">Deactivated</Badge>}
-                    {counts.active > 0 ? (
-                      <Badge>{counts.active} active</Badge>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">0 active</span>
-                    )}
-                    {counts.pending > 0 && <Badge variant="warning">Pending review</Badge>}
-                  </div>
-                </div>
-                <div className="mt-2.5">
-                  <AdThumbs ads={ads} />
-                </div>
-                <div className="mt-2 flex flex-wrap gap-x-4 text-xs text-muted-foreground">
-                  <span>
-                    {counts.total} ad{counts.total === 1 ? '' : 's'}
-                  </span>
-                  <span>Joined {formatDateTime(a.created_at)}</span>
-                </div>
-              </Link>
-            )
-          })}
-        </div>
-
-        {/* Desktop table */}
-        <div className="hidden rounded-lg border border-border md:block">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Advertising</TableHead>
-                <TableHead>Joined</TableHead>
-                <TableHead className="text-right">Ads</TableHead>
-                <TableHead className="text-right">Active</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {advertisers.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
-                    No advertisers yet.
-                  </TableCell>
-                </TableRow>
-              )}
-              {advertisers.map((a) => {
-                const ads = adsByOwner.get(a.id) ?? []
-                const counts = countsFor(ads)
-                return (
-                  <TableRow key={a.id} className="cursor-pointer hover:bg-accent/50">
-                    <TableCell className="font-medium">
-                      <Link
-                        href={`/admin/advertisers/${a.id}`}
-                        className="flex items-center gap-2 hover:underline"
-                      >
-                        {a.full_name ?? '—'}
-                        {counts.pending > 0 && <Badge variant="warning">Pending</Badge>}
-                        {deactivatedIds.has(a.id) && <Badge variant="secondary">Deactivated</Badge>}
-                      </Link>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      <Link href={`/admin/advertisers/${a.id}`} className="block">
-                        {a.email}
-                      </Link>
-                    </TableCell>
-                    <TableCell>
-                      <AdThumbs ads={ads} />
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {formatDateTime(a.created_at)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">{counts.total}</TableCell>
-                    <TableCell className="text-right">
-                      {counts.active > 0 ? (
-                        <Badge>{counts.active}</Badge>
-                      ) : (
-                        <span className="text-muted-foreground">0</span>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
-        </div>
-      </div>
+      <HudBody>
+        <AdvertiserTable rows={rows} />
+      </HudBody>
     </>
   )
 }

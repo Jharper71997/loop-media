@@ -81,10 +81,11 @@ export const SCREEN_TABS: SectionTab[] = [
   { href: '/admin/map', label: 'Map' },
 ]
 
-export const MONEY_TABS: SectionTab[] = [
-  { href: '/admin/money', label: 'Billing' },
-  { href: '/admin/revenue', label: 'Revenue' },
-]
+// Money has no second page yet: /admin/revenue is a redirect to /admin/money, so
+// listing it as a tab renders one that bounces to the tab you are already on. The
+// payments ledger becomes the second tab when it gets its own route; until then
+// Money is a leaf and renders no strip at all.
+export const MONEY_TABS: SectionTab[] = [{ href: '/admin/money', label: 'Billing' }]
 
 // Packages and categories are already folded into the pricing page (both routes
 // redirect there), so they are not separate tabs. Business settings leads
