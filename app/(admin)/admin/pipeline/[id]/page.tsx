@@ -59,19 +59,22 @@ const EVENT_ICON: Record<EventKind, typeof MessageSquare> = {
 }
 
 export default async function OpportunityPage({ params }: { params: Promise<{ id: string }> }) {
-  const profile = await requireAdmin()
   const { id } = await params
-  const loaded = await loadOpportunity(id)
+  // Templates are a fixed list that depends on nothing, so it has no business
+  // waiting behind the record it will be rendered next to.
+  const [profile, loaded, templates] = await Promise.all([
+    requireAdmin(),
+    loadOpportunity(id),
+    loadTemplates(),
+  ])
   if (!loaded) notFound()
   const { opportunity: o, events } = loaded
 
   // The thread follows the business across conversion: once an opportunity has
   // an advertiser account, messages sent before and after the sale are one
-  // history rather than two.
-  const [thread, templates] = await Promise.all([
-    loadThread({ opportunityId: o.id, advertiserId: o.advertiserId }),
-    loadTemplates(),
-  ])
+  // history rather than two. This one genuinely waits — it needs the advertiser
+  // id the record carries.
+  const thread = await loadThread({ opportunityId: o.id, advertiserId: o.advertiserId })
 
   const cold = daysSince(o.lastTouchAt)
 

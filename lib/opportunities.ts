@@ -228,17 +228,20 @@ export async function loadOpportunity(
   id: string
 ): Promise<{ opportunity: Opportunity; events: OpportunityEvent[] } | null> {
   const supabase = await createClient()
-  const { data, error } = await supabase.from('opportunities').select(SELECT).eq('id', id).maybeSingle()
+  // Both queries key off the id we already have, so the timeline never needed to
+  // wait for the record to come back first.
+  const [{ data, error }, { data: evData }] = await Promise.all([
+    supabase.from('opportunities').select(SELECT).eq('id', id).maybeSingle(),
+    supabase
+      .from('opportunity_events')
+      .select('id, kind, body, from_stage, to_stage, created_at, author:profiles(full_name, email)')
+      .eq('opportunity_id', id)
+      .order('created_at', { ascending: false }),
+  ])
   if (error || !data) {
     if (error && !isMissingTable(error)) console.error('[pipeline] loadOpportunity failed:', error)
     return null
   }
-
-  const { data: evData } = await supabase
-    .from('opportunity_events')
-    .select('id, kind, body, from_stage, to_stage, created_at, author:profiles(full_name, email)')
-    .eq('opportunity_id', id)
-    .order('created_at', { ascending: false })
 
   type EvRow = {
     id: string
