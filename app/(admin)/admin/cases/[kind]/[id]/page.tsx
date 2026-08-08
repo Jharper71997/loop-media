@@ -4,12 +4,21 @@ import { ScreenDarkCase } from './ScreenDarkCase'
 import { AdvertiserCase } from './AdvertiserCase'
 import { BillingCase } from './BillingCase'
 import { UnsoldCase } from './UnsoldCase'
+import { HostOwedCase } from './HostOwedCase'
 
 // One route for every case on the board, so a case link is always
 // /admin/cases/<what is wrong>/<who it is about> and never a page-specific URL
 // that has to be invented again the next time a new kind of problem shows up.
 
-const KINDS = ['screen-dark', 'under-delivery', 'no-results', 'free-rider', 'money-overdue', 'unsold'] as const
+const KINDS = [
+  'screen-dark',
+  'under-delivery',
+  'no-results',
+  'free-rider',
+  'money-overdue',
+  'unsold',
+  'host-owed',
+] as const
 type Kind = (typeof KINDS)[number]
 
 export default async function CasePage({
@@ -32,5 +41,7 @@ export default async function CasePage({
       return <BillingCase campaignId={id} kind={kind as 'free-rider' | 'money-overdue'} />
     case 'unsold':
       return <UnsoldCase venueId={id} />
+    case 'host-owed':
+      return <HostOwedCase hostId={id} />
   }
 }

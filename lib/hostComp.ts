@@ -15,11 +15,43 @@ import type { createAdminClient } from '@/lib/supabase/admin'
 
 type Admin = ReturnType<typeof createAdminClient>
 
-// How many screens the perk covers. Stripe can only cap REDEMPTIONS, and the
-// coupon is 100% off the whole order — so a single checkout with five screens in
-// the cart would comp all five and still leave a redemption on the code. The buy
-// flow enforces the screen count itself against this number.
-export const HOST_COMP_MAX_SCREENS = 2
+// The perk scales with what the host actually gives us: two free advertising
+// screens for every screen they put in their establishment. A host with one TV
+// gets two; a host with three TVs gets six. It is priced that way on purpose —
+// a host who takes a second screen is doubling our inventory in their room, and
+// the thing they get back should double with it.
+//
+// Stripe can only cap REDEMPTIONS, and the coupon is 100% off the whole order,
+// so the redemption cap cannot enforce a screen count: a single checkout with
+// five screens in the cart is one redemption. The buy flow enforces the screen
+// count itself against hostFreeScreenAllowance().
+export const FREE_SCREENS_PER_HOSTED_TV = 2
+
+/** @deprecated The allowance is per hosted screen now — use hostFreeScreenAllowance(). */
+export const HOST_COMP_MAX_SCREENS = FREE_SCREENS_PER_HOSTED_TV
+
+/**
+ * How many free advertising screens this host has earned: two per screen they
+ * host at a live venue. Returns 0 for someone who hosts nothing, which is also
+ * the safe answer when the lookup fails — a wrong 0 means they use the manual
+ * promo box, a wrong number means we comp screens nobody agreed to.
+ */
+export async function hostFreeScreenAllowance(admin: Admin, userId: string): Promise<number> {
+  try {
+    const { data } = await admin
+      .from('venues')
+      .select('id, tvs(id)')
+      .eq('host_user_id', userId)
+      .eq('status', 'active')
+    const hostedTvs = ((data ?? []) as unknown as { tvs: { id: string }[] | null }[]).reduce(
+      (n, v) => n + (v.tvs?.length ?? 0),
+      0
+    )
+    return hostedTvs * FREE_SCREENS_PER_HOSTED_TV
+  } catch {
+    return 0
+  }
+}
 
 // One reusable coupon backs every host comp code: 100% off, forever. Created
 // lazily with a stable id so we never make duplicates.

@@ -12,6 +12,7 @@ export type CaseKind =
   | 'free-rider'
   | 'money-overdue'
   | 'unsold'
+  | 'host-owed'
   | 'task'
 
 // critical = money is actively bleeding or a customer is being short-changed.

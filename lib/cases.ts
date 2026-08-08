@@ -22,6 +22,7 @@ import { createClient } from '@/lib/supabase/server'
 import { screenDownState } from '@/lib/uptime'
 import { loadAdminInbox, loadBillingRows } from '@/lib/adminInbox'
 import { loadInventory } from '@/lib/inventory'
+import { loadHostBenefits, discretionaryFreeScreens } from '@/lib/hostBenefit'
 import type { VenueHours } from '@/lib/openHours'
 
 // The columns every "is this screen actually down" check needs. Kept in one
@@ -244,12 +245,14 @@ export interface CaseBoardData {
 
 export const loadCases = cache(async (territoryId: string | null): Promise<CaseBoardData> => {
   const supabase = await createClient()
-  const [inbox, inventory, billing, results] = await Promise.all([
+  const [inbox, inventory, billing, results, hostBenefits] = await Promise.all([
     loadAdminInbox(territoryId),
     loadInventory(territoryId),
     loadBillingRows(territoryId),
     loadAdResults(territoryId),
+    loadHostBenefits(territoryId),
   ])
+  const benefitByHost = new Map(hostBenefits.map((b) => [b.hostId, b]))
   const median = networkScanRate(results)
   const cases: Case[] = []
 
@@ -373,12 +376,61 @@ export const loadCases = cache(async (territoryId: string | null): Promise<CaseB
     })
   }
 
+  // ---- Hosts who are not getting what hosting earns them --------------------
+  // Two free advertising screens for every screen they host. This is the deal,
+  // not a favour, and it was going undelivered silently: the perk is a Stripe
+  // code minted when the venue goes live, and nothing ever checked whether the
+  // host redeemed it. No money is at risk here — it is a promise outstanding —
+  // so it carries no dollar figure and never inflates the money totals.
+  for (const b of hostBenefits) {
+    if (b.gap <= 0) continue
+    cases.push({
+      id: `host-owed:${b.hostId}`,
+      kind: 'host-owed',
+      severity: 'opening',
+      title: b.name,
+      summary:
+        b.using === 0
+          ? `Hosts ${b.hostedTvs} screen${b.hostedTvs === 1 ? '' : 's'} at ${b.venueNames.join(', ')} and has none of the ${b.owed} free screens that earns`
+          : `Using ${b.using} of the ${b.owed} free screens that hosting ${b.hostedTvs} screen${b.hostedTvs === 1 ? '' : 's'} earns them`,
+      moneyCents: 0,
+      moneyNote: '',
+      since: null,
+      href: `/admin/cases/host-owed/${b.hostId}`,
+      subjectId: b.hostId,
+    })
+  }
+
   // ---- What we are giving away ---------------------------------------------
   // A comp is a decision, not an accident — but an untracked comp is how a
   // network runs at capacity and still makes nothing.
+  //
+  // A HOST's free screens are not that. They are what we owe for the screen in
+  // their room, so only the part above their allowance is discretionary. Calling
+  // the whole thing a giveaway would put every host on this list for taking the
+  // deal we sold them.
   for (const row of billing) {
     if (row.billing.method !== 'comp' && row.billing.method !== 'unbilled') continue
     const res = results.find((r) => r.campaignId === row.campaignId)
+    const benefit = benefitByHost.get(row.advertiserId)
+    if (benefit) {
+      const extra = discretionaryFreeScreens(benefit)
+      // Entirely covered by the hosting agreement — nothing to convert.
+      if (extra === 0) continue
+      cases.push({
+        id: `free-rider:${row.campaignId}`,
+        kind: 'free-rider',
+        severity: 'opening',
+        title: row.advertiserName,
+        summary: `Host of ${benefit.venueNames.join(', ')} — running ${benefit.using} free screens, ${extra} more than hosting ${benefit.hostedTvs} screen${benefit.hostedTvs === 1 ? '' : 's'} earns`,
+        moneyCents: row.monthlyCents,
+        moneyNote: 'above the hosting deal',
+        since: row.billing.paidThrough ?? null,
+        href: `/admin/cases/free-rider/${row.campaignId}`,
+        subjectId: row.campaignId,
+      })
+      continue
+    }
     cases.push({
       id: `free-rider:${row.campaignId}`,
       kind: 'free-rider',

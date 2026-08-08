@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { HOST_COMP_MAX_SCREENS } from '@/lib/hostComp'
+import { FREE_SCREENS_PER_HOSTED_TV } from '@/lib/hostComp'
 import { timeAgo, isTvLive, formatNumber } from '@/lib/format'
 import type { Tv, Venue } from '@/lib/db.types'
 import { LiveStatus } from '@/components/app/LiveStatus'
@@ -43,6 +43,13 @@ export default async function HostHome() {
   // The host's 100%-off advertising comp code, minted when a venue goes live.
   const compCode =
     venues.find((v) => v.status === 'active' && v.comp_promo_code)?.comp_promo_code ?? null
+
+  // Two free advertising screens for every screen they host — so putting a
+  // second TV in the room doubles what they get back, not just what we get.
+  const freeScreenAllowance =
+    venues
+      .filter((v) => v.status === 'active')
+      .reduce((n, v) => n + (v.tvs?.length ?? 0), 0) * FREE_SCREENS_PER_HOSTED_TV
 
   const tvIds = venues.flatMap((v) => v.tvs.map((t) => t.id))
 
@@ -311,8 +318,9 @@ export default async function HostHome() {
                               <span className="font-mono font-semibold text-foreground">
                                 {v.comp_promo_code}
                               </span>{' '}
-                              covers up to {HOST_COMP_MAX_SCREENS} screens and applies itself at
-                              checkout for 100% off. Nothing to type.
+                              covers {freeScreenAllowance} screen{freeScreenAllowance === 1 ? '' : 's'} — two for
+                              every screen you host — and applies itself at checkout for 100%
+                              off. Nothing to type.
                             </p>
                           </div>
                         </div>
