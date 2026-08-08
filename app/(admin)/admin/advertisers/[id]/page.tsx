@@ -5,15 +5,14 @@ import { requireAdmin } from '@/lib/auth'
 import { getTerritoryContext } from '@/lib/territory'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { Suspense } from 'react'
+import { RecordShell, RailPanel, RailFact } from '@/components/admin/RecordShell'
 import {
-  RecordShell,
-  RecordVerdict,
-  RailPanel,
-  RailFact,
-  ActivityTimeline,
-} from '@/components/admin/RecordShell'
-import { loadVerdict } from '@/lib/verdict'
-import { loadActivity } from '@/lib/activity'
+  VerdictBlock,
+  VerdictSkeleton,
+  ActivityBlock,
+  ActivitySkeleton,
+} from './Streamed'
 import { loadBillingRows } from '@/lib/adminInbox'
 import { loadHostBenefits } from '@/lib/hostBenefit'
 import { HEALTH_VARIANT, BILLING_METHOD_LABEL } from '@/lib/billing'
@@ -156,9 +155,7 @@ export default async function AdvertiserDetail({
   // Everything the record needs to lead with a verdict and a history, from the
   // same engines the board and the case pages use — so this page and Today can
   // never tell you different things about the same account.
-  const [verdict, activity, billing, benefits] = await Promise.all([
-    loadVerdict({ kind: 'advertiser', id }, territory.activeId),
-    loadActivity({ kind: 'advertiser', id }),
+  const [billing, benefits] = await Promise.all([
     loadBillingRows(territory.activeId),
     loadHostBenefits(territory.activeId),
   ])
@@ -186,7 +183,7 @@ export default async function AdvertiserDetail({
       tabs={[
         { id: 'overview', label: 'Overview' },
         { id: 'campaigns', label: 'Ads & campaigns', count: campaigns.length },
-        { id: 'activity', label: 'Activity', count: activity.length },
+        { id: 'activity', label: 'Activity' },
       ]}
       badges={
         <>
@@ -221,11 +218,13 @@ export default async function AdvertiserDetail({
         </>
       }
       verdict={
-        <RecordVerdict
-          cases={verdict.cases}
-          moneyCents={verdict.moneyCents}
-          healthyLine={healthyLine}
-        />
+        <Suspense fallback={<VerdictSkeleton />}>
+          <VerdictBlock
+            advertiserId={id}
+            territoryId={territory.activeId}
+            healthyLine={healthyLine}
+          />
+        </Suspense>
       }
       rail={
         <>
@@ -304,7 +303,11 @@ export default async function AdvertiserDetail({
         </div>
       )}
 
-      {tab === 'activity' && <ActivityTimeline events={activity} />}
+      {tab === 'activity' && (
+        <Suspense fallback={<ActivitySkeleton />}>
+          <ActivityBlock advertiserId={id} />
+        </Suspense>
+      )}
 
       {tab === 'overview' && (
         <>
@@ -330,7 +333,9 @@ export default async function AdvertiserDetail({
             <h2 className="mb-2 text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
               Recent activity
             </h2>
-            <ActivityTimeline events={activity.slice(0, 8)} />
+            <Suspense fallback={<ActivitySkeleton />}>
+              <ActivityBlock advertiserId={id} limit={8} />
+            </Suspense>
           </div>
         </>
       )}

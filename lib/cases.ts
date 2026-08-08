@@ -18,6 +18,7 @@
 // The numbers stay honest about their provenance, the same way lib/analytics.ts
 // does: plays and scans are MEASURED, reach is ESTIMATED and always labeled.
 import { cache } from 'react'
+import { unstable_cache } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { screenDownState } from '@/lib/uptime'
@@ -87,18 +88,39 @@ type PlacementRow = {
 // so the roster reported "not shown once" for the accounts running the most.
 // A zero here is not cosmetic: diagnose() reads it as too-new and drops them out
 // of the results cases entirely. Every caller is already behind requireAdmin().
-async function countPlays(adId: string, sinceISO: string): Promise<number> {
-  const { count, error } = await createAdminClient()
-    .from('ad_plays')
-    .select('*', { count: 'exact', head: true })
-    .eq('ad_id', adId)
-    .gte('played_at', sinceISO)
-  if (error) {
-    // Never let a failed count masquerade as a measured zero.
-    console.error('ad_plays count failed for', adId, error.message)
-    return 0
-  }
-  return count ?? 0
+// Cached across requests, not just within one. React's cache() dedupes inside a
+// single render, but this same count was being recomputed on every navigation —
+// and it is the most expensive query in the admin, run once per ad, on every
+// page that shows a verdict or a problem count. A 30-day total does not
+// meaningfully change minute to minute, so serving a slightly stale one is the
+// right trade for a page that opens immediately. Safe to cache because it takes
+// no cookies: it runs on the admin client, and callers are behind requireAdmin.
+const cachedPlayCount = unstable_cache(
+  async (adId: string, sinceISO: string): Promise<number> => {
+    const { count, error } = await createAdminClient()
+      .from('ad_plays')
+      .select('*', { count: 'exact', head: true })
+      .eq('ad_id', adId)
+      .gte('played_at', sinceISO)
+    if (error) {
+      // Never let a failed count masquerade as a measured zero.
+      console.error('ad_plays count failed for', adId, error.message)
+      return 0
+    }
+    return count ?? 0
+  },
+  ['ad-plays-30d'],
+  { revalidate: 300 }
+)
+
+// The window start moves every millisecond, which would make the cache key
+// unique per request and cache nothing at all. Round it down to the hour so
+// every request in that hour shares a key, and the value stays a real timestamp
+// Postgres can compare against.
+function countPlays(adId: string, sinceISO: string): Promise<number> {
+  const hour = new Date(sinceISO)
+  hour.setUTCMinutes(0, 0, 0)
+  return cachedPlayCount(adId, hour.toISOString())
 }
 
 /**

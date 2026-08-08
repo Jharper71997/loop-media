@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { Suspense, use, useState, useTransition } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
@@ -109,6 +109,19 @@ const GROUPS: NavGroup[] = [
     ],
   },
 ]
+
+// Badges arrive after the shell. NavLinks suspends on the promise; the fallback
+// renders the identical nav with no counts, so the sidebar is usable instantly
+// and the numbers appear in place without anything moving.
+function NavBadges({
+  countsPromise,
+  onNavigate,
+}: {
+  countsPromise: Promise<Record<string, number>>
+  onNavigate?: () => void
+}) {
+  return <NavLinks onNavigate={onNavigate} counts={use(countsPromise)} />
+}
 
 function NavLinks({
   onNavigate,
@@ -238,12 +251,12 @@ function Wordmark() {
 function SidebarBody({
   profile,
   territory,
-  counts,
+  countsPromise,
   onNavigate,
 }: {
   profile: Profile
   territory: TerritoryContext
-  counts?: Record<string, number>
+  countsPromise: Promise<Record<string, number>>
   onNavigate?: () => void
 }) {
   return (
@@ -253,7 +266,9 @@ function SidebarBody({
       <TerritorySwitcher territory={territory} />
 
       <div className="flex-1 overflow-y-auto">
-        <NavLinks onNavigate={onNavigate} counts={counts} />
+        <Suspense fallback={<NavLinks onNavigate={onNavigate} />}>
+          <NavBadges countsPromise={countsPromise} onNavigate={onNavigate} />
+        </Suspense>
       </div>
 
       <div className="border-t border-border pt-2">
@@ -290,12 +305,13 @@ function SidebarBody({
 export function AdminNav({
   profile,
   territory,
-  counts,
+  countsPromise,
 }: {
   profile: Profile
   territory: TerritoryContext
-  // Live badge counts keyed by nav href (e.g. { '/admin/queue': 3 }).
-  counts?: Record<string, number>
+  // Live badge counts keyed by nav href (e.g. { '/admin/queue': 3 }), resolved
+  // after the shell paints rather than before it.
+  countsPromise: Promise<Record<string, number>>
 }) {
   const [open, setOpen] = useState(false)
 
@@ -304,7 +320,7 @@ export function AdminNav({
       {/* Desktop sidebar */}
       <aside className="hidden w-56 shrink-0 border-r border-border bg-card/30 md:block">
         <div className="sticky top-0 h-screen">
-          <SidebarBody profile={profile} territory={territory} counts={counts} />
+          <SidebarBody profile={profile} territory={territory} countsPromise={countsPromise} />
         </div>
       </aside>
 
@@ -320,7 +336,7 @@ export function AdminNav({
             <SidebarBody
               profile={profile}
               territory={territory}
-              counts={counts}
+              countsPromise={countsPromise}
               onNavigate={() => setOpen(false)}
             />
           </SheetContent>
