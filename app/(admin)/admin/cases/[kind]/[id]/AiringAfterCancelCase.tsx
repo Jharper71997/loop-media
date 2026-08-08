@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { formatCents, formatNumber, formatDateTime } from '@/lib/format'
 import {
   CaseShell,
@@ -63,7 +64,7 @@ export async function AiringAfterCancelCase({ campaignId }: { campaignId: string
   // How much has actually gone out since it ended.
   let playsSince = 0
   if (camp.ad && camp.endedAt) {
-    const { count } = await supabase
+    const { count } = await createAdminClient()
       .from('ad_plays')
       .select('*', { count: 'exact', head: true })
       .eq('ad_id', camp.ad.id)

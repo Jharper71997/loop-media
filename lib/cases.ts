@@ -19,6 +19,7 @@
 // does: plays and scans are MEASURED, reach is ESTIMATED and always labeled.
 import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { screenDownState } from '@/lib/uptime'
 import { loadAdminInbox, loadBillingRows } from '@/lib/adminInbox'
 import { loadInventory } from '@/lib/inventory'
@@ -77,16 +78,26 @@ type PlacementRow = {
 // Count rows without pulling them back. ad_plays is append-only and grows by
 // thousands per screen per day, so the board can never afford to fetch it —
 // but an indexed count(*) per ad is cheap and exact.
-async function countPlays(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  adId: string,
-  sinceISO: string
-): Promise<number> {
-  const { count } = await supabase
+//
+// Counted with the ADMIN client, scoped to ad ids we have already resolved, for
+// the reason app/host/page.tsx documents: per-table RLS makes aggregate reads
+// unreliable, and an exact count over a table this size is where that shows.
+// It failed silently and asymmetrically — the three advertisers with the MOST
+// plays (12k, 28k, 36k) all read as zero while smaller counts came back fine,
+// so the roster reported "not shown once" for the accounts running the most.
+// A zero here is not cosmetic: diagnose() reads it as too-new and drops them out
+// of the results cases entirely. Every caller is already behind requireAdmin().
+async function countPlays(adId: string, sinceISO: string): Promise<number> {
+  const { count, error } = await createAdminClient()
     .from('ad_plays')
     .select('*', { count: 'exact', head: true })
     .eq('ad_id', adId)
     .gte('played_at', sinceISO)
+  if (error) {
+    // Never let a failed count masquerade as a measured zero.
+    console.error('ad_plays count failed for', adId, error.message)
+    return 0
+  }
   return count ?? 0
 }
 
@@ -154,7 +165,7 @@ export const loadAdResults = cache(async (territoryId: string | null): Promise<A
   // Scans are small enough to aggregate in memory; plays are not.
   const adIds = [...new Set(placements.map((p) => p.ad_id))]
   if (!adIds.length) return []
-  const { data: scanData } = await supabase
+  const { data: scanData } = await createAdminClient()
     .from('qr_scans')
     .select('ad_id')
     .in('ad_id', adIds)
@@ -165,7 +176,7 @@ export const loadAdResults = cache(async (territoryId: string | null): Promise<A
     scansByAd.set(s.ad_id, (scansByAd.get(s.ad_id) ?? 0) + 1)
   }
 
-  const playCounts = await Promise.all(adIds.map((id) => countPlays(supabase, id, sinceISO)))
+  const playCounts = await Promise.all(adIds.map((id) => countPlays(id, sinceISO)))
   const playsByAd = new Map(adIds.map((id, i) => [id, playCounts[i]]))
 
   const out: AdResults[] = []

@@ -304,10 +304,23 @@ export function DataTable<T>({
                   ref={(el) => {
                     rowRefs.current[i] = el
                   }}
-                  onClick={() => setFocus(i)}
+                  onClick={(e) => {
+                    setFocus(i)
+                    if (!link) return
+                    // The whole row is the target, which is what every admin
+                    // worth copying does — hitting a 12px name is not a hit
+                    // area. Clicks that land on something interactive (the
+                    // checkbox, a nested link, a button) belong to that thing.
+                    const el = e.target as HTMLElement
+                    if (el.closest('a,button,input,label,[role="checkbox"]')) return
+                    // Cmd/Ctrl-click opens a new tab, same as a link would.
+                    if (e.metaKey || e.ctrlKey) window.open(link, '_blank')
+                    else router.push(link)
+                  }}
                   data-state={isSel ? 'selected' : undefined}
                   className={cn(
                     'transition-colors hover:bg-muted/50 data-[state=selected]:bg-primary/10',
+                    link && 'cursor-pointer',
                     i === focus && 'bg-muted/40'
                   )}
                 >

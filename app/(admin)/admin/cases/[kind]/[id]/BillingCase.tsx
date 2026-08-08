@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { formatCents, formatNumber, timeAgo, formatDateTime } from '@/lib/format'
 import { loadBillingRows } from '@/lib/adminInbox'
 import {
@@ -85,7 +86,7 @@ export async function BillingCase({
   // What they have actually received for the money we did not collect.
   let plays = 0
   if (camp.ad) {
-    const { count } = await supabase
+    const { count } = await createAdminClient()
       .from('ad_plays')
       .select('*', { count: 'exact', head: true })
       .eq('ad_id', camp.ad.id)

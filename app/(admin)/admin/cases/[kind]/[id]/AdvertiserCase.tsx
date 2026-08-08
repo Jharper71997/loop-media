@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { formatCents, formatNumber, timeAgo } from '@/lib/format'
 import { summarizeUptime, venueBusinessHours, formatUptimePct, screenDownState } from '@/lib/uptime'
 import type { PerDayHours } from '@/lib/openHours'
@@ -117,7 +118,7 @@ export async function AdvertiserCase({
   const [playCounts, { data: scanRows }, { data: uptimeRows }] = await Promise.all([
     Promise.all(
       tvIds.map(async (tvId) => {
-        const { count } = await supabase
+        const { count } = await createAdminClient()
           .from('ad_plays')
           .select('*', { count: 'exact', head: true })
           .eq('ad_id', adId)
@@ -126,7 +127,7 @@ export async function AdvertiserCase({
         return count ?? 0
       })
     ),
-    supabase
+    createAdminClient()
       .from('qr_scans')
       .select('tv_id, scanned_at')
       .eq('ad_id', adId)
