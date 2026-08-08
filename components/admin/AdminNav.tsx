@@ -7,14 +7,10 @@ import { usePathname } from 'next/navigation'
 import { useRouter } from 'next/navigation'
 import {
   LayoutDashboard,
-  Inbox,
   Store,
   Users,
   DollarSign,
-  Coins,
-  BarChart3,
   Settings,
-  Target,
   Menu,
   LogOut,
   UserCircle,
@@ -47,31 +43,45 @@ type NavItem = {
 }
 type NavGroup = { label: string | null; items: NavItem[] }
 
-// Seven entries, grouped by what you're trying to DO — not by which table the
-// page reads. Sell/Advertisers/Money is the money-in path in the order you walk
-// it; Content and Screens are the two things that keep an existing account
-// running; Setup is the rarely-touched configuration.
+// Five entries. Each is a question the business runs on, not a table:
+//
+//   Today       — what is broken, owed, or waiting on me right now
+//   Advertisers — who pays us, who might, and what is left to sell
+//   Screens     — are the things we sell actually working
+//   Money       — what came in, and what is going to
+//   Setup       — the numbers and copy you change twice a year
+//
+// Everything that used to be its own sidebar entry is still its own route; it
+// now appears as a tab inside the section it belongs to (see SectionTabs), so no
+// bookmark, email link or muscle-memory URL broke.
 const GROUPS: NavGroup[] = [
-  { label: null, items: [{ href: '/admin', label: 'Today', icon: LayoutDashboard, exact: true }] },
+  {
+    label: null,
+    items: [
+      {
+        href: '/admin',
+        label: 'Today',
+        icon: LayoutDashboard,
+        exact: true,
+        match: ['/admin/cases', '/admin/queue', '/admin/creative', '/admin/house', '/admin/trivia'],
+      },
+    ],
+  },
   {
     label: 'Grow',
     items: [
-      { href: '/admin/pipeline', label: 'Pipeline', icon: Target },
-      { href: '/admin/sell', label: 'Sell', icon: Coins, match: ['/admin/deals'] },
-      { href: '/admin/advertisers', label: 'Advertisers', icon: Users },
+      {
+        href: '/admin/advertisers',
+        label: 'Advertisers',
+        icon: Users,
+        match: ['/admin/pipeline', '/admin/sell', '/admin/deals', '/admin/reports'],
+      },
       { href: '/admin/money', label: 'Money', icon: DollarSign, match: ['/admin/revenue'] },
-      { href: '/admin/reports', label: 'Reports', icon: BarChart3 },
     ],
   },
   {
     label: 'Run',
     items: [
-      {
-        href: '/admin/queue',
-        label: 'Content',
-        icon: Inbox,
-        match: ['/admin/creative', '/admin/house', '/admin/trivia'],
-      },
       {
         href: '/admin/venues',
         label: 'Screens',
@@ -118,9 +128,10 @@ function NavLinks({
             </span>
           )}
           {group.items.map(({ href, label, icon: Icon, exact, match }) => {
-            const active = exact
-              ? pathname === href
-              : pathname.startsWith(href) || (match ?? []).some((m) => pathname.startsWith(m))
+            // `exact` only constrains the entry's own href (/admin is a prefix of
+            // every admin route); its `match` prefixes still light it up.
+            const hit = exact ? pathname === href : pathname.startsWith(href)
+            const active = hit || (match ?? []).some((m) => pathname.startsWith(m))
             const n = counts?.[href] ?? 0
             return (
               <Link

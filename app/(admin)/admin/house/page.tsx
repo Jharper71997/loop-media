@@ -2,7 +2,7 @@ import { requireAdmin } from '@/lib/auth'
 import { getTerritoryContext } from '@/lib/territory'
 import { createClient } from '@/lib/supabase/server'
 import { PageHeader } from '@/components/admin/PageHeader'
-import { SectionTabs, CONTENT_TABS } from '@/components/admin/SectionTabs'
+import { SectionTabs, TODAY_TABS } from '@/components/admin/SectionTabs'
 import { Badge } from '@/components/ui/badge'
 import { formatDateTime } from '@/lib/format'
 import { HouseUploader } from './HouseUploader'
@@ -68,7 +68,7 @@ export default async function HouseSlidesPage() {
             : 'Replace the built-in house slides across every screen. Pick a market to override just that market.'
         }
       />
-      <SectionTabs tabs={CONTENT_TABS} />
+      <SectionTabs tabs={TODAY_TABS} />
 
       <div className="space-y-4 p-3 md:p-4">
         {SLIDES.map((slide) => {

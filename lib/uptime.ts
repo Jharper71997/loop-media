@@ -6,10 +6,46 @@
 //
 // Pure functions (no DB) so they're usable on server and client.
 
-import { formatPerDayHours, type PerDayHours } from '@/lib/openHours'
+import { formatPerDayHours, isWithinOpenHours, type PerDayHours, type VenueHours } from '@/lib/openHours'
 
 export const UPTIME_SLA = 0.8 // 80% of business hours
 export const UPTIME_WINDOW_DAYS = 30
+
+// ---------------------------------------------------------------------------
+// Is this screen DOWN, as opposed to merely quiet?
+// ---------------------------------------------------------------------------
+// isTvLive() answers "did this screen beat in the last 95 seconds", which is the
+// right question for a live indicator and the wrong one for a problem list: a
+// bar that closed at 10pm has every screen "not live" by midnight, and a list
+// built on that reports seven emergencies every morning that are all just closed
+// venues. The offline-alert cron already got this right — stale for a while
+// WHILE THE VENUE IS OPEN — so the same rule decides what counts as broken here.
+//
+// The second clause exists because a genuinely dead screen should not vanish
+// from the list at closing time: once it has been silent for over a day, the
+// hour stops mattering.
+export const DOWN_AFTER_MS = 30 * 60 * 1000
+export const DOWN_REGARDLESS_MS = 26 * 60 * 60 * 1000
+
+export type ScreenDownState = {
+  down: boolean
+  /** Time since the last heartbeat; null when it has never checked in. */
+  staleMs: number | null
+  reason: 'never-checked-in' | 'down-while-open' | 'down-over-a-day' | null
+}
+
+export function screenDownState(
+  lastHeartbeat: string | null,
+  hours: VenueHours,
+  nowMs = Date.now()
+): ScreenDownState {
+  if (!lastHeartbeat) return { down: true, staleMs: null, reason: 'never-checked-in' }
+  const staleMs = nowMs - new Date(lastHeartbeat).getTime()
+  if (staleMs > DOWN_REGARDLESS_MS) return { down: true, staleMs, reason: 'down-over-a-day' }
+  if (staleMs > DOWN_AFTER_MS && isWithinOpenHours(new Date(nowMs), hours))
+    return { down: true, staleMs, reason: 'down-while-open' }
+  return { down: false, staleMs, reason: null }
+}
 
 export type BusinessHours = {
   open: string // 'HH:MM'

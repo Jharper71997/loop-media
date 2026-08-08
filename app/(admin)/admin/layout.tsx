@@ -18,13 +18,13 @@ export default async function AdminLayout({
   const { counts } = await loadAdminInbox(territory.activeId)
 
   const badges: Record<string, number> = {
-    // Pipeline = follow-ups you promised that are due or overdue.
-    '/admin/pipeline': counts.followup,
-    // Content = ads awaiting review + creative we owe an advertiser.
-    '/admin/queue': counts.approvals + counts.creative,
-    // Money = accounts that are live but unbilled, overdue, or about to lapse,
-    // plus anything paid that never activated.
-    '/admin/money': counts.billing + counts.activation,
+    // Today = the work that only moves if you touch it: ads awaiting review,
+    // creative we owe an advertiser, and anything paid that never activated.
+    '/admin': counts.approvals + counts.creative + counts.activation,
+    // Advertisers = follow-ups you promised that are due or overdue.
+    '/admin/advertisers': counts.followup,
+    // Money = accounts that are live but unbilled, overdue, or about to lapse.
+    '/admin/money': counts.billing,
     // Screens = paired screens that have gone dark at a live venue.
     '/admin/venues': counts.offline,
   }
