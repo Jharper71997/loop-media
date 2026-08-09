@@ -26,9 +26,17 @@ import { createOpportunity } from './actions'
 export function NewOpportunityDialog({
   kind,
   categories,
+  stage,
+  stageLabel,
+  variant = 'button',
 }: {
   kind: OpportunityKind
   categories: { id: string; name: string }[]
+  /** Drop the new card straight into this column. Defaults to the first. */
+  stage?: string
+  stageLabel?: string
+  /** 'icon' is the compact trigger that sits in a column header. */
+  variant?: 'button' | 'icon'
 }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
@@ -67,6 +75,7 @@ export function NewOpportunityDialog({
       const dollars = Number(monthly.replace(/[$,\s]/g, ''))
       const res = await createOpportunity({
         kind,
+        stage: stage ?? null,
         businessName,
         contactName,
         email,
@@ -93,14 +102,30 @@ export function NewOpportunityDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button size="sm" />}>
-        <Plus className="size-4" /> Add prospect
-      </DialogTrigger>
+      {variant === 'icon' ? (
+        <DialogTrigger
+          render={
+            <button
+              type="button"
+              title={`Add a prospect to ${stageLabel ?? 'this column'}`}
+              className="rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            />
+          }
+        >
+          <Plus className="size-4" />
+          <span className="sr-only">Add a prospect to {stageLabel ?? 'this column'}</span>
+        </DialogTrigger>
+      ) : (
+        <DialogTrigger render={<Button size="sm" />}>
+          <Plus className="size-4" /> Add prospect
+        </DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>New {kind === 'host' ? 'host' : 'advertiser'} prospect</DialogTitle>
           <DialogDescription>
-            Goes to the first column of {KIND_LABEL[kind]}. Only the business name is required.
+            Goes to {stageLabel ? `“${stageLabel}”` : 'the first column'} in {KIND_LABEL[kind]}.
+            Only the business name is required.
           </DialogDescription>
         </DialogHeader>
 

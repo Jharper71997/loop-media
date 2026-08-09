@@ -157,7 +157,12 @@ export default async function PipelinePage({
                 </div>
               </Panel>
             ) : (
-              <Board kind={kind} columns={board.columns} stages={stages} />
+              <Board
+                kind={kind}
+                columns={board.columns}
+                stages={stages}
+                categories={categories}
+              />
             )}
 
             {(board.won.length > 0 || board.lost.length > 0) && (

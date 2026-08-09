@@ -19,6 +19,8 @@ import {
   type StageDef,
 } from '@/lib/pipeline'
 import { moveStage } from './actions'
+import { NewOpportunityDialog } from './NewOpportunityDialog'
+import { EditOpportunityDialog } from './EditOpportunityDialog'
 
 // The board.
 //
@@ -41,10 +43,12 @@ export function Board({
   kind,
   columns,
   stages,
+  categories,
 }: {
   kind: OpportunityKind
   columns: BoardColumnData[]
   stages: StageDef[]
+  categories: { id: string; name: string }[]
 }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
@@ -174,9 +178,22 @@ export function Board({
               one line. The count and the money are the two numbers you scan a
               board for, so they get their own rows and their own weight. */}
           <header className="shrink-0 border-b border-border px-2.5 py-2">
-            <h2 className="truncate text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-              {col.label}
-            </h2>
+            <div className="flex items-center justify-between gap-1">
+              <h2 className="truncate text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                {col.label}
+              </h2>
+              {/* Adding a prospect belongs where you are looking at prospects.
+                  It was only in the sticky page header, sandwiched between
+                  Outreach and Import, which is a fine place for it to be and a
+                  terrible place for it to be found. */}
+              <NewOpportunityDialog
+                kind={kind}
+                categories={categories}
+                stage={col.key}
+                stageLabel={col.label}
+                variant="icon"
+              />
+            </div>
             <p className="mt-1 text-sm tabular-nums">
               {col.items.length} opportunit{col.items.length === 1 ? 'y' : 'ies'}
             </p>
@@ -206,6 +223,7 @@ export function Board({
                   o={o}
                   kind={kind}
                   stages={stages}
+                  categories={categories}
                   pending={pending}
                   onDragStart={() => setDragId(o.id)}
                   onDragEnd={() => setDragId(null)}
@@ -225,6 +243,7 @@ function Card({
   o,
   kind,
   stages,
+  categories,
   pending,
   onDragStart,
   onDragEnd,
@@ -233,6 +252,7 @@ function Card({
   o: Opportunity
   kind: OpportunityKind
   stages: StageDef[]
+  categories: { id: string; name: string }[]
   pending: boolean
   onDragStart: () => void
   onDragEnd: () => void
@@ -302,16 +322,25 @@ function Card({
             <span className="sr-only">Call {o.businessName}</span>
           </a>
         )}
-        {o.email && (
+        {/* Email either writes to them or gets you the address to write to.
+            Most of these came off phone-only vcards, so a mail button that
+            simply is not there when there is no address just reads as broken —
+            and the moment you learn the address is the moment you are looking
+            at the card. */}
+        {o.email ? (
           <a
             href={`mailto:${o.email}`}
-            title={o.email}
+            title={`Email ${o.email}`}
             className="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
           >
             <Mail className="size-3" />
             <span className="sr-only">Email {o.businessName}</span>
           </a>
+        ) : (
+          <EditOpportunityDialog opportunity={o} categories={categories} focus="email" />
         )}
+
+        <EditOpportunityDialog opportunity={o} categories={categories} />
 
         {/* The accessible path to the same action as dragging. */}
         <select
