@@ -18,6 +18,8 @@ import {
   CaseAction,
   CaseActions,
 } from '@/components/admin/CaseShell'
+import { MoveScreen } from '@/components/admin/MoveScreen'
+import { moveDestinationsFor } from '@/lib/moveScreen'
 
 // A screen that stopped checking in.
 //
@@ -140,6 +142,16 @@ export async function ScreenDarkCase({ tvId }: { tvId: string }) {
   }))
   const atRisk = affected.reduce((s, a) => s + a.share, 0)
 
+  // Somewhere else each affected ad could run instead. Priced per campaign,
+  // because the discount an advertiser is on decides what a swap costs them.
+  const movable = (
+    await Promise.all(
+      [...new Set(affected.map((a) => a.campaignId).filter((id): id is string => !!id))].map(
+        async (campaignId) => (await moveDestinationsFor(campaignId, venue.id)).context ?? null
+      )
+    )
+  ).filter((c): c is NonNullable<typeof c> => !!c)
+
   // Last day with any recorded uptime — the honest answer to "when did it stop",
   // which the heartbeat alone rounds off once it has been dark a while.
   const lastGoodDay = [...days].reverse().find((d) => d.seconds > 0)?.day ?? null
@@ -256,6 +268,19 @@ export async function ScreenDarkCase({ tvId }: { tvId: string }) {
                   <div className="text-[10px] text-muted-foreground">not delivering</div>
                 </div>
               </div>
+            ))}
+          </div>
+        </CaseSection>
+      )}
+
+      {movable.length > 0 && (
+        <CaseSection
+          title="Move an ad off this screen"
+          note="fixes delivery today; the repair still has to happen"
+        >
+          <div className="space-y-2">
+            {movable.map((ctx) => (
+              <MoveScreen key={ctx.campaignId} context={ctx} />
             ))}
           </div>
         </CaseSection>

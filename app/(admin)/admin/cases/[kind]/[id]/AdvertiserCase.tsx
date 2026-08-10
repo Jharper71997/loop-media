@@ -13,6 +13,8 @@ import {
   CaseAction,
   CaseActions,
 } from '@/components/admin/CaseShell'
+import { MoveScreen } from '@/components/admin/MoveScreen'
+import { moveDestinationsFor } from '@/lib/moveScreen'
 
 // An advertiser who is paying and not getting what they paid for.
 //
@@ -202,6 +204,17 @@ export async function AdvertiserCase({
   const darkScreens = venues.reduce((s, v) => s + v.darkScreens, 0)
   const monthly = camp.monthly_total_cents ?? 0
 
+  // For every venue on this campaign where nothing is showing, where else the ad
+  // could go. Only fully-dark venues are offered: a venue with one live screen
+  // out of two is still delivering, and moving it would cost them that screen.
+  const movable = (
+    await Promise.all(
+      venues
+        .filter((v) => v.darkScreens > 0 && v.darkScreens === v.screens)
+        .map(async (v) => (await moveDestinationsFor(campaignId, v.id)).context ?? null)
+    )
+  ).filter((c): c is NonNullable<typeof c> => !!c)
+
   // The bar they are measured against: the median of everyone else on the network.
   const allResults = await loadAdResults(camp.territory_id)
   const median = networkScanRate(allResults.filter((r) => r.campaignId !== campaignId))
@@ -354,6 +367,19 @@ export async function AdvertiserCase({
           </div>
         </div>
       </CaseSection>
+
+      {movable.length > 0 && (
+        <CaseSection
+          title="Move this ad to another screen"
+          note="delivery they paid for, restored today"
+        >
+          <div className="space-y-2">
+            {movable.map((ctx) => (
+              <MoveScreen key={ctx.fromVenueId} context={ctx} />
+            ))}
+          </div>
+        </CaseSection>
+      )}
 
       <CaseSection title="What to do">
         <CaseActions>
