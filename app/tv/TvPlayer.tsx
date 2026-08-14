@@ -12,6 +12,30 @@ const DEVICE_KEY = 'lm_device'
 const DEVICE_SECRET_KEY = 'lm_device_secret'
 
 const cacheKey = (d: string) => `lm_loop_${d}`
+const CACHE_PREFIX = 'lm_loop_'
+
+// How many CONSECUTIVE 404/403 replies it takes before a screen believes it has
+// really been unpaired. Unpairing destroys the only copy of this screen's
+// identity, and the kiosk URL is a plain /tv with nothing to restore it from, so
+// acting on one bad reply is how a whole fleet goes dark at once (2026-08-14).
+// At the 30s poll cadence this is ~2 minutes of the server saying the same thing.
+const UNPAIR_STRIKES = 5
+
+// Last-ditch identity recovery. Unpairing clears the id and secret but NOT the
+// cached loop, which is stored under `lm_loop_<deviceId>` — so the key name
+// itself is the final copy of who this screen is. Without this, a screen that
+// unpaired itself stays dark until someone drives to the venue and types a code.
+function recoverDeviceId(): string | null {
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i)
+      if (k?.startsWith(CACHE_PREFIX)) return k.slice(CACHE_PREFIX.length) || null
+    }
+  } catch {
+    // Storage disabled/full — nothing to recover from.
+  }
+  return null
+}
 
 type AdItem = {
   type: 'ad'
@@ -161,7 +185,11 @@ export function TvPlayer() {
     const urlSecret = params.get('secret')?.trim()
     // In preview never read/persist the stored device — keep the admin's browser
     // from inheriting (or becoming) a real screen.
-    const id = urlDevice || (isPreview ? null : localStorage.getItem(DEVICE_KEY))
+    // ...and if the stored id is gone, fall back to recovering it from the cached
+    // loop left behind by a self-unpair, so the screen heals on its next reload
+    // instead of waiting for a site visit.
+    const id =
+      urlDevice || (isPreview ? null : localStorage.getItem(DEVICE_KEY) ?? recoverDeviceId())
     const secret = urlSecret || (isPreview ? null : localStorage.getItem(DEVICE_SECRET_KEY))
     if (id) {
       if (!isPreview) {
@@ -346,6 +374,8 @@ function Player({
   // build, a new version has deployed and we reload — otherwise the screen runs
   // the JS it started with forever and never picks up fixes.
   const bootBuild = useRef<string | null>(null)
+  // Consecutive 404/403 replies from the loop endpoint. Reset by any good poll.
+  const unpairStrikes = useRef(0)
   // The screen-label + Unpair controls stay hidden during playback (a TV has no
   // mouse hover) so the display is clean. A tap/remote-click reveals them for a
   // few seconds — long enough to unpair or go fullscreen — then they hide again.
@@ -393,11 +423,19 @@ function Player({
       })
       if (res.status === 404 || res.status === 403) {
         // 404 = unpaired/unknown device; 403 = device secret rejected (e.g. the
-        // code was regenerated to move the screen). Either way, drop to pairing.
-        onUnpair()
-        return
+        // code was regenerated to move the screen). Both are real states, but
+        // neither is urgent — and obeying a WRONG one costs us the screen until
+        // someone drives out to it. So make the server say it repeatedly, and
+        // keep playing the cached loop while we wait it out.
+        unpairStrikes.current++
+        if (unpairStrikes.current >= UNPAIR_STRIKES) {
+          onUnpair()
+          return
+        }
+        throw new Error('rejected')
       }
       if (!res.ok) throw new Error('fetch failed')
+      unpairStrikes.current = 0
       const data: Manifest = await res.json()
       // Self-update: reload once when the deployed build changes — for real
       // screens AND the admin preview, so a peek always reflects the latest

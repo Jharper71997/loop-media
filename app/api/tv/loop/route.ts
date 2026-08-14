@@ -54,12 +54,20 @@ export async function GET(req: Request) {
   }
 
   const supabase = createAdminClient()
-  const { data: tvRow } = await supabase
+  const { data: tvRow, error: tvErr } = await supabase
     .from('tvs')
     .select('id, device_secret, loop_length_seconds, slot_seconds, brewloop_seconds, advertise_seconds, trivia_slide_seconds, overscan_pct, venue:venues(id, name, lat, lng, play_code, trivia_enabled, territory:territories(id, name))')
     .eq('device_id', device)
     .maybeSingle()
 
+  // "The database did not answer" is NOT "this device does not exist". The error
+  // used to be dropped on the floor here, so any Supabase hiccup answered 404 —
+  // and 404 is the one reply that makes a screen erase its own identity and drop
+  // to the pairing screen for good. On 2026-08-14 a single bad response took five
+  // venues dark inside 20 seconds. A screen must retry a failure, never obey it.
+  if (tvErr) {
+    return NextResponse.json({ error: 'Lookup failed.' }, { status: 503 })
+  }
   if (!tvRow) {
     return NextResponse.json({ error: 'Device not paired.' }, { status: 404 })
   }
