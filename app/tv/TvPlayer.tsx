@@ -37,6 +37,24 @@ function recoverDeviceId(): string | null {
   return null
 }
 
+// Drop every cached loop except `keep`. Recovery above treats a leftover
+// `lm_loop_<id>` key as proof of identity, so a stale one is not dead weight —
+// it is a screen's old self waiting to be resurrected. Called when a screen is
+// deliberately re-pointed (re-paired or reset), which is the one case where the
+// old identity is wrong and must not come back.
+function purgeCachedLoops(keep?: string) {
+  try {
+    const doomed: string[] = []
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i)
+      if (k?.startsWith(CACHE_PREFIX) && k !== (keep ? cacheKey(keep) : null)) doomed.push(k)
+    }
+    for (const k of doomed) localStorage.removeItem(k)
+  } catch {
+    // Storage disabled — nothing cached to purge.
+  }
+}
+
 type AdItem = {
   type: 'ad'
   id: string
@@ -183,6 +201,22 @@ export function TvPlayer() {
     setPreview(isPreview)
     const urlDevice = params.get('device')?.trim()
     const urlSecret = params.get('secret')?.trim()
+    // /tv?reset=1 — the only way to make a screen forget itself on purpose now
+    // that it can recover its id from a leftover cache key. The kiosk menu's
+    // Unpair clears just `lm_device`, so on the installed APK it no longer sticks;
+    // this is the lever that does, and it works over the existing kiosk link with
+    // no reflash. Re-pointing a TV at a new venue goes through here.
+    if (params.get('reset') === '1' && !isPreview) {
+      try {
+        localStorage.removeItem(DEVICE_KEY)
+        localStorage.removeItem(DEVICE_SECRET_KEY)
+      } catch {
+        // Storage disabled — there was nothing to forget.
+      }
+      purgeCachedLoops()
+      setReady(true)
+      return
+    }
     // In preview never read/persist the stored device — keep the admin's browser
     // from inheriting (or becoming) a real screen.
     // ...and if the stored id is gone, fall back to recovering it from the cached
@@ -213,6 +247,10 @@ export function TvPlayer() {
         onPaired={(id, secret) => {
           localStorage.setItem(DEVICE_KEY, id)
           if (secret) localStorage.setItem(DEVICE_SECRET_KEY, secret)
+          // A TV moved to another venue leaves its previous venue's cached loop
+          // behind. Without this, the next reload would "recover" that old id and
+          // silently put the screen back on the wrong venue's ads.
+          purgeCachedLoops(id)
           setDeviceId(id)
           setDeviceSecret(secret)
         }}

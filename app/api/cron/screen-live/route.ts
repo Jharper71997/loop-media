@@ -4,6 +4,7 @@ import { appUrl } from '@/lib/stripe'
 import { sendEmail } from '@/lib/email'
 import { resolveEmail, escapeHtml } from '@/lib/emailSettings'
 import { runOfflineAlerts } from '@/lib/offlineAlerts'
+import { runFleetAlarm } from '@/lib/fleetAlarm'
 
 // "A new screen just went live near you" announcement — two emails, one trigger.
 //
@@ -95,6 +96,17 @@ export async function GET(req: Request) {
   const admin = createAdminClient()
   const base = appUrl()
 
+  // Folded-in fleet alarm: many screens stopping at once is a platform fault, and
+  // it must be evaluated BEFORE the host alerts below, which it suppresses. Runs
+  // on this daily cron for the same Hobby cron-cap reason as the offline alerts —
+  // daily is far slower than this deserves; see the note in lib/fleetAlarm.
+  let fleet: unknown = null
+  try {
+    fleet = await runFleetAlarm(admin, base, { dry })
+  } catch {
+    fleet = { outage: null, sent: 0, skipped: 'error' }
+  }
+
   // Folded-in host offline-screen alerts (run on this daily cron to respect the
   // Hobby cron cap — see lib/offlineAlerts). Independent of the screen-live email
   // below; a failure here must never block it.
@@ -111,7 +123,7 @@ export async function GET(req: Request) {
   const advOn = dry || (await resolveEmail(admin, 'screen_live', {})).enabled
   const hostOn = dry || (await resolveEmail(admin, 'host_screen_live', {})).enabled
   if (!advOn && !hostOn) {
-    return NextResponse.json({ ran: 0, sent: 0, skipped: 'screen_live disabled', offline })
+    return NextResponse.json({ ran: 0, sent: 0, skipped: 'screen_live disabled', offline, fleet })
   }
 
   // Venue ids whose screen has ever checked in (so it's real + live).
@@ -120,7 +132,7 @@ export async function GET(req: Request) {
     .select('venue_id')
     .not('last_heartbeat_at', 'is', null)
   const everLive = [...new Set((liveTvs ?? []).map((t) => t.venue_id as string))]
-  if (!everLive.length) return NextResponse.json({ ran: 0, sent: 0, results: [], offline })
+  if (!everLive.length) return NextResponse.json({ ran: 0, sent: 0, results: [], offline, fleet })
 
   // Venues we've already announced.
   const { data: announced } = await admin.from('venue_live_notice_log').select('venue_id')
@@ -263,5 +275,6 @@ export async function GET(req: Request) {
     hostEmails: results.reduce((n, r) => n + r.hostRecipients, 0),
     results,
     offline,
+    fleet,
   })
 }

@@ -22,11 +22,16 @@ export async function POST(req: Request) {
   }
 
   const supabase = createAdminClient()
-  const { data: tv } = await supabase
+  const { data: tv, error: tvErr } = await supabase
     .from('tvs')
     .select('id, device_secret')
     .eq('device_id', device)
     .maybeSingle()
+  // A failed lookup is not an unknown device — see the note in ../loop/route.ts.
+  // Nothing here erases a screen's identity, so this can't take the fleet dark,
+  // but answering 404 to a database blip silently drops proof-of-play, which is
+  // what advertisers are billed and reported on. Say "retry", not "you're wrong".
+  if (tvErr) return NextResponse.json({ error: 'Lookup failed.' }, { status: 503 })
   if (!tv) return NextResponse.json({ error: 'Device not paired.' }, { status: 404 })
   if (!deviceSecretOk(tv.device_secret, req)) {
     return NextResponse.json({ error: 'Device secret mismatch.' }, { status: 403 })
@@ -34,13 +39,14 @@ export async function POST(req: Request) {
 
   // Only log a play if the ad is actually scheduled on this screen — otherwise a
   // leaked device_id could inflate proof-of-play counts for any ad.
-  const { data: placement } = await supabase
+  const { data: placement, error: placeErr } = await supabase
     .from('ad_placements')
     .select('id')
     .eq('ad_id', adId)
     .eq('tv_id', tv.id)
     .eq('status', 'active')
     .maybeSingle()
+  if (placeErr) return NextResponse.json({ error: 'Lookup failed.' }, { status: 503 })
   if (!placement) {
     return NextResponse.json({ error: 'Ad is not scheduled on this screen.' }, { status: 409 })
   }

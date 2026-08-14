@@ -427,7 +427,16 @@ public class MainActivity extends Activity {
     private void unpair() {
         if (web == null) return;
         // Clear the stored device id so the screen returns to the code-entry view.
-        web.evaluateJavascript("try{localStorage.removeItem('lm_device');}catch(e){}", null);
+        // The secret and every cached loop go too: the player recovers its identity
+        // from a leftover `lm_loop_<id>` key (so a screen that unpairs itself after a
+        // bad server reply can heal without a site visit), which means clearing only
+        // `lm_device` would let this deliberate unpair silently undo itself on reload.
+        web.evaluateJavascript(
+            "try{localStorage.removeItem('lm_device');localStorage.removeItem('lm_device_secret');"
+                + "var d=[];for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);"
+                + "if(k&&k.indexOf('lm_loop_')===0)d.push(k);}"
+                + "for(var j=0;j<d.length;j++)localStorage.removeItem(d[j]);}catch(e){}",
+            null);
         web.clearCache(true);
         web.loadUrl(TV_URL);
     }

@@ -15,11 +15,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, skipped: true })
   }
   const supabase = createAdminClient()
-  const { data: tv } = await supabase
+  const { data: tv, error: tvErr } = await supabase
     .from('tvs')
     .select('id, last_heartbeat_at, device_secret')
     .eq('device_id', device)
     .maybeSingle()
+  // Same rule as the other tv routes: a database failure is not an unknown
+  // device. This one already failed safe (an unknown device gets a cheerful 200),
+  // but swallowing the error meant a Supabase blip silently stopped crediting
+  // uptime while every screen still looked healthy. 503 makes it visible.
+  if (tvErr) return NextResponse.json({ error: 'Lookup failed.' }, { status: 503 })
   if (!tv) return NextResponse.json({ ok: true })
   // A device WITH a secret must present it; a mismatched secret is a spoof.
   if (!deviceSecretOk(tv.device_secret, req)) {

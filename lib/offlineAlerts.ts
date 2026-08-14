@@ -13,6 +13,7 @@ import type { createAdminClient } from '@/lib/supabase/admin'
 import { sendEmail } from '@/lib/email'
 import { resolveEmail, escapeHtml } from '@/lib/emailSettings'
 import { isWithinOpenHours } from '@/lib/openHours'
+import { detectFleetOutage } from '@/lib/fleetAlarm'
 
 type Admin = ReturnType<typeof createAdminClient>
 
@@ -76,6 +77,14 @@ export async function runOfflineAlerts(
   // Admin on/off gate for this email.
   if (!dry && !(await resolveEmail(admin, 'screen_offline', {})).enabled) {
     return { ran: 0, sent: 0, skipped: 'screen_offline disabled' }
+  }
+
+  // Never blame the host for our own outage. When screens across several venues
+  // stop within minutes of each other the cause is the platform, and this email
+  // would send a bar owner to go power-cycle a TV that is working fine. The
+  // operators get the fleet alarm instead (lib/fleetAlarm); hosts hear nothing.
+  if (!dry && (await detectFleetOutage(admin, now))) {
+    return { ran: 0, sent: 0, skipped: 'fleet outage — host alerts suppressed' }
   }
 
   let vq = admin

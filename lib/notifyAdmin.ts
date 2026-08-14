@@ -21,7 +21,7 @@ function embeddedName(v: unknown): string | null {
   return typeof name === 'string' ? name : null
 }
 
-async function adminRecipients(admin: AdminClient): Promise<string[]> {
+export async function adminRecipients(admin: AdminClient): Promise<string[]> {
   const pinned = process.env.ADMIN_ALERT_EMAIL
   if (pinned) {
     return pinned
