@@ -17,6 +17,7 @@ import type { createAdminClient } from '@/lib/supabase/admin'
 import { sendEmail } from '@/lib/email'
 import { escapeHtml } from '@/lib/emailSettings'
 import { adminRecipients } from '@/lib/notifyAdmin'
+import { isWithinOpenHours } from '@/lib/openHours'
 
 type Admin = ReturnType<typeof createAdminClient>
 
@@ -34,11 +35,20 @@ const MIN_VENUES = 2
 // One alarm per outage, not one per run.
 const COOLDOWN_MS = 6 * 60 * 60 * 1000
 
+type VenueHours = {
+  id: string
+  name: string
+  business_open: string | null
+  business_close: string | null
+  business_days: number[] | null
+  business_hours: Record<string, { open: string; close: string }> | null
+}
+
 type TvRow = {
   id: string
   device_id: string | null
   last_heartbeat_at: string | null
-  venue: { id: string; name: string } | null
+  venue: VenueHours | null
 }
 
 export type FleetOutage = {
@@ -52,12 +62,10 @@ export type FleetOutage = {
 
 // A PostgREST embed arrives as an object or a one-element array depending on the
 // relationship; normalise both.
-function embedded(v: unknown): { id: string; name: string } | null {
+function embedded(v: unknown): VenueHours | null {
   const rel = Array.isArray(v) ? v[0] : v
-  const r = rel as { id?: unknown; name?: unknown } | null | undefined
-  return typeof r?.id === 'string' && typeof r?.name === 'string'
-    ? { id: r.id, name: r.name }
-    : null
+  const r = rel as VenueHours | null | undefined
+  return typeof r?.id === 'string' && typeof r?.name === 'string' ? r : null
 }
 
 // Finds the largest group of screens that stopped within CLUSTER_MS of each
@@ -65,7 +73,9 @@ function embedded(v: unknown): { id: string; name: string } | null {
 export async function detectFleetOutage(admin: Admin, now = Date.now()): Promise<FleetOutage | null> {
   const { data, error } = await admin
     .from('tvs')
-    .select('id, device_id, last_heartbeat_at, venue:venues(id, name)')
+    .select(
+      'id, device_id, last_heartbeat_at, venue:venues(id, name, business_open, business_close, business_days, business_hours)'
+    )
   // Never alarm on a failed read — that is the exact mistake that caused the
   // outage this alarm exists to catch.
   if (error) return null
@@ -79,7 +89,20 @@ export async function detectFleetOutage(admin: Admin, now = Date.now()): Promise
     }))
     .filter((t) => {
       const silent = now - t.at
-      return silent > STALE_AFTER_MS && silent < RECENT_WINDOW_MS
+      if (silent <= STALE_AFTER_MS || silent >= RECENT_WINDOW_MS) return false
+      // A screen going quiet at closing time is a venue shutting off its TV, not
+      // an outage — and venues keep similar hours, so several closing within the
+      // same few minutes is exactly the correlated shape this alarm looks for.
+      // Without this guard a normal evening would page the operators. Judge by
+      // whether the venue was open WHEN IT STOPPED, not right now.
+      const v = t.venue
+      if (!v) return true
+      return isWithinOpenHours(new Date(t.at).toISOString(), {
+        business_open: v.business_open,
+        business_close: v.business_close,
+        business_days: v.business_days,
+        business_hours: v.business_hours,
+      })
     })
     .sort((a, b) => a.at - b.at)
 
