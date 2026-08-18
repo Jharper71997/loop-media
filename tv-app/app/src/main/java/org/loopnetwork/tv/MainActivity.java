@@ -8,6 +8,8 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.SharedPreferences;
+import android.net.Uri;
 import android.provider.Settings;
 import android.widget.Toast;
 import android.net.wifi.WifiManager;
@@ -81,6 +83,13 @@ public class MainActivity extends Activity {
     private boolean deviceOwner;
     private static final String KIOSK_PREFS = "kiosk";
     private static final String KEY_UNLOCKED = "unlocked";
+    // Native copy of this screen's identity. The web player keeps the same
+    // values in localStorage, but localStorage is exactly what gets wiped when
+    // the player mistakenly believes it was unpaired -- and then the screen sits
+    // on a pairing code until a human drives out to it. These two keys are the
+    // copy that survives that, and they are fed back in through the URL.
+    private static final String KEY_DEVICE_ID = "device_id";
+    private static final String KEY_DEVICE_SECRET = "device_secret";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -128,8 +137,12 @@ public class MainActivity extends Activity {
                 // Inject an independent heartbeat. If the page's JS context dies
                 // or hangs, this interval dies with it and the watchdog fires.
                 v.evaluateJavascript(
-                    "(function(){if(window.__lmPing)return;" +
-                    "window.__lmPing=setInterval(function(){try{AndroidKiosk.alive();}catch(e){}},15000);" +
+                    "(function(){" +
+                    "function cap(){try{var d=localStorage.getItem('lm_device');" +
+                    "if(d)AndroidKiosk.identity(d,localStorage.getItem('lm_device_secret'));}catch(e){}}" +
+                    "cap();" +
+                    "if(window.__lmPing)return;" +
+                    "window.__lmPing=setInterval(function(){try{AndroidKiosk.alive();}catch(e){}cap();},15000);" +
                     "try{AndroidKiosk.alive();}catch(e){}})();", null);
             }
 
@@ -160,7 +173,7 @@ public class MainActivity extends Activity {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         lastAlive = SystemClock.elapsedRealtime();
-        web.loadUrl(TV_URL);
+        web.loadUrl(kioskUrl());
     }
 
     private void recoverFromCrash() {
@@ -175,7 +188,7 @@ public class MainActivity extends Activity {
     private void scheduleRetry() {
         handler.postDelayed(new Runnable() {
             @Override public void run() {
-                if (web != null) web.loadUrl(TV_URL);
+                if (web != null) web.loadUrl(kioskUrl());
             }
         }, 5_000L);
     }
@@ -185,7 +198,7 @@ public class MainActivity extends Activity {
             long since = SystemClock.elapsedRealtime() - lastAlive;
             if (since > WATCHDOG_TIMEOUT_MS && web != null) {
                 web.stopLoading();
-                web.loadUrl(TV_URL);
+                web.loadUrl(kioskUrl());
                 lastAlive = SystemClock.elapsedRealtime();
             }
             handler.postDelayed(this, WATCHDOG_CHECK_MS);
@@ -194,7 +207,7 @@ public class MainActivity extends Activity {
 
     private final Runnable safetyReload = new Runnable() {
         @Override public void run() {
-            if (web != null) web.loadUrl(TV_URL);
+            if (web != null) web.loadUrl(kioskUrl());
             handler.postDelayed(this, SAFETY_RELOAD_MS);
         }
     };
@@ -203,6 +216,36 @@ public class MainActivity extends Activity {
     private class KioskBridge {
         @JavascriptInterface
         public void alive() { lastAlive = SystemClock.elapsedRealtime(); }
+
+        /** Page hands us its identity so we can hand it back after any wipe. */
+        @JavascriptInterface
+        public void identity(String id, String secret) { rememberIdentity(id, secret); }
+    }
+
+    private SharedPreferences prefs() {
+        return getSharedPreferences(KIOSK_PREFS, MODE_PRIVATE);
+    }
+
+    /** The kiosk URL carrying this screen's identity once we have seen it.
+     *  The player prefers ?device= / &secret= over localStorage, so a screen that
+     *  clears its own storage still comes back as the SAME screen instead of
+     *  dropping to a pairing code and needing a site visit. */
+    private String kioskUrl() {
+        String id = prefs().getString(KEY_DEVICE_ID, null);
+        if (id == null || id.isEmpty()) return TV_URL;
+        String url = TV_URL + "?device=" + Uri.encode(id);
+        String secret = prefs().getString(KEY_DEVICE_SECRET, null);
+        if (secret != null && !secret.isEmpty()) url += "&secret=" + Uri.encode(secret);
+        return url;
+    }
+
+    private void rememberIdentity(String id, String secret) {
+        if (id == null || id.trim().isEmpty()) return;
+        SharedPreferences.Editor e = prefs().edit().putString(KEY_DEVICE_ID, id.trim());
+        if (secret != null && !secret.trim().isEmpty()) {
+            e.putString(KEY_DEVICE_SECRET, secret.trim());
+        }
+        e.apply();
     }
 
     /** Start the soft-kiosk watchdog that bounces the app back after a Home press.
@@ -292,26 +335,73 @@ public class MainActivity extends Activity {
         // The soft watchdog uses the same {@code unlocked} pref as the device-
         // owner lock, so "locked" is simply "not unlocked" in either mode.
         final boolean locked = !isUnlocked();
-        final String lockLabel = locked
-            ? "Unlock for setup (Wi-Fi, etc.)"
-            : "Re-lock kiosk";
-        final String[] options = {
-            "Reload screen", lockLabel, "Open Wi-Fi / device settings", "Unpair this screen", "Exit app"
-        };
+        // On Fire OS 8+ the bounce-back is blocked until the app is granted
+        // SYSTEM_ALERT_WINDOW once. Say so here rather than letting an installer
+        // walk away from a screen that looks fine and escapes on the first Home.
+        final boolean armed = KioskWatchdogService.canPullForward(this);
+        final java.util.ArrayList<String> items = new java.util.ArrayList<String>();
+        items.add("Reload screen");
+        items.add(locked ? "Unlock for setup (Wi-Fi, etc.)" : "Re-lock kiosk");
+        items.add("Open Wi-Fi / device settings");
+        if (!armed) items.add("Fix kiosk permission (Home button escapes)");
+        items.add("Unpair this screen");
+        items.add("Exit app");
+        final String[] options = items.toArray(new String[0]);
         new AlertDialog.Builder(this)
-            .setTitle("Loop Network — screen admin")
+            .setTitle(armed ? "Loop Network \u2014 screen admin"
+                            : "Loop Network \u2014 kiosk NOT armed")
             .setItems(options, new DialogInterface.OnClickListener() {
                 @Override public void onClick(DialogInterface dialog, int which) {
-                    switch (which) {
-                        case 0: if (web != null) web.loadUrl(TV_URL); break;
-                        case 1: toggleLock(); break;
-                        case 2: openSettingsForMaintenance(); break;
-                        case 3: unpair(); break;
-                        default: exitApp(); break;
+                    String choice = options[which];
+                    if (choice.startsWith("Reload")) {
+                        if (web != null) web.loadUrl(kioskUrl());
+                    } else if (choice.startsWith("Unlock") || choice.startsWith("Re-lock")) {
+                        toggleLock();
+                    } else if (choice.startsWith("Open Wi-Fi")) {
+                        openSettingsForMaintenance();
+                    } else if (choice.startsWith("Fix kiosk")) {
+                        showKioskPermissionHelp();
+                    } else if (choice.startsWith("Unpair")) {
+                        unpair();
+                    } else {
+                        exitApp();
                     }
                 }
             })
             .setNegativeButton("Cancel", null)
+            .show();
+    }
+
+    /** Android 10+ (Fire OS 8 and up) blocks background activity starts, which is
+     *  how the watchdog pulls the loop back after a Home press. Some builds expose
+     *  an overlay-permission screen that grants it from the remote; stock Fire OS
+     *  does not, so fall back to showing the one-time ADB command. */
+    private void showKioskPermissionHelp() {
+        setUnlocked(true); // don't let the watchdog yank us out of Settings
+        if (android.os.Build.VERSION.SDK_INT >= 23) {
+            try {
+                Intent i = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:" + getPackageName()));
+                i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(i);
+                Toast.makeText(this,
+                    "Allow \"display over other apps\", then re-lock from MENU x3.",
+                    Toast.LENGTH_LONG).show();
+                return;
+            } catch (Exception ignored) {}
+        }
+        // No overlay screen on this build, so we are staying put: re-arm the
+        // watchdog rather than leaving the screen unlocked behind the dialog.
+        setUnlocked(false);
+        new AlertDialog.Builder(this)
+            .setTitle("One-time setup command")
+            .setMessage("This TV blocks the kiosk bounce-back until it is granted once "
+                + "from a laptop:\n\n"
+                + "adb connect <this TV's IP>:5555\n"
+                + "adb shell appops set org.loopnetwork.kiosk SYSTEM_ALERT_WINDOW allow\n\n"
+                + "It survives reboots and is only needed once per TV. "
+                + "The IP is in Settings > My Fire TV > About > Network.")
+            .setPositiveButton("OK", null)
             .show();
     }
 
@@ -437,8 +527,15 @@ public class MainActivity extends Activity {
                 + "if(k&&k.indexOf('lm_loop_')===0)d.push(k);}"
                 + "for(var j=0;j<d.length;j++)localStorage.removeItem(d[j]);}catch(e){}",
             null);
+        // Drop the native copy too, or the very next load would hand the id
+        // straight back and the unpair would appear to do nothing.
+        prefs().edit().remove(KEY_DEVICE_ID).remove(KEY_DEVICE_SECRET).apply();
         web.clearCache(true);
-        web.loadUrl(TV_URL);
+        // ?reset=1 is the player's own "forget yourself" lever: it clears storage
+        // and purges the cached loops the player would otherwise recover its id
+        // from. Belt and braces with the JS above, and it works even if the
+        // evaluateJavascript call above lost its race with the page.
+        web.loadUrl(TV_URL + "?reset=1");
     }
 
     @Override

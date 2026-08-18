@@ -23,20 +23,75 @@ Motion-detection wake (needs a camera), mouse-cursor hiding (no mouse),
 brightness control. The **Home** button can't be fully blocked on Fire OS
 unless the app is set as the launcher — an OS limit, not a code gap.
 
-## How a host installs it (no computer needed)
+## Which TV can run this (the Insignia question)
 
-1. On the Fire TV: Settings → My Fire TV → Developer options → **Install unknown
-   apps** → enable for the **Downloader** app (one-time).
-2. Install **Downloader** (by AFTVnews) from the Fire TV app store if not present.
-3. Open Downloader, enter **`www.loopnetwork.org/app`**, download, Install, Open.
-   Type the `www.` — the bare apex 308s twice (http→https, then apex→www) and
+One APK, every Fire TV. `minSdk 22` covers Fire OS 5 through 8, and the
+special-use foreground-service type keeps it alive on the API-34 Fire OS 14
+generation. There is no per-model build.
+
+Check **Settings > My Fire TV > About > Software version** before anything else:
+
+| Version starts with | What it is | Works? |
+| --- | --- | --- |
+| 5, 6, 7 | Fire OS 5-7 (Android 5-9) | Yes, nothing extra |
+| 8 or 14 | Fire OS 8+ (Android 10+) | Yes, plus the one-time appops grant below |
+| `1.` | **Vega OS** (Fire TV Stick 4K Select, Stick HD 2nd gen) | **No. Not Android, no sideloading, by any method.** |
+
+Insignia F20 / F30 / F50 are all Fire TV built-ins and all still ship Fire OS, so
+any current Insignia works. What does **not** work is an Insignia **Roku** TV or a
+pre-Fire-TV Insignia: neither runs Android, and Roku killed non-certified private
+channels (beta channels cap at 20 devices and expire), so there is no port worth
+building. Treat those panels as dumb screens and drive them with a **Fire TV Stick
+4K Max** on HDMI 1, which is the same install below and makes literally any TV a
+Loop screen.
+
+## Installing on a TV (no computer needed)
+
+1. Settings > My Fire TV > **About** > highlight the TV name > press Select **7x**
+   to reveal Developer options.
+2. Developer options > **Install unknown apps** > enable for **Downloader**
+   (newer Fire OS made this per-app; there is no global unknown-sources switch).
+3. Install **Downloader** (by AFTVnews) from the Fire TV app store.
+4. Open Downloader, enter **`www.loopnetwork.org/app`**, download, Install, Open.
+   Type the `www.` — the bare apex 308s twice (http->https, then apex->www) and
    Downloader hangs on "Connecting…" instead of following it.
-4. Enter the 4-character **pairing code** from the Loop Network dashboard. Done —
-   it stays paired across reboots.
+5. **Open the app once by hand.** An app that has never been launched, or that was
+   ever force-stopped, receives no `BOOT_COMPLETED` at all, permanently.
+6. Enter the 4-character **pairing code** from the Loop Network dashboard.
 
-> One-time setup ends at step 3. Everything after is just the code. To remove
-> even the sideload step later, publish to the **Amazon Appstore** so hosts
-> search "Loop Network" and one-tap install.
+Reinstalling over an existing copy fails the signature check (each CI build signs
+with a fresh debug key), so **uninstall the old app first**.
+
+### Fire OS 8+ only: one command per TV
+
+Android 10 added background-activity-launch restrictions, and a foreground service
+gets no exemption, so the soft watchdog cannot pull the loop back after a Home
+press until the app holds `SYSTEM_ALERT_WINDOW`. There is no Fire OS UI for it:
+
+```bash
+adb connect <tv-ip>:5555          # IP is in About > Network
+adb shell appops set org.loopnetwork.kiosk SYSTEM_ALERT_WINDOW allow
+```
+
+It persists across reboots and is needed once per TV. The app cannot do this to
+itself — Amazon blocked local ADB in Fire OS 7.6.6.9 / 8.1.0.3. The hidden admin
+menu (**MENU x3**) reads "kiosk NOT armed" and offers **Fix kiosk permission**
+whenever the grant is missing, so nobody leaves a screen that looks fine and
+escapes on the first Home press.
+
+### TV settings, every unit
+
+- **Parental Controls OFF.** A PIN protecting app launches redirects every launch
+  into the PIN wizard, our code never runs, and the kiosk silently dies.
+- Screensaver **Never**; disable Sleep / auto power off. No app can override these.
+- Power Controls > Power On > **Last Input**.
+- Fire OS 8 kicks to home after 4h idle ("Are you still watching?"). Amazon
+  exempts signage apps through a Developer Support case.
+
+### Verify before it leaves the bench
+
+Home button bounces back in 1-2s; unplug 30s and it returns to `/tv` on its own;
+the venue shows live in admin.
 
 ## Build
 

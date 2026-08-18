@@ -14,8 +14,8 @@ android {
         applicationId "org.loopnetwork.kiosk"
         minSdk 22          // Fire OS 5 (API 22) and up
         targetSdk 34
-        versionCode 8
-        versionName "1.7"
+        versionCode 9
+        versionName "1.8"
     }
 
     buildTypes {

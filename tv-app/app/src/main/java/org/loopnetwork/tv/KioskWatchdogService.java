@@ -6,6 +6,9 @@ import android.app.NotificationManager;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.ServiceInfo;
+import android.app.admin.DevicePolicyManager;
+import android.provider.Settings;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
@@ -53,7 +56,40 @@ public class KioskWatchdogService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
-        startForeground(NOTIF_ID, buildNotification());
+        Notification n = buildNotification();
+        try {
+            if (Build.VERSION.SDK_INT >= 34) {
+                startForeground(NOTIF_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
+            } else {
+                startForeground(NOTIF_ID, n);
+            }
+        } catch (Exception e) {
+            // Never let a foreground-service policy change take the screen
+            // down: fall back to the untyped call, and if that also throws
+            // the app keeps running as a plain player.
+            try { startForeground(NOTIF_ID, n); } catch (Exception ignored) {}
+        }
+    }
+
+    /**
+     * Whether this device will actually honour the bounce-back.
+     *
+     * Fire OS 7 and older (Android 9) allow background activity starts, so the
+     * watchdog just works. Fire OS 8+ (Android 10+) blocks them regardless of
+     * targetSdk, and a foreground service earns no exemption -- the two ways
+     * back in are being device owner or holding SYSTEM_ALERT_WINDOW, which is
+     * granted once per TV with:
+     *   adb shell appops set org.loopnetwork.kiosk SYSTEM_ALERT_WINDOW allow
+     * The admin dialog surfaces this so a screen is never quietly unarmed.
+     */
+    static boolean canPullForward(Context ctx) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return true;
+        try {
+            DevicePolicyManager dpm =
+                (DevicePolicyManager) ctx.getSystemService(Context.DEVICE_POLICY_SERVICE);
+            if (dpm != null && dpm.isDeviceOwnerApp(ctx.getPackageName())) return true;
+        } catch (Exception ignored) {}
+        try { return Settings.canDrawOverlays(ctx); } catch (Exception e) { return false; }
     }
 
     @Override
