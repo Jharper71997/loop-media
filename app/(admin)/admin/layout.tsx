@@ -22,23 +22,26 @@ export default async function AdminLayout({
   // badges — which are decoration on a nav that works without them — resolve
   // into it. The promise is passed down rather than awaited; AdminNav reads it
   // with `use()` behind its own Suspense boundary.
+  // Keyed to the verbs in AdminNav, so a badge counts the work that verb is FOR.
   const badges = loadAdminInbox(territory.activeId).then(({ counts }) => ({
-    // Today = the work that only moves if you touch it: ads awaiting review,
+    // Watch = something is actually broken: screens dark at a live venue.
+    '/admin': counts.offline,
+    // Sell = follow-ups you promised that are due or overdue.
+    '/admin/sell': counts.followup,
+    // Ship = an ad that cannot go live until you touch it: awaiting review,
     // creative we owe an advertiser, and anything paid that never activated.
-    '/admin': counts.approvals + counts.creative + counts.activation,
-    // Advertisers = follow-ups you promised that are due or overdue.
-    '/admin/advertisers': counts.followup,
-    // Money = accounts that are live but unbilled, overdue, or about to lapse.
-    '/admin/money': counts.billing,
-    // Screens = paired screens that have gone dark at a live venue.
-    '/admin/venues': counts.offline,
+    '/admin/ship': counts.approvals + counts.creative + counts.activation,
+    // More = accounts that are live but unbilled, overdue, or about to lapse.
+    '/admin/more': counts.billing,
   }))
 
   return (
     <div className="flex min-h-dvh flex-col md:flex-row">
       <CommandPalette />
       <AdminNav profile={profile} territory={territory} countsPromise={badges} />
-      <main className="min-w-0 flex-1">{children}</main>
+      {/* pb-16 clears the phone tab bar, which is fixed and would otherwise sit
+          on top of the last row of every list. */}
+      <main className="min-w-0 flex-1 pb-16 md:pb-0">{children}</main>
     </div>
   )
 }

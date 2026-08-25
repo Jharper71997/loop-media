@@ -6,11 +6,10 @@ import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { useRouter } from 'next/navigation'
 import {
-  LayoutDashboard,
-  Store,
-  Users,
-  DollarSign,
-  Settings,
+  Activity,
+  PhoneCall,
+  Clapperboard,
+  LayoutGrid,
   Menu,
   LogOut,
   UserCircle,
@@ -34,7 +33,7 @@ import { setActiveTerritory } from '@/app/(admin)/admin/territory-actions'
 // `match` lists the extra route prefixes that belong to a merged section, so the
 // sidebar entry stays lit while you move between that section's tabs (see
 // components/admin/SectionTabs.tsx). `href` is always the section's first tab.
-type NavItem = {
+export type NavItem = {
   href: string
   label: string
   icon: LucideIcon
@@ -43,72 +42,70 @@ type NavItem = {
 }
 type NavGroup = { label: string | null; items: NavItem[] }
 
-// Five entries. Each is a question the business runs on, not a table:
+// THREE VERBS AND A DRAWER.
 //
-//   Today       — what is broken, owed, or waiting on me right now
-//   Advertisers — who pays us, who might, and what is left to sell
-//   Screens     — are the things we sell actually working
-//   Money       — what came in, and what is going to
-//   Setup       — the numbers and copy you change twice a year
+// The sidebar was organised by what the data IS — advertisers, screens, money,
+// setup — which is how a database is organised, not how a day is. You do three
+// things in here, and each one used to be scattered across sections: checking
+// nothing is dark meant Today plus Screens plus Uptime; working the list meant
+// Advertisers plus Pipeline plus Open inventory; getting an ad live meant
+// Approvals plus Creative plus a venue page. Nouns made you assemble the job.
+//
+//   Watch — is anything dark, broken, or being short-changed right now
+//   Sell  — the call list, in order, with what to say
+//   Ship  — an ad from paid, to built, to approved, to on screen
+//   More  — money, venues, settings, reports: real pages, just not daily ones
 //
 // Everything that used to be its own sidebar entry is still its own route; it
-// now appears as a tab inside the section it belongs to (see SectionTabs), so no
+// now appears as a tab inside the verb it belongs to (see SectionTabs), so no
 // bookmark, email link or muscle-memory URL broke.
-const GROUPS: NavGroup[] = [
+export const VERBS: NavItem[] = [
   {
-    label: null,
-    items: [
-      {
-        href: '/admin',
-        label: 'Today',
-        icon: LayoutDashboard,
-        exact: true,
-        match: ['/admin/cases', '/admin/queue', '/admin/creative', '/admin/house', '/admin/trivia'],
-      },
-    ],
+    href: '/admin',
+    label: 'Watch',
+    icon: Activity,
+    exact: true,
+    match: ['/admin/cases', '/admin/uptime', '/admin/venues', '/admin/tvs', '/admin/map'],
   },
   {
-    label: 'Grow',
-    items: [
-      {
-        href: '/admin/advertisers',
-        label: 'Advertisers',
-        icon: Users,
-        match: ['/admin/pipeline', '/admin/sell', '/admin/deals', '/admin/reports'],
-      },
-      { href: '/admin/money', label: 'Money', icon: DollarSign, match: ['/admin/revenue'] },
-    ],
+    href: '/admin/sell',
+    label: 'Sell',
+    icon: PhoneCall,
+    match: ['/admin/pipeline', '/admin/advertisers', '/admin/deals', '/admin/reports'],
   },
   {
-    label: 'Run',
-    items: [
-      {
-        href: '/admin/venues',
-        label: 'Screens',
-        icon: Store,
-        match: ['/admin/uptime', '/admin/map', '/admin/tvs'],
-      },
-    ],
+    href: '/admin/ship',
+    label: 'Ship',
+    icon: Clapperboard,
+    match: ['/admin/queue', '/admin/creative', '/admin/house', '/admin/trivia'],
   },
   {
-    label: null,
-    items: [
-      {
-        href: '/admin/settings',
-        label: 'Setup',
-        icon: Settings,
-        match: [
-          '/admin/pricing',
-          '/admin/messages',
-          '/admin/packages',
-          '/admin/categories',
-          '/admin/email',
-          '/admin/account',
-        ],
-      },
+    href: '/admin/more',
+    label: 'More',
+    icon: LayoutGrid,
+    match: [
+      '/admin/money',
+      '/admin/revenue',
+      '/admin/settings',
+      '/admin/pricing',
+      '/admin/messages',
+      '/admin/packages',
+      '/admin/categories',
+      '/admin/email',
+      '/admin/account',
     ],
   },
 ]
+
+const GROUPS: NavGroup[] = [{ label: null, items: VERBS }]
+
+/** Shared by the sidebar and the phone tab bar so they cannot disagree. */
+export function isVerbActive(item: NavItem, pathname: string): boolean {
+  // `exact` only constrains the entry's own href (/admin is a prefix of every
+  // admin route); its `match` prefixes still light it up.
+  const hit = item.exact ? pathname === item.href : pathname.startsWith(item.href)
+  return hit || (item.match ?? []).some((m) => pathname.startsWith(m))
+}
 
 // Badges arrive after the shell. NavLinks suspends on the promise; the fallback
 // renders the identical nav with no counts, so the sidebar is usable instantly
@@ -140,11 +137,9 @@ function NavLinks({
               {group.label}
             </span>
           )}
-          {group.items.map(({ href, label, icon: Icon, exact, match }) => {
-            // `exact` only constrains the entry's own href (/admin is a prefix of
-            // every admin route); its `match` prefixes still light it up.
-            const hit = exact ? pathname === href : pathname.startsWith(href)
-            const active = hit || (match ?? []).some((m) => pathname.startsWith(m))
+          {group.items.map((item) => {
+            const { href, label, icon: Icon } = item
+            const active = isVerbActive(item, pathname)
             const n = counts?.[href] ?? 0
             return (
               <Link
@@ -342,6 +337,60 @@ export function AdminNav({
           </SheetContent>
         </Sheet>
       </div>
+
+      {/* Phone tab bar.
+          Every navigation on a phone used to cost two taps and a slide-out
+          panel: open the hamburger, wait for the sheet, aim at a 32px row. The
+          four things you actually do are now one thumb-reachable tap from
+          anywhere, and the sheet keeps its job as the drawer for the long tail.
+          pb-[env(safe-area-inset-bottom)] keeps the row clear of the iPhone home
+          indicator, which otherwise sits directly on top of "Ship". */}
+      <nav
+        data-ga-nav="admin_tabbar"
+        className="fixed inset-x-0 bottom-0 z-40 flex border-t border-border bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
+      >
+        <Suspense fallback={<TabBarLinks />}>
+          <TabBarBadges countsPromise={countsPromise} />
+        </Suspense>
+      </nav>
+    </>
+  )
+}
+
+function TabBarBadges({ countsPromise }: { countsPromise: Promise<Record<string, number>> }) {
+  return <TabBarLinks counts={use(countsPromise)} />
+}
+
+function TabBarLinks({ counts }: { counts?: Record<string, number> }) {
+  const pathname = usePathname()
+  return (
+    <>
+      {VERBS.map((item) => {
+        const active = isVerbActive(item, pathname)
+        const Icon = item.icon
+        const n = counts?.[item.href] ?? 0
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            aria-current={active ? 'page' : undefined}
+            className={cn(
+              'relative flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-medium transition-colors',
+              active ? 'text-primary' : 'text-muted-foreground'
+            )}
+          >
+            <span className="relative">
+              <Icon className="size-5" />
+              {n > 0 && (
+                <span className="absolute -right-2 -top-1 min-w-4 rounded-full bg-primary px-1 text-center font-mono text-[9px] font-semibold leading-4 text-primary-foreground">
+                  {n > 99 ? '99+' : n}
+                </span>
+              )}
+            </span>
+            {item.label}
+          </Link>
+        )
+      })}
     </>
   )
 }

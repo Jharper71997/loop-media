@@ -3,7 +3,7 @@ import { requireAdmin } from '@/lib/auth'
 import { getTerritoryContext } from '@/lib/territory'
 import { createClient } from '@/lib/supabase/server'
 import { PageHeader } from '@/components/admin/PageHeader'
-import { SectionTabs, SCREEN_TABS } from '@/components/admin/SectionTabs'
+import { SectionTabs, WATCH_TABS } from '@/components/admin/SectionTabs'
 import { AutoRefresh } from '@/components/app/AutoRefresh'
 import { summarizeUptime, venueBusinessHours, screenDownState } from '@/lib/uptime'
 import { loadBillingRows } from '@/lib/adminInbox'
@@ -118,7 +118,7 @@ export default async function UptimePage() {
         title="Uptime"
         description={`${rows.length} paired screen${rows.length === 1 ? '' : 's'} · ${breaches} below SLA · ${downNow} down now`}
       />
-      <SectionTabs tabs={SCREEN_TABS} />
+      <SectionTabs tabs={WATCH_TABS} />
 
       <div className="space-y-3 p-3 md:p-4">
         {breaches > 0 && (

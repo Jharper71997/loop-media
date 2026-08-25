@@ -3,7 +3,7 @@ import { requireAdmin } from '@/lib/auth'
 import { getTerritoryContext } from '@/lib/territory'
 import { createClient } from '@/lib/supabase/server'
 import { PageHeader } from '@/components/admin/PageHeader'
-import { SectionTabs, SETUP_TABS } from '@/components/admin/SectionTabs'
+import { SectionTabs, MORE_TABS } from '@/components/admin/SectionTabs'
 import { InlineNumber } from '@/components/admin/InlineNumber'
 import {
   Table,
@@ -150,7 +150,7 @@ export default async function PricingPage() {
             : 'Packages, per-location tier prices, the account minimum, discounts, and the category catalog. Edits go live immediately.'
         }
       />
-      <SectionTabs tabs={SETUP_TABS} />
+      <SectionTabs tabs={MORE_TABS} />
 
       <div className="max-w-4xl space-y-8 p-6">
         {/* Packages */}

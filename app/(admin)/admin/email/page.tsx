@@ -1,7 +1,7 @@
 import { requireAdmin } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { PageHeader } from '@/components/admin/PageHeader'
-import { SectionTabs, SETUP_TABS } from '@/components/admin/SectionTabs'
+import { SectionTabs, MORE_TABS } from '@/components/admin/SectionTabs'
 import { EMAIL_CATALOG } from '@/lib/emailSettings'
 import { EmailSettingCard } from './EmailSettingCard'
 
@@ -24,7 +24,7 @@ export default async function EmailPage() {
         title="Automated emails"
         description="Turn each automated email on or off and edit its wording. Blank fields use the default copy. The branded layout, buttons, greeting, and any data (names, amounts, links) are filled in automatically. Changes apply on the next send — no deploy."
       />
-      <SectionTabs tabs={SETUP_TABS} />
+      <SectionTabs tabs={MORE_TABS} />
 
       <div className="max-w-3xl space-y-5 p-6">
         {EMAIL_CATALOG.map((entry) => {

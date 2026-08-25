@@ -1,7 +1,7 @@
 import { requireAdmin } from '@/lib/auth'
 import { getTerritoryContext } from '@/lib/territory'
 import { PageHeader } from '@/components/admin/PageHeader'
-import { SectionTabs, TODAY_TABS } from '@/components/admin/SectionTabs'
+import { SectionTabs, WATCH_TABS } from '@/components/admin/SectionTabs'
 import { AutoRefresh } from '@/components/app/AutoRefresh'
 import { HudBody, StatStrip, Stat } from '@/components/admin/hud'
 import { CaseBoard } from '@/components/admin/CaseBoard'
@@ -9,7 +9,7 @@ import { loadCases } from '@/lib/cases'
 import { loadBillingRows } from '@/lib/adminInbox'
 import { formatCents } from '@/lib/format'
 
-// Today — the whole business as a list of open problems.
+// Watch — is anything dark, broken, or being short-changed right now.
 //
 // This page used to be a dashboard: a band of numbers, a work queue, a meter,
 // a list of what was on air. All true, none of it pointed anywhere. You could
@@ -19,13 +19,31 @@ import { formatCents } from '@/lib/format'
 // Now the page IS the problem list. Every row has money on it and opens a case
 // page that shows the evidence and the fix. The numbers on top are only there to
 // say how much is at stake in each direction — they are not the point.
+//
+// Two things changed when it stopped being readable at 26 rows:
+//
+//   * ONE PROBLEM IS ONE ROW. A dark screen used to appear once as the screen
+//     and again per advertiser on it; four outages made eleven rows. The screen
+//     case now names the advertisers going without, and only a paying advertiser
+//     receiving NOTHING gets a row of their own. See the collapse in lib/cases.ts.
+//   * A ROW CAN BE CLEARED. Every case is derived, so handling one changed
+//     nothing on screen — the list could only grow. Cases can now be snoozed,
+//     and come back on their own if they get worse (lib/caseDismissals.ts).
+//
+// Open inventory left the board entirely. Every venue is mostly unsold, the
+// number is four figures, and the list sorts by money — so "19 of 24 spots open"
+// outranked a screen that had been dark for three days. Selling is a job with
+// its own surface; the total stays here as a number, which is all it ever was.
 
-export default async function AdminToday() {
+export default async function AdminWatch() {
   const profile = await requireAdmin()
   const territory = await getTerritoryContext(profile)
   const t = territory.activeId
 
-  const [{ cases, totals }, billingRows] = await Promise.all([loadCases(t), loadBillingRows(t)])
+  const [{ cases, snoozed, totals }, billingRows] = await Promise.all([
+    loadCases(t),
+    loadBillingRows(t),
+  ])
 
   // Recurring value of everything actually billed. Comps are excluded on purpose:
   // a comped ad is running, but it is not revenue, and folding it into MRR is how
@@ -39,14 +57,16 @@ export default async function AdminToday() {
     : 'All territories'
 
   const description = totals.open
-    ? `${totals.open} open · ${totals.critical} breaking now · ${scopeLabel}`
-    : `Nothing open · ${scopeLabel}`
+    ? `${totals.open} open · ${totals.critical} breaking now${totals.snoozed ? ` · ${totals.snoozed} snoozed` : ''} · ${scopeLabel}`
+    : totals.snoozed
+      ? `Nothing open · ${totals.snoozed} snoozed · ${scopeLabel}`
+      : `Nothing open · ${scopeLabel}`
 
   return (
     <>
       <AutoRefresh seconds={60} />
-      <PageHeader title="Today" description={description} />
-      <SectionTabs tabs={TODAY_TABS} />
+      <PageHeader title="Watch" description={description} />
+      <SectionTabs tabs={WATCH_TABS} />
       <HudBody>
         <StatStrip cols={4}>
           <Stat
@@ -54,7 +74,7 @@ export default async function AdminToday() {
             value={formatCents(totals.atRiskCents)}
             sub="per month, breaking or unpaid"
             tone={totals.atRiskCents > 0 ? 'bad' : undefined}
-            title="Revenue on dark screens, on advertisers not getting delivery or results, and on accounts that owe us."
+            title="Revenue on dark screens and on accounts that owe us. Delivery is counted once, on the screen — never again per advertiser sitting on it."
           />
           <Stat
             label="Given away"
@@ -68,7 +88,7 @@ export default async function AdminToday() {
             value={formatCents(totals.unsoldCents)}
             sub="per month, open spots"
             href="/admin/sell"
-            title="Monthly value of empty spots on screens that are already live and earning."
+            title="Monthly value of empty spots on screens that are already live and earning. Worked on the call list, not here."
           />
           <Stat
             label="Billed MRR"
@@ -79,7 +99,7 @@ export default async function AdminToday() {
           />
         </StatStrip>
 
-        <CaseBoard cases={cases} />
+        <CaseBoard cases={cases} snoozed={snoozed} />
       </HudBody>
     </>
   )

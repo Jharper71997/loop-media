@@ -48,49 +48,48 @@ export function SectionTabs({ tabs }: { tabs: SectionTab[] }) {
   )
 }
 
-// The merged sections. Kept here so the sidebar and the pages agree on what
-// belongs where — the sidebar link for a section points at its first tab.
+// The verbs, expanded.
 //
-// Five sections, named for the four questions the business runs on: what needs
-// doing today, who is paying us, are the screens working, where is the money,
-// and the configuration you touch twice a year.
+// The sidebar carries four things you DO; every page that belongs to one of them
+// appears here as a tab. No route moved, so every existing deep link, email and
+// bookmark still lands — what changed is which pages sit next to each other, and
+// that now follows the job rather than the schema.
 
-// Today owns the work that lands on you daily. Approvals, house slides and
-// trivia are all "content going onto screens", which is a today job, not a
-// destination you go browsing.
-export const TODAY_TABS: SectionTab[] = [
+// Watch — is anything dark, broken, or being short-changed right now. The board
+// is the answer; venues, uptime and the map are how you go look at the hardware
+// behind it. These used to be two separate sections, which meant "is that screen
+// really down" was a trip across the sidebar.
+export const WATCH_TABS: SectionTab[] = [
   { href: '/admin', label: 'Board', exact: true },
+  { href: '/admin/venues', label: 'Venues & screens' },
+  { href: '/admin/uptime', label: 'Uptime' },
+  { href: '/admin/map', label: 'Map' },
+]
+
+// Sell — the call list first, because that is the thing you work. Everything
+// after it is where a name on that list came from.
+export const SELL_TABS: SectionTab[] = [
+  { href: '/admin/sell', label: 'Call list' },
+  { href: '/admin/pipeline', label: 'Pipeline' },
+  { href: '/admin/advertisers', label: 'Advertisers' },
+  { href: '/admin/reports', label: 'Reports' },
+]
+
+// Ship — an ad from paid to on screen. Approvals, creative and the house content
+// were three separate destinations for one pipeline; the queue is the pipeline.
+export const SHIP_TABS: SectionTab[] = [
+  { href: '/admin/ship', label: 'Queue' },
   { href: '/admin/queue', label: 'Approvals' },
   { href: '/admin/creative', label: 'Creative help' },
   { href: '/admin/house', label: 'House slides' },
   { href: '/admin/trivia', label: 'Trivia' },
 ]
 
-// Everything about getting more advertisers paying more, in the order you walk
-// it: who we have, who we are chasing, what is left to sell, how it performed.
-export const ADVERTISER_TABS: SectionTab[] = [
-  { href: '/admin/advertisers', label: 'Advertisers' },
-  { href: '/admin/pipeline', label: 'Pipeline' },
-  { href: '/admin/sell', label: 'Open inventory' },
-  { href: '/admin/reports', label: 'Reports' },
-]
-
-export const SCREEN_TABS: SectionTab[] = [
-  { href: '/admin/venues', label: 'Venues & screens' },
-  { href: '/admin/uptime', label: 'Uptime' },
-  { href: '/admin/map', label: 'Map' },
-]
-
-// Money has no second page yet: /admin/revenue is a redirect to /admin/money, so
-// listing it as a tab renders one that bounces to the tab you are already on. The
-// payments ledger becomes the second tab when it gets its own route; until then
-// Money is a leaf and renders no strip at all.
-export const MONEY_TABS: SectionTab[] = [{ href: '/admin/money', label: 'Billing' }]
-
-// Packages and categories are already folded into the pricing page (both routes
-// redirect there), so they are not separate tabs. Business settings leads
-// because it is the one page that can change any number in the app.
-export const SETUP_TABS: SectionTab[] = [
+// More — real pages, just not daily ones. Money leads because it is the only one
+// here you ever open in a hurry.
+export const MORE_TABS: SectionTab[] = [
+  { href: '/admin/more', label: 'All pages' },
+  { href: '/admin/money', label: 'Billing' },
   { href: '/admin/settings', label: 'Business settings' },
   { href: '/admin/pricing', label: 'Pricing & packages' },
   { href: '/admin/messages', label: 'Templates' },
