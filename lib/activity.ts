@@ -154,11 +154,17 @@ export const loadActivity = cache(
         body: string
         created_at: string
       }[]) {
+        // A call is a message row too (0074), and it is neither sent nor
+        // received — "We sent an email" for a phone call would be nonsense, and
+        // the body is already a written summary of what happened.
         out.push({
           at: m.created_at,
           kind: 'message',
-          title: `${m.direction === 'in' ? 'They sent' : 'We sent'} ${m.channel === 'sms' ? 'a text' : 'an email'}`,
-          detail: m.subject ?? m.body.slice(0, 120),
+          title:
+            m.channel === 'call'
+              ? m.body
+              : `${m.direction === 'in' ? 'They sent' : 'We sent'} ${m.channel === 'sms' ? 'a text' : 'an email'}`,
+          detail: m.channel === 'call' ? undefined : (m.subject ?? m.body.slice(0, 120)),
         })
       }
 

@@ -6,7 +6,13 @@
 import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { isMissingTable } from '@/lib/opportunities'
-import type { Message, MessageTemplate, Channel, Direction, MessageStatus } from '@/lib/messaging'
+import type {
+  Message,
+  MessageTemplate,
+  ThreadChannel,
+  Direction,
+  MessageStatus,
+} from '@/lib/messaging'
 
 type MsgRow = {
   id: string
@@ -19,6 +25,8 @@ type MsgRow = {
   status: string
   error: string | null
   created_at: string
+  duration_seconds?: number | null
+  answered?: boolean | null
   author: { full_name: string | null; email: string | null }
     | { full_name: string | null; email: string | null }[]
     | null
@@ -30,7 +38,8 @@ function toMessage(r: MsgRow): Message {
   const a = one(r.author)
   return {
     id: r.id,
-    channel: (r.channel === 'sms' ? 'sms' : 'email') as Channel,
+    // A call is history, never something composed here — see ThreadChannel.
+    channel: (r.channel === 'sms' || r.channel === 'call' ? r.channel : 'email') as ThreadChannel,
     direction: (r.direction === 'in' ? 'in' : 'out') as Direction,
     toAddress: r.to_address,
     fromAddress: r.from_address,
@@ -40,11 +49,32 @@ function toMessage(r: MsgRow): Message {
     error: r.error,
     createdAt: r.created_at,
     authorName: a?.full_name ?? a?.email ?? null,
+    durationSeconds: r.duration_seconds ?? null,
+    answered: r.answered ?? null,
   }
 }
 
-const SELECT =
+// Two selects, because this repo ships features ahead of the migrations that
+// back them (see the note at the top of lib/activity.ts). The call columns
+// arrive in 0074; until that is applied, asking for them fails the whole query
+// and the thread — which has worked for months — would silently go blank. So we
+// ask for them, and fall back to the set that has always existed.
+const BASE_COLUMNS =
   'id, channel, direction, to_address, from_address, subject, body, status, error, created_at, author:profiles!created_by(full_name, email)'
+const SELECT = BASE_COLUMNS.replace(
+  ', author:',
+  ', duration_seconds, answered, author:'
+)
+
+/** A "column does not exist" from PostgREST, rather than a real failure. */
+function isMissingColumn(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false
+  return (
+    error.code === 'PGRST204' ||
+    error.code === '42703' ||
+    /duration_seconds|answered/.test(error.message ?? '')
+  )
+}
 
 // The thread for one record. `advertiserId` is passed as well as
 // `opportunityId` once a deal converts, so the history from before they were a
@@ -61,12 +91,19 @@ export async function loadThread(input: {
   if (opportunityId) filters.push(`opportunity_id.eq.${opportunityId}`)
   if (advertiserId) filters.push(`advertiser_id.eq.${advertiserId}`)
 
-  const { data, error } = await supabase
-    .from('messages')
-    .select(SELECT)
-    .or(filters.join(','))
-    .order('created_at', { ascending: false })
-    .limit(200)
+  const run = (columns: string) =>
+    supabase
+      .from('messages')
+      .select(columns)
+      .or(filters.join(','))
+      .order('created_at', { ascending: false })
+      .limit(200)
+
+  let { data, error } = await run(SELECT)
+  if (error && isMissingColumn(error)) {
+    // 0074 is not applied yet. Show the emails and texts rather than nothing.
+    ;({ data, error } = await run(BASE_COLUMNS))
+  }
 
   if (error) {
     if (!isMissingTable(error)) console.error('[messages] loadThread failed:', error)

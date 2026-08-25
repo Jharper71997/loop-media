@@ -37,6 +37,7 @@ import {
   NextStepForm,
   Composer,
   CloseControls,
+  DeleteOpportunity,
   DealHandoffLink,
 } from './RecordControls'
 import { cn } from '@/lib/utils'
@@ -97,6 +98,13 @@ export default async function OpportunityPage({ params }: { params: Promise<{ id
               kind={o.kind}
               status={o.status}
               businessName={o.businessName}
+            />
+            <DeleteOpportunity
+              id={o.id}
+              kind={o.kind}
+              status={o.status}
+              businessName={o.businessName}
+              messageCount={thread.messages.length}
             />
           </div>
         }

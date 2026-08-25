@@ -21,6 +21,7 @@ import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { loadInventory } from '@/lib/inventory'
 import { loadHostBenefits } from '@/lib/hostBenefit'
+import { loadLastTouches } from '@/lib/commsLog'
 import { isMissingTable } from '@/lib/opportunities'
 import { formatCents } from '@/lib/format'
 
@@ -45,6 +46,12 @@ export interface CallEntry {
   since: string | null
   /** Only set for a promised follow-up that has already slipped. */
   overdue: boolean
+  /**
+   * The last time we actually reached out, however we did it. Comes from the
+   * message log, so a call made from a phone counts — this is what stops the
+   * list putting the same name in front of you the morning after you rang them.
+   */
+  lastTouch: { at: string; channel: 'email' | 'sms' | 'call' } | null
 }
 
 // Reason ranks the list. Inside a reason, money breaks the tie — see sortCalls.
@@ -119,10 +126,11 @@ export const loadCallList = cache(async (territoryId: string | null): Promise<Ca
     .eq('status', 'open')
   if (territoryId) oq = oq.eq('territory_id', territoryId)
 
-  const [{ data: oppData, error: oppError }, inventory, hosts] = await Promise.all([
+  const [{ data: oppData, error: oppError }, inventory, hosts, touches] = await Promise.all([
     oq,
     loadInventory(territoryId),
     loadHostBenefits(territoryId),
+    loadLastTouches(territoryId),
   ])
 
   if (oppError && !isMissingTable(oppError)) {
@@ -143,6 +151,7 @@ export const loadCallList = cache(async (territoryId: string | null): Promise<Ca
       email: r.email,
       moneyCents: money,
       href,
+      lastTouch: touches.get(r.id) ?? null,
     }
 
     if (r.next_step_at && new Date(r.next_step_at) <= endOfToday) {
@@ -204,6 +213,7 @@ export const loadCallList = cache(async (territoryId: string | null): Promise<Ca
       href: `/admin/venues/${v.venueId}`,
       since: null,
       overdue: false,
+      lastTouch: null,
     })
   }
 
@@ -225,6 +235,7 @@ export const loadCallList = cache(async (territoryId: string | null): Promise<Ca
       href: `/admin/cases/host-owed/${h.hostId}`,
       since: null,
       overdue: false,
+      lastTouch: null,
     })
   }
 

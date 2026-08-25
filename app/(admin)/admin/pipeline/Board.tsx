@@ -21,6 +21,7 @@ import {
 import { moveStage } from './actions'
 import { NewOpportunityDialog } from './NewOpportunityDialog'
 import { EditOpportunityDialog } from './EditOpportunityDialog'
+import { DeleteOpportunity } from './[id]/RecordControls'
 
 // The board.
 //
@@ -341,6 +342,14 @@ function Card({
         )}
 
         <EditOpportunityDialog opportunity={o} categories={categories} />
+
+        <DeleteOpportunity
+          id={o.id}
+          kind={o.kind}
+          businessName={o.businessName}
+          status={o.status}
+          compact
+        />
 
         {/* The accessible path to the same action as dragging. */}
         <select

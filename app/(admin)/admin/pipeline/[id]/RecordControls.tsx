@@ -1,10 +1,11 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { toast } from 'sonner'
-import { Check, Pencil, Trophy, X, XCircle } from 'lucide-react'
+import { Check, Pencil, Trash2, Trophy, X, XCircle } from 'lucide-react'
 import { Button, buttonVariants } from '@/components/ui/button'
+import { ConfirmButton } from '@/components/admin/ConfirmButton'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
@@ -34,6 +35,7 @@ import {
   setNextStep,
   markWon,
   markLost,
+  deleteOpportunity,
   moveStage,
 } from '../actions'
 
@@ -503,5 +505,93 @@ export function DealHandoffLink({ id }: { id: string }) {
     >
       Set up the deal
     </a>
+  )
+}
+
+
+/**
+ * Delete a prospect outright.
+ *
+ * NOT the same button as "Lost", and the wording works hard to keep them apart.
+ * Lost keeps the record and the objection — the single most useful thing a dead
+ * deal leaves behind, and what the next pitch has to answer. Delete is for rows
+ * that should never have existed: a duplicate, a bad import, a test.
+ *
+ * The confirmation names what goes with it. Deleting an opportunity cascades to
+ * its messages (0069), which since 0074 means its logged CALLS and TEXTS as
+ * well — a record of a phone conversation that would no longer exist anywhere.
+ * That has to be on screen before the click, not discovered afterwards.
+ */
+export function DeleteOpportunity({
+  id,
+  kind,
+  businessName,
+  status,
+  messageCount,
+  compact,
+}: {
+  id: string
+  kind: OpportunityKind
+  businessName: string
+  status: 'open' | 'won' | 'lost'
+  /**
+   * Omit when the caller does not know. The board renders dozens of cards and
+   * counting history for each would cost a query per card — so there it says
+   * that history goes, without claiming a number it has not looked up. Saying
+   * "nothing else is attached" when nobody checked would be the one wording
+   * that could lose a call log by accident.
+   */
+  messageCount?: number
+  /** Sized to sit with the other icon actions on a board card. */
+  compact?: boolean
+}) {
+  const router = useRouter()
+  const pathname = usePathname()
+  const [pending, start] = useTransition()
+
+  const losses = [
+    messageCount === undefined
+      ? 'any calls, texts and emails logged against it'
+      : messageCount > 0
+        ? `${messageCount} logged ${messageCount === 1 ? 'call, text or email' : 'calls, texts and emails'}`
+        : null,
+    status === 'won' ? 'the record of how this deal was won' : null,
+    status === 'lost' ? 'the reason it was lost' : null,
+  ].filter(Boolean) as string[]
+
+  const description = losses.length
+    ? `This also deletes ${losses.join(' and ')}, and cannot be undone. To keep the history, mark it ${lostLabel(kind).toLowerCase()} instead.`
+    : 'Nothing else is attached to it. This cannot be undone.'
+
+  return (
+    <ConfirmButton
+      variant="ghost"
+      size="icon-sm"
+      className={compact ? 'size-5 [&_svg]:size-3' : undefined}
+      disabled={pending}
+      aria-label={`Delete ${businessName}`}
+      title="Delete this prospect"
+      message={`Delete ${businessName} for good?`}
+      description={description}
+      confirmLabel="Delete for good"
+      confirmVariant="destructive"
+      onConfirm={() =>
+        start(async () => {
+          const res = await deleteOpportunity(id)
+          if (res.error) {
+            toast.error(res.error)
+            return
+          }
+          toast.success(`${businessName} deleted`)
+          // From the record page there is nothing left to refresh into, so go
+          // back to the board. From the board itself, pushing the route you are
+          // already on is a no-op — refresh so the card actually disappears.
+          if (pathname.startsWith('/admin/pipeline/')) router.push('/admin/pipeline')
+          else router.refresh()
+        })
+      }
+    >
+      <Trash2 className="size-4 text-destructive" />
+    </ConfirmButton>
   )
 }

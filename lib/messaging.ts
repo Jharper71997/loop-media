@@ -4,7 +4,14 @@
 // Pure and client-safe — the compose box previews a rendered template as you
 // type, so this cannot import next/headers or the mail transport.
 
+// What you can COMPOSE and send from the admin. A call is not one of these —
+// nothing here dials — so it is deliberately excluded, which keeps the compose
+// box, the templates and checkCompose from ever having to answer "what is the
+// subject line of a phone call".
 export type Channel = 'email' | 'sms'
+// What can appear on a TIMELINE. Calls arrive from the Quo webhook (lib/quo.ts)
+// and are read-only history, so reading is wider than writing.
+export type ThreadChannel = Channel | 'call'
 export type Direction = 'out' | 'in'
 export type MessageStatus = 'queued' | 'sent' | 'failed' | 'received'
 
@@ -20,7 +27,7 @@ export interface MessageTemplate {
 
 export interface Message {
   id: string
-  channel: Channel
+  channel: ThreadChannel
   direction: Direction
   toAddress: string | null
   fromAddress: string | null
@@ -30,6 +37,9 @@ export interface Message {
   error: string | null
   createdAt: string
   authorName: string | null
+  /** Calls only: how long it lasted, and whether anyone picked up. */
+  durationSeconds?: number | null
+  answered?: boolean | null
 }
 
 // ---------------------------------------------------------------------------

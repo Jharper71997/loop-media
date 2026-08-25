@@ -4,6 +4,7 @@ import { useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Phone, MessageSquare, Mail, Check, Clock, ChevronRight } from 'lucide-react'
+import { timeAgo } from '@/lib/format'
 import { toast } from 'sonner'
 import { formatCents } from '@/lib/format'
 import { type CallEntry } from '@/lib/callList'
@@ -75,6 +76,18 @@ export function CallCard({ c }: { c: CallEntry }) {
             <p className="text-xs text-foreground/80">{c.contactName}</p>
           )}
           <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{c.why}</p>
+          {/* The proof the log is working: ring them from your phone and this
+              line appears without anyone touching the admin. */}
+          {c.lastTouch && (
+            <p className="mt-0.5 text-[11px] text-muted-foreground/80">
+              {c.lastTouch.channel === 'call'
+                ? 'Called'
+                : c.lastTouch.channel === 'sms'
+                  ? 'Texted'
+                  : 'Emailed'}{' '}
+              {timeAgo(c.lastTouch.at)}
+            </p>
+          )}
         </div>
         {c.moneyCents > 0 && (
           <div className="shrink-0 text-right">

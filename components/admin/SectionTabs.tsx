@@ -70,6 +70,7 @@ export const WATCH_TABS: SectionTab[] = [
 // after it is where a name on that list came from.
 export const SELL_TABS: SectionTab[] = [
   { href: '/admin/sell', label: 'Call list' },
+  { href: '/admin/activity', label: 'Activity' },
   { href: '/admin/pipeline', label: 'Pipeline' },
   { href: '/admin/advertisers', label: 'Advertisers' },
   { href: '/admin/reports', label: 'Reports' },

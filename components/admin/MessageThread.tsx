@@ -3,7 +3,16 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { AlertTriangle, Mail, MessageSquare, Send, ArrowDownLeft, ArrowUpRight } from 'lucide-react'
+import {
+  AlertTriangle,
+  Mail,
+  MessageSquare,
+  Send,
+  ArrowDownLeft,
+  ArrowUpRight,
+  Phone,
+  PhoneMissed,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -212,7 +221,9 @@ export function MessageThread({
       {/* ---- Thread ---- */}
       <div className="border-t border-border pt-3">
         {messages.length === 0 ? (
-          <p className="py-4 text-center text-xs text-muted-foreground">Nothing sent yet.</p>
+          <p className="py-4 text-center text-xs text-muted-foreground">
+            No calls, texts or emails on record yet.
+          </p>
         ) : (
           <ul className="space-y-2">
             {messages.map((m) => (
@@ -228,17 +239,32 @@ export function MessageThread({
                 )}
               >
                 <p className="flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
-                  {m.direction === 'in' ? (
+                  {/* A call gets a phone icon rather than the in/out arrow: on a
+                      mixed timeline the thing you scan for is "did we ever
+                      actually speak", and an arrow does not answer that. */}
+                  {m.channel === 'call' ? (
+                    m.answered ? (
+                      <Phone className="size-3 text-success" aria-hidden />
+                    ) : (
+                      <PhoneMissed className="size-3 text-destructive" aria-hidden />
+                    )
+                  ) : m.direction === 'in' ? (
                     <ArrowDownLeft className="size-3 text-success" aria-hidden />
                   ) : (
                     <ArrowUpRight className="size-3" aria-hidden />
                   )}
                   <span className="font-medium text-foreground">
-                    {m.direction === 'in' ? 'Received' : m.channel === 'sms' ? 'Text' : 'Email'}
+                    {m.channel === 'call'
+                      ? 'Call'
+                      : m.direction === 'in'
+                        ? 'Received'
+                        : m.channel === 'sms'
+                          ? 'Text'
+                          : 'Email'}
                   </span>
                   {formatDateTime(m.createdAt)}
                   {m.authorName && `· ${m.authorName}`}
-                  {m.status === 'failed' && (
+                  {m.status === 'failed' && m.channel !== 'call' && (
                     <span className="font-medium text-destructive">· did not send</span>
                   )}
                 </p>
