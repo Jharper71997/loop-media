@@ -3,7 +3,7 @@ import { getTerritoryContext } from '@/lib/territory'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { PageHeader } from '@/components/admin/PageHeader'
-import { SectionTabs, ADVERTISER_TABS } from '@/components/admin/SectionTabs'
+import { SectionTabs, SELL_TABS } from '@/components/admin/SectionTabs'
 import { HudBody } from '@/components/admin/hud'
 import { loadBillingRows } from '@/lib/adminInbox'
 import { loadAdResults, loadCases } from '@/lib/cases'
@@ -166,7 +166,7 @@ export default async function AdvertisersPage() {
         title="Advertisers"
         description={`${live.length} account${live.length === 1 ? '' : 's'} · ${(payingCents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 })}/mo billed`}
       />
-      <SectionTabs tabs={ADVERTISER_TABS} />
+      <SectionTabs tabs={SELL_TABS} />
       <HudBody>
         <AdvertiserTable rows={rows} />
       </HudBody>

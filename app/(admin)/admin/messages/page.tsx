@@ -1,7 +1,7 @@
 import { AlertTriangle, Info } from 'lucide-react'
 import { requireAdmin } from '@/lib/auth'
 import { PageHeader } from '@/components/admin/PageHeader'
-import { SectionTabs, SETUP_TABS } from '@/components/admin/SectionTabs'
+import { SectionTabs, MORE_TABS } from '@/components/admin/SectionTabs'
 import { HudBody, Panel } from '@/components/admin/hud'
 import { loadAllTemplates } from '@/lib/conversations'
 import { smsEnabled, SMS_DISABLED_REASON } from '@/lib/messaging'
@@ -31,7 +31,7 @@ export default async function MessagesPage() {
         }
         action={ready ? <TemplateEditor /> : undefined}
       />
-      <SectionTabs tabs={SETUP_TABS} />
+      <SectionTabs tabs={MORE_TABS} />
 
       <HudBody>
         {!ready ? (

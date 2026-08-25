@@ -2,7 +2,7 @@ import { AlertTriangle } from 'lucide-react'
 import { requireAdmin } from '@/lib/auth'
 import { PageHeader } from '@/components/admin/PageHeader'
 import { HudBody, Panel } from '@/components/admin/hud'
-import { SectionTabs, SETUP_TABS } from '@/components/admin/SectionTabs'
+import { SectionTabs, MORE_TABS } from '@/components/admin/SectionTabs'
 import { EditableValue } from '@/components/admin/EditableValue'
 import { getSettings, getSettingsMeta } from '@/lib/settings.server'
 import { SETTINGS, SETTING_KEYS, SETTING_GROUPS, type SettingKey } from '@/lib/settings'
@@ -38,7 +38,7 @@ export default async function SettingsPage() {
             : 'Read-only until the settings table is created'
         }
       />
-      <SectionTabs tabs={SETUP_TABS} />
+      <SectionTabs tabs={MORE_TABS} />
 
       <HudBody>
         {!meta.ready && (

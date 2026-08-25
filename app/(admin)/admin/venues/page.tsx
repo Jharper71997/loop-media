@@ -5,7 +5,7 @@ import { getTerritoryContext } from '@/lib/territory'
 import { createClient } from '@/lib/supabase/server'
 import { kioskUrl } from '@/lib/tv'
 import { PageHeader } from '@/components/admin/PageHeader'
-import { SectionTabs, SCREEN_TABS } from '@/components/admin/SectionTabs'
+import { SectionTabs, WATCH_TABS } from '@/components/admin/SectionTabs'
 import { ListSearch } from '@/components/admin/ListSearch'
 import { DeleteButton } from '@/components/admin/DeleteButton'
 import { LiveStatus } from '@/components/app/LiveStatus'
@@ -147,7 +147,7 @@ export default async function VenuesPage({
           />
         }
       />
-      <SectionTabs tabs={SCREEN_TABS} />
+      <SectionTabs tabs={WATCH_TABS} />
 
       <div className="space-y-3 p-3 md:p-4">
         <ListSearch

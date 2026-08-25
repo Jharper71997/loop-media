@@ -1,19 +1,30 @@
-// Cases — the admin's single list of open problems, each with money attached.
+// Cases — everything that is BROKEN, one row each, with money attached.
 //
 // The old admin answered "what is in the database". You had to already suspect a
 // problem to go find it: dark screens on the uptime page, unpaid accounts on the
 // money page, an advertiser getting nothing out of their spot nowhere at all.
-// This module inverts that. It asks the four questions the business actually
-// runs on and returns the answers as a ranked list:
+// This module inverts that and returns the answers as a ranked list:
 //
-//   1. Is anyone paying us less than they should, or not at all?
-//   2. Are the screens working?
-//   3. What are we giving away for free, and what does it cost?
-//   4. Is an advertiser we already have failing to get results?
+//   1. Are the screens working?
+//   2. Is anyone paying us less than they should, or not at all?
+//   3. Is an advertiser we already have failing to get results?
+//   4. What are we giving away for free, and what does it cost?
 //
 // Every case carries a dollar figure, an age, and a link into a page that shows
 // the evidence behind it. Nothing here is advisory: if a case is open, something
-// is wrong or being left on the table.
+// is wrong.
+//
+// WHAT IS NOT A CASE, and why the list got readable when they left:
+//
+//   * Open inventory. Every venue is mostly unsold and the number is four
+//     figures, so sorting by money put "19 of 24 spots open" above a screen that
+//     had been dark three days. Selling is a job, not an exception — /admin/sell.
+//   * Hosts owed their free screens. Nothing is broken; someone has to ring them.
+//     It is a call, and it belongs on the call list with their phone number
+//     attached — lib/callList.ts.
+//   * One outage, once. A dark screen used to appear as itself AND again for
+//     every advertiser sitting on it. See the collapse in the under-delivery
+//     block: four outages made eleven rows, and now make five.
 //
 // The numbers stay honest about their provenance, the same way lib/analytics.ts
 // does: plays and scans are MEASURED, reach is ESTIMATED and always labeled.
@@ -25,6 +36,8 @@ import { screenDownState } from '@/lib/uptime'
 import { loadAdminInbox, loadBillingRows } from '@/lib/adminInbox'
 import { loadInventory } from '@/lib/inventory'
 import { loadHostBenefits, discretionaryFreeScreens } from '@/lib/hostBenefit'
+import { formatCents } from '@/lib/format'
+import { loadDismissals, stillDismissed, type Dismissal } from '@/lib/caseDismissals'
 import type { VenueHours } from '@/lib/openHours'
 
 // The columns every "is this screen actually down" check needs. Kept in one
@@ -46,6 +59,13 @@ const WINDOW_DAYS = 30
 
 const windowStartISO = () => new Date(Date.now() - WINDOW_DAYS * 86_400_000).toISOString()
 
+/** "Archie's, Brassa and Twin Ravens" — names, not a count you cannot act on. */
+function listNames(names: string[], max = 3): string {
+  if (names.length === 1) return names[0]
+  if (names.length <= max) return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+  return `${names.slice(0, max).join(', ')} and ${names.length - max} more`
+}
+
 // ---------------------------------------------------------------------------
 // Per-advertiser results — the part that did not exist before.
 // ---------------------------------------------------------------------------
@@ -65,6 +85,13 @@ export interface AdResults {
   scanRate: number | null
   screens: number
   darkScreens: number
+  /**
+   * WHICH screens are dark, not just how many. The board needs the identities to
+   * tell "this advertiser is suffering an outage already on the list" from "this
+   * advertiser is suffering an outage nothing else would show you" — the first
+   * is a duplicate of a screen case, the second is the only place it surfaces.
+   */
+  darkTvIds: string[]
   /** ESTIMATED humans reached: venue foot traffic, never presented as measured. */
   estReach: number
   venueNames: string[]
@@ -201,6 +228,13 @@ export const loadAdResults = cache(async (territoryId: string | null): Promise<A
   const playCounts = await Promise.all(adIds.map((id) => countPlays(id, sinceISO)))
   const playsByAd = new Map(adIds.map((id, i) => [id, playCounts[i]]))
 
+  // Down, not merely quiet — a venue that is simply closed right now is not an
+  // advertiser being short-changed.
+  const isDark = (p: PlacementRow) => {
+    const hours = venueById.get(p.tv!.venue_id)?.hours
+    return hours ? screenDownState(p.tv!.last_heartbeat_at, hours).down : false
+  }
+
   const out: AdResults[] = []
   for (const row of billing) {
     const rows = byCampaign.get(row.campaignId) ?? []
@@ -209,6 +243,7 @@ export const loadAdResults = cache(async (territoryId: string | null): Promise<A
     const venues = [...new Set(rows.map((p) => p.tv!.venue_id))]
     const plays = playsByAd.get(adId) ?? 0
     const scans = scansByAd.get(adId) ?? 0
+    const darkTvIds = rows.filter(isDark).map((p) => p.tv!.id)
     out.push({
       campaignId: row.campaignId,
       advertiserId: row.advertiserId,
@@ -220,12 +255,8 @@ export const loadAdResults = cache(async (territoryId: string | null): Promise<A
       scans,
       scanRate: plays > 0 ? (scans / plays) * 1000 : null,
       screens: rows.length,
-      // Down, not merely quiet — a venue that is simply closed right now is not
-      // an advertiser being short-changed.
-      darkScreens: rows.filter((p) => {
-        const hours = venueById.get(p.tv!.venue_id)?.hours
-        return hours ? screenDownState(p.tv!.last_heartbeat_at, hours).down : false
-      }).length,
+      darkScreens: darkTvIds.length,
+      darkTvIds,
       estReach: venues.reduce((s, id) => s + (venueById.get(id)?.reach ?? 0), 0),
       venueNames: venues.map((id) => venueById.get(id)?.name ?? 'Unknown venue').sort(),
     })
@@ -265,14 +296,21 @@ export function diagnose(r: AdResults, median: number | null): Diagnosis {
 // The board
 // ---------------------------------------------------------------------------
 
+/** A case someone has waved off, carrying the dismissal that is hiding it. */
+export type SnoozedCase = Case & { dismissal: Dismissal }
+
 export interface CaseBoardData {
+  /** What is actually open right now — dismissals already applied. */
   cases: Case[]
+  /** Hidden, and why. Kept so "clear" is never the same as "gone". */
+  snoozed: SnoozedCase[]
   totals: {
     atRiskCents: number
     compedCents: number
     unsoldCents: number
     critical: number
     open: number
+    snoozed: number
   }
 }
 
@@ -332,14 +370,32 @@ export const loadCases = cache(async (territoryId: string | null): Promise<CaseB
     for (const tvId of tvIds) revenuePerTv.set(tvId, (revenuePerTv.get(tvId) ?? 0) + share)
   }
 
+  // Who is going without, per screen. The board used to print a bare count
+  // ("5 advertisers not airing here"), which is the one detail you cannot act
+  // on — whether to drive out there tonight depends entirely on WHICH five.
+  const affectedByTv = new Map<string, string[]>()
+  for (const r of results) {
+    for (const tvId of r.darkTvIds) {
+      const list = affectedByTv.get(tvId) ?? []
+      list.push(r.advertiserName)
+      affectedByTv.set(tvId, list)
+    }
+  }
+
+  // Screens whose outage is on this board under its own case. An advertiser
+  // whose only problem is one of these is not a second problem — see the
+  // under-delivery block below.
+  const boardedDarkTvs = new Set<string>()
+
   for (const tv of tvs) {
     // An unpaired screen is an install that has not happened, not an outage —
     // that belongs in the pipeline, not on the broken list.
     if (!tv.device_id || tv.venue!.status !== 'active') continue
     const state = screenDownState(tv.last_heartbeat_at, tv.venue!)
     if (!state.down) continue
+    boardedDarkTvs.add(tv.id)
     const money = revenuePerTv.get(tv.id) ?? 0
-    const advertisers = [...tvsByCampaign.values()].filter((ids) => ids.includes(tv.id)).length
+    const names = [...new Set(affectedByTv.get(tv.id) ?? [])].sort()
     const cause =
       state.reason === 'never-checked-in'
         ? 'Paired but has never checked in'
@@ -351,8 +407,8 @@ export const loadCases = cache(async (territoryId: string | null): Promise<CaseB
       kind: 'screen-dark',
       severity: 'critical',
       title: tv.venue!.name,
-      summary: advertisers
-        ? `${cause} — ${advertisers} advertiser${advertisers === 1 ? '' : 's'} not airing here`
+      summary: names.length
+        ? `${cause} — ${listNames(names)} not airing here`
         : `${cause} — nothing is playing`,
       moneyCents: money,
       moneyNote: money ? 'riding on this screen' : 'no ads sold here yet',
@@ -373,19 +429,52 @@ export const loadCases = cache(async (territoryId: string | null): Promise<CaseB
     return m === 'comp' || m === 'unbilled'
   }
 
+  // Delivery money that no screen case is already carrying. See the atRisk
+  // calculation at the bottom: a dark screen's case counts the revenue riding on
+  // that screen, so counting the advertiser's full monthly rate on top of it
+  // billed the same outage twice and inflated the headline number.
+  let uncoveredDeliveryCents = 0
+
   for (const r of results) {
     const d = diagnose(r, median)
     if (d === 'healthy' || d === 'too-new') continue
     const free = isFree(r.campaignId)
     if (d === 'not-airing') {
+      // THE COLLAPSE. An advertiser is "not airing" because screens they sit on
+      // are dark. Those screens are already cases, and each one names the
+      // advertisers going without — so emitting a row per advertiser restates a
+      // problem the board is already showing, once per victim. Four dark screens
+      // were producing four screen cases plus seven advertiser cases: eleven
+      // rows, one job.
+      const covered = r.darkTvIds.every((id) => boardedDarkTvs.has(id))
+      // One exception, and it is not a duplicate: a PAYING advertiser with
+      // nothing at all on screen. "A screen is down" is a repair. "This customer
+      // is receiving nothing for their money" is a credit, a move, or a phone
+      // call before they churn — a different job, on a different clock, that no
+      // screen case would ever put in front of you.
+      const blackout = r.darkScreens === r.screens && !free
+      if (covered && !blackout) continue
+
+      // Only the part no screen case is carrying, so the totals stay exact.
+      const uncovered = r.darkTvIds.filter((id) => !boardedDarkTvs.has(id)).length
+      if (!free) {
+        uncoveredDeliveryCents += Math.round((r.monthlyCents * uncovered) / Math.max(1, r.screens))
+      }
+
       cases.push({
         id: `under-delivery:${r.campaignId}`,
         kind: 'under-delivery',
         severity: free ? 'warning' : 'critical',
         title: r.advertiserName,
-        summary: `${free ? 'Running free on' : 'Paying for'} ${r.screens} screen${r.screens === 1 ? '' : 's'}, ${r.darkScreens} of them not airing — they are not getting what they were promised`,
+        summary: blackout
+          ? `Paying ${formatCents(r.monthlyCents)} a month and not one of their ${r.screens} screen${r.screens === 1 ? ' is' : 's are'} airing — they are getting nothing`
+          : `${free ? 'Running free on' : 'Paying for'} ${r.screens} screen${r.screens === 1 ? '' : 's'}, ${r.darkScreens} of them not airing — they are not getting what they were promised`,
         moneyCents: r.monthlyCents,
-        moneyNote: free ? 'comped value not delivered' : 'paid for delivery we are not making',
+        moneyNote: blackout
+          ? 'paying for nothing at all'
+          : free
+            ? 'comped value not delivered'
+            : 'paid for delivery we are not making',
         since: null,
         href: `/admin/cases/under-delivery/${r.campaignId}`,
         subjectId: r.campaignId,
@@ -475,30 +564,18 @@ export const loadCases = cache(async (territoryId: string | null): Promise<CaseB
     }
   }
 
-  // ---- Hosts who are not getting what hosting earns them --------------------
-  // Two free advertising screens for every screen they host. This is the deal,
-  // not a favour, and it was going undelivered silently: the perk is a Stripe
-  // code minted when the venue goes live, and nothing ever checked whether the
-  // host redeemed it. No money is at risk here — it is a promise outstanding —
-  // so it carries no dollar figure and never inflates the money totals.
-  for (const b of hostBenefits) {
-    if (b.gap <= 0) continue
-    cases.push({
-      id: `host-owed:${b.hostId}`,
-      kind: 'host-owed',
-      severity: 'opening',
-      title: b.name,
-      summary:
-        b.using === 0
-          ? `Hosts ${b.hostedTvs} screen${b.hostedTvs === 1 ? '' : 's'} at ${b.venueNames.join(', ')} and has none of the ${b.owed} free screens that earns`
-          : `Using ${b.using} of the ${b.owed} free screens that hosting ${b.hostedTvs} screen${b.hostedTvs === 1 ? '' : 's'} earns them`,
-      moneyCents: 0,
-      moneyNote: '',
-      since: null,
-      href: `/admin/cases/host-owed/${b.hostId}`,
-      subjectId: b.hostId,
-    })
-  }
+  // ---- Hosts we owe are a CALL, not a breakage --------------------------
+  // Two free advertising screens for every screen a host gives us. It was going
+  // undelivered silently — the perk is a Stripe code minted when the venue goes
+  // live, and nothing ever checked whether the host redeemed it — so surfacing
+  // it was right. Putting it HERE was not.
+  //
+  // Nothing is broken and no money is at risk; someone has to ring a host and
+  // walk them through taking up what they already earned. That is the call list
+  // (lib/callList.ts, reason 'owed'), where the row arrives with their phone
+  // number on it instead of a link to a page about them. Five hosts were sitting
+  // at the bottom of this board at $0 apiece, permanently, which is how a board
+  // teaches you to skip its last five rows.
 
   // ---- What we are giving away ---------------------------------------------
   // A comp is a decision, not an accident — but an untracked comp is how a
@@ -508,26 +585,42 @@ export const loadCases = cache(async (territoryId: string | null): Promise<CaseB
   // their room, so only the part above their allowance is discretionary. Calling
   // the whole thing a giveaway would put every host on this list for taking the
   // deal we sold them.
+  // A host over their allowance is ONE conversation, however many comped
+  // campaigns it is spread across. Iterating billing rows put the same host on
+  // the board once per campaign, with byte-identical summaries — the benefit
+  // figures describe the host, not the campaign, so the rows could not even be
+  // told apart. Collected by host first, emitted once below.
+  const overHosts = new Map<
+    string,
+    { name: string; benefit: NonNullable<ReturnType<typeof benefitByHost.get>>; cents: number; campaignId: string; topCents: number; since: string | null }
+  >()
+
   for (const row of billing) {
     if (row.billing.method !== 'comp' && row.billing.method !== 'unbilled') continue
     const res = results.find((r) => r.campaignId === row.campaignId)
     const benefit = benefitByHost.get(row.advertiserId)
     if (benefit) {
-      const extra = discretionaryFreeScreens(benefit)
       // Entirely covered by the hosting agreement — nothing to convert.
-      if (extra === 0) continue
-      cases.push({
-        id: `free-rider:${row.campaignId}`,
-        kind: 'free-rider',
-        severity: 'opening',
-        title: row.advertiserName,
-        summary: `Host of ${benefit.venueNames.join(', ')} — running ${benefit.using} free screens, ${extra} more than hosting ${benefit.hostedTvs} screen${benefit.hostedTvs === 1 ? '' : 's'} earns`,
-        moneyCents: row.monthlyCents,
-        moneyNote: 'above the hosting deal',
-        since: row.billing.paidThrough ?? null,
-        href: `/admin/cases/free-rider/${row.campaignId}`,
-        subjectId: row.campaignId,
-      })
+      if (discretionaryFreeScreens(benefit) === 0) continue
+      const cur = overHosts.get(row.advertiserId)
+      if (!cur) {
+        overHosts.set(row.advertiserId, {
+          name: row.advertiserName,
+          benefit,
+          cents: row.monthlyCents,
+          // Link at their biggest comped campaign — the one worth acting on.
+          campaignId: row.campaignId,
+          topCents: row.monthlyCents,
+          since: row.billing.paidThrough ?? null,
+        })
+      } else {
+        cur.cents += row.monthlyCents
+        if (row.monthlyCents > cur.topCents) {
+          cur.topCents = row.monthlyCents
+          cur.campaignId = row.campaignId
+        }
+        cur.since = cur.since ?? row.billing.paidThrough ?? null
+      }
       continue
     }
     cases.push({
@@ -544,6 +637,24 @@ export const loadCases = cache(async (territoryId: string | null): Promise<CaseB
       since: row.billing.paidThrough ?? null,
       href: `/admin/cases/free-rider/${row.campaignId}`,
       subjectId: row.campaignId,
+    })
+  }
+
+  // One row per over-allowance host. Keyed on the host, not the campaign, so
+  // re-dismissing does not have to be done once per campaign either.
+  for (const [hostId, h] of overHosts) {
+    const extra = discretionaryFreeScreens(h.benefit)
+    cases.push({
+      id: `free-rider:host:${hostId}`,
+      kind: 'free-rider',
+      severity: 'opening',
+      title: h.name,
+      summary: `Host of ${listNames(h.benefit.venueNames)} — running ${h.benefit.using} free screens, ${extra} more than hosting ${h.benefit.hostedTvs} screen${h.benefit.hostedTvs === 1 ? '' : 's'} earns`,
+      moneyCents: h.cents,
+      moneyNote: 'above the hosting deal',
+      since: h.since,
+      href: `/admin/cases/free-rider/${h.campaignId}`,
+      subjectId: h.campaignId,
     })
   }
 
@@ -567,22 +678,19 @@ export const loadCases = cache(async (territoryId: string | null): Promise<CaseB
     })
   }
 
-  // ---- Empty slots on screens that are already working ----------------------
-  for (const v of inventory.rows) {
-    if (!v.active || v.open <= 0 || v.liveScreens === 0) continue
-    cases.push({
-      id: `unsold:${v.venueId}`,
-      kind: 'unsold',
-      severity: 'opening',
-      title: v.name,
-      summary: `${v.open} of ${v.totalSlots} spots open${v.runningTitles.length ? ` · ${v.runningTitles.length} advertiser${v.runningTitles.length === 1 ? '' : 's'} already here` : ' · nobody running here yet'}`,
-      moneyCents: v.openValueCents,
-      moneyNote: 'unsold every month',
-      since: null,
-      href: `/admin/cases/unsold/${v.venueId}`,
-      subjectId: v.venueId,
-    })
-  }
+  // ---- Empty slots are NOT cases -------------------------------------------
+  // Open inventory used to be one row per venue, and those rows owned the top of
+  // the board: every venue is mostly unsold, the number is four figures, and the
+  // list sorts by money — so "19 of 24 spots open" outranked a screen that had
+  // been dark for three days. It is also not a problem you fix today by clicking
+  // it. Selling is its own job with its own surface (/admin/sell), and it is the
+  // whole job, not an exception to a working state.
+  //
+  // The dollar total still belongs here, because "what is unsold" is one of the
+  // four numbers above the board — it just does not belong IN the board.
+  const unsoldCents = inventory.rows
+    .filter((v) => v.active && v.open > 0 && v.liveScreens > 0)
+    .reduce((s, v) => s + v.openValueCents, 0)
 
   // ---- Everything else waiting on a human ----------------------------------
   // These already had a home that works; they join the board so one list really
@@ -606,27 +714,51 @@ export const loadCases = cache(async (territoryId: string | null): Promise<CaseB
   // "At risk" means revenue the business could actually lose. A screen going dark
   // under a comped ad costs nothing this month; it is on the board because it is
   // broken, not because it is billable.
-  const atRiskCents = cases
-    .filter(
-      (c) =>
-        c.kind === 'screen-dark' ||
-        c.kind === 'money-overdue' ||
-        // Not counted: an ad airing after cancellation is inventory leaking,
-        // not revenue we still have a claim on.
-        ((c.kind === 'under-delivery' || c.kind === 'no-results') && !isFree(c.subjectId))
-    )
-    .reduce((s, c) => s + c.moneyCents, 0)
+  //
+  // Delivery money is counted ONCE, on the screen. It used to be counted twice:
+  // each dark screen contributed the revenue riding on it, AND every advertiser
+  // on that screen contributed their full monthly rate. With four screens dark
+  // the headline read $932 when the honest figure was $544 — the same outage,
+  // billed once per screen and again per victim. Only delivery on screens that
+  // have no case of their own (uncoveredDeliveryCents) is added back here.
+  const atRiskCents =
+    uncoveredDeliveryCents +
+    cases
+      .filter(
+        (c) =>
+          c.kind === 'screen-dark' ||
+          c.kind === 'money-overdue' ||
+          // Not counted: an ad airing after cancellation is inventory leaking,
+          // not revenue we still have a claim on.
+          (c.kind === 'no-results' && !isFree(c.subjectId))
+      )
+      .reduce((s, c) => s + c.moneyCents, 0)
   const compedCents = cases.filter((c) => c.kind === 'free-rider').reduce((s, c) => s + c.moneyCents, 0)
-  const unsoldCents = cases.filter((c) => c.kind === 'unsold').reduce((s, c) => s + c.moneyCents, 0)
+
+  // ---- What has been waved off ---------------------------------------------
+  // Applied last, so every rule above stays ignorant of dismissals and the
+  // totals describe the real state of the business rather than the state of the
+  // list. A snoozed dark screen still costs what it costs.
+  const dismissals = await loadDismissals()
+  const now = Date.now()
+  const open: Case[] = []
+  const snoozed: SnoozedCase[] = []
+  for (const c of cases) {
+    const d = dismissals.get(c.id)
+    if (d && stillDismissed(c, d, now)) snoozed.push({ ...c, dismissal: d })
+    else open.push(c)
+  }
 
   return {
-    cases,
+    cases: open,
+    snoozed,
     totals: {
       atRiskCents,
       compedCents,
       unsoldCents,
-      critical: cases.filter((c) => c.severity === 'critical').length,
-      open: cases.length,
+      critical: open.filter((c) => c.severity === 'critical').length,
+      open: open.length,
+      snoozed: snoozed.length,
     },
   }
 })
