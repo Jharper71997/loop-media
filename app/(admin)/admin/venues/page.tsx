@@ -18,6 +18,7 @@ import { suggestTier, venuePriceCents, TIER_LABEL } from '@/lib/pricing'
 import { getPricingConfig } from '@/lib/pricing.server'
 import { isVenueListable } from '@/lib/venue'
 import { adSlotCount, houseSlideCount, loopOccupancy } from '@/lib/loop'
+import { HOUSE_SELECT, housePlays, type HouseRow } from '@/lib/houseSlides'
 import { venueBusinessHours, formatBusinessHours } from '@/lib/uptime'
 import type { Category, Territory, Venue, PriceTier, Tv } from '@/lib/db.types'
 import { VenueDialog } from './VenueDialog'
@@ -74,18 +75,23 @@ export default async function VenuesPage({
   if (status === 'active') vq = vq.eq('status', 'active')
   else if (status === 'inactive') vq = vq.eq('status', 'inactive')
 
-  const [{ data: venues }, { data: categories }, { data: hostProfiles }] = await Promise.all([
-    vq,
-    supabase.from('categories').select('*').order('name'),
-    supabase
-      .from('profiles')
-      .select('id, email, full_name')
-      .in('role', ['host', 'admin'])
-      .eq('is_demo', false)
-      .order('email'),
-  ])
+  const [{ data: venues }, { data: categories }, { data: hostProfiles }, { data: houseData }] =
+    await Promise.all([
+      vq,
+      supabase.from('categories').select('*').order('name'),
+      supabase
+        .from('profiles')
+        .select('id, email, full_name')
+        .in('role', ['host', 'admin'])
+        .eq('is_demo', false)
+        .order('email'),
+      // A market can switch a house slide off (0075), which changes how many
+      // slides a screen there actually runs — so the slot math below has to ask.
+      supabase.from('house_creatives').select(HOUSE_SELECT).eq('active', true),
+    ])
 
   const rows = (venues ?? []) as VenueRow[]
+  const houseRows = (houseData ?? []) as HouseRow[]
   const cats = (categories ?? []) as Category[]
   const territories = territory.territories as Territory[]
   const hosts = (hostProfiles ?? []) as { id: string; email: string; full_name: string | null }[]
@@ -224,7 +230,11 @@ export default async function VenuesPage({
                   screens.map((tv, i) => {
                     const occ = loopOccupancy({
                       adSlots: adSlotCount(tv.loop_length_seconds, tv.slot_seconds),
-                      houseSlides: houseSlideCount({ triviaEnabled: v.trivia_enabled }),
+                      houseSlides: houseSlideCount({
+                        triviaEnabled: v.trivia_enabled,
+                        brewloop: housePlays(houseRows, 'brewloop', v.territory_id),
+                        advertise: housePlays(houseRows, 'advertise', v.territory_id),
+                      }),
                       paidSold: adsByTv.get(tv.id) ?? 0,
                     })
                     return (

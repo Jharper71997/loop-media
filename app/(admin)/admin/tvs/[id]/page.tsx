@@ -19,6 +19,7 @@ import type { Tv } from '@/lib/db.types'
 import { RegenerateButton } from '../RegenerateButton'
 import { deleteTv } from '../actions'
 import { loopOccupancy } from '@/lib/loop'
+import { HOUSE_SELECT, housePlays, type HouseRow } from '@/lib/houseSlides'
 import {
   RemovePlacementButton,
   AddPlacement,
@@ -146,16 +147,31 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
   const used = placements.length
   const open = Math.max(0, maxSlots - used)
 
-  // Slides the app ALWAYS injects on top of paid ads, so "used of maxSlots" (paid
-  // inventory) isn't everything on the TV. The Brew Loop ad + "Advertise here" card
-  // always play and the trivia teaser plays where trivia is on. Each is fixed-time
-  // (15s) and is NOT a paid slot. We list them as rows below so the admin matches
-  // the real screen. The fallbacks mirror the player's (HOUSE_SLIDE_SECONDS in
+  // Slides the app injects on top of paid ads, so "used of maxSlots" (paid
+  // inventory) isn't everything on the TV: the Brew Loop ad, the "Advertise here"
+  // card, and the trivia teaser where trivia is on. Each is fixed-time (15s) and
+  // is NOT a paid slot. We list them as rows below so the admin matches the real
+  // screen. The fallbacks mirror the player's (HOUSE_SLIDE_SECONDS in
   // app/tv/TvPlayer.tsx) so a screen with no stored value reads here as it plays.
-  const houseSlides: { kind: string; label: string; seconds: number }[] = [
-    { kind: 'brewloop', label: 'Brew Loop ad', seconds: tv.brewloop_seconds ?? 15 },
-    { kind: 'advertise', label: '“Advertise on this screen” card', seconds: tv.advertise_seconds ?? 15 },
-  ]
+  //
+  // Either house slide can be switched off for a market (0075), and a screen in
+  // that market really does run one fewer slide — so the breakdown asks rather
+  // than assuming both.
+  const { data: houseData } = await supabase
+    .from('house_creatives')
+    .select(HOUSE_SELECT)
+    .eq('active', true)
+  const houseRows = (houseData ?? []) as HouseRow[]
+  const market = tv.venue?.territory_id ?? null
+  const houseSlides: { kind: string; label: string; seconds: number }[] = []
+  if (housePlays(houseRows, 'brewloop', market))
+    houseSlides.push({ kind: 'brewloop', label: 'Brew Loop ad', seconds: tv.brewloop_seconds ?? 15 })
+  if (housePlays(houseRows, 'advertise', market))
+    houseSlides.push({
+      kind: 'advertise',
+      label: '“Advertise on this screen” card',
+      seconds: tv.advertise_seconds ?? 15,
+    })
   if (tv.venue?.trivia_enabled)
     houseSlides.push({ kind: 'trivia', label: 'Trivia teaser', seconds: tv.trivia_slide_seconds ?? 15 })
   // Loop occupancy with the always-on house slides counted as filled: `used` and

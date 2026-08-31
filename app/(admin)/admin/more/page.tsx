@@ -12,6 +12,7 @@ import {
   Settings,
   UserCircle,
   Gamepad2,
+  Globe,
   Images,
   ChevronRight,
   type LucideIcon,
@@ -133,6 +134,12 @@ const GROUPS: Group[] = [
         label: 'Emails',
         detail: 'Which automated emails send, and to whom.',
         icon: Mail,
+      },
+      {
+        href: '/admin/territories',
+        label: 'Markets',
+        detail: 'The cities the network runs in. Add one, archive one, delete a stray one.',
+        icon: Globe,
       },
       {
         href: '/admin/account',

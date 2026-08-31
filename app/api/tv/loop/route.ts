@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import QRCode from 'qrcode'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { genPairingCode, deviceSecretOk } from '@/lib/tv'
+import { HOUSE_SELECT, resolveHouse, type HouseRow } from '@/lib/houseSlides'
 import { QR_SIZE_DEFAULT } from '@/lib/adCreative'
 
 // Public base URL the phone-scannable QR must point at (the deployed domain in
@@ -26,19 +27,11 @@ const BREWLOOP_OFFER_URL =
 // learn about Loop Network. Override via env if the domain changes.
 const LOOP_SITE_URL = process.env.NEXT_PUBLIC_LOOP_SITE_URL || 'https://loopnetwork.org'
 
-// An admin-uploaded replacement for one of the built-in house slides (0063).
-type HouseCreative = {
-  kind: 'brewloop' | 'advertise'
-  creative_type: 'image' | 'video'
-  creative_url: string
-  territory_id: string | null
-}
-
-// Fold an override into the house-slide payload. Absent (the normal case) this
-// adds nothing at all, so the manifest keeps the exact shape older cached players
-// already understand and they go on drawing the built-in design.
-function creativeFields(c: HouseCreative | undefined) {
-  if (!c) return {}
+// Fold an uploaded override into the house-slide payload. Absent (the normal
+// case) this adds nothing at all, so the manifest keeps the exact shape older
+// cached players already understand and they go on drawing the built-in design.
+function creativeFields(c: HouseRow | null) {
+  if (!c || c.mode !== 'creative' || !c.creative_url) return {}
   return {
     creative_type: c.creative_type,
     creative_url: c.creative_url,
@@ -196,51 +189,51 @@ export async function GET(req: Request) {
     }
   }
 
-  // Admin-uploaded overrides for the two house slides (migration 0063). A row
-  // scoped to this screen's market wins over the network-wide one (territory_id
-  // null); with neither, the player renders its built-in design as it always has.
-  // Ordering puts the territory match first so the pick is just "the first row".
-  const houseOverride: Record<string, HouseCreative | undefined> = {}
-  {
-    let hq = supabase
-      .from('house_creatives')
-      .select('kind, creative_type, creative_url, territory_id')
-      .eq('active', true)
-    hq = tv.venue?.territory?.id
-      ? hq.or(`territory_id.is.null,territory_id.eq.${tv.venue.territory.id}`)
-      : hq.is('territory_id', null)
-    const { data: houseRows } = await hq
-    for (const row of (houseRows ?? []) as HouseCreative[]) {
-      const held = houseOverride[row.kind]
-      // Keep the more specific row: a market-scoped override beats the global one
-      // whichever order they arrive in.
-      if (!held || (!held.territory_id && row.territory_id)) houseOverride[row.kind] = row
-    }
-  }
+  // What this screen's market has said about the two house slides (0063 + 0075):
+  // an uploaded replacement, the built-in design, or off entirely. The whole
+  // table is a handful of rows, so it's read in one go and resolved in lib —
+  // the same resolution the admin page and the slot math use.
+  const { data: houseData } = await supabase
+    .from('house_creatives')
+    .select(HOUSE_SELECT)
+    .eq('active', true)
+  const houseRows = (houseData ?? []) as HouseRow[]
+  const marketId = tv.venue?.territory?.id ?? null
+  const advertiseRow = resolveHouse(houseRows, 'advertise', marketId)
+  const brewloopRow = resolveHouse(houseRows, 'brewloop', marketId)
 
   // Scan QR for the house / "advertise on this screen" slide: a business owner who
   // sees it scans to reach the Loop Network site and learn more. Points at the
-  // marketing site (not the in-app signup flow). Always present (unlike ads/trivia).
-  const advertise = {
-    url: LOOP_SITE_URL,
-    qr_image: await QRCode.toDataURL(LOOP_SITE_URL, {
-      margin: 1,
-      width: 240,
-      color: { dark: '#000000', light: '#ffffff' },
-    }),
-    ...creativeFields(houseOverride.advertise),
-  }
+  // marketing site (not the in-app signup flow). NULL when this market has the
+  // slide switched off — the player leaves it out of the loop rather than
+  // rendering an empty one.
+  const advertise =
+    advertiseRow?.mode === 'off'
+      ? null
+      : {
+          url: LOOP_SITE_URL,
+          qr_image: await QRCode.toDataURL(LOOP_SITE_URL, {
+            margin: 1,
+            width: 240,
+            color: { dark: '#000000', light: '#ffffff' },
+          }),
+          ...creativeFields(advertiseRow),
+        }
 
-  // Jville Brew Loop house ad ($5 off, scan to book) — plays on every screen.
-  const brewloop = {
-    url: BREWLOOP_OFFER_URL,
-    qr_image: await QRCode.toDataURL(BREWLOOP_OFFER_URL, {
-      margin: 1,
-      width: 240,
-      color: { dark: '#000000', light: '#ffffff' },
-    }),
-    ...creativeFields(houseOverride.brewloop),
-  }
+  // Jville Brew Loop house ad ($5 off, scan to book) — on every screen whose
+  // market hasn't turned it off.
+  const brewloop =
+    brewloopRow?.mode === 'off'
+      ? null
+      : {
+          url: BREWLOOP_OFFER_URL,
+          qr_image: await QRCode.toDataURL(BREWLOOP_OFFER_URL, {
+            margin: 1,
+            width: 240,
+            color: { dark: '#000000', light: '#ffffff' },
+          }),
+          ...creativeFields(brewloopRow),
+        }
 
   return NextResponse.json({
     tv: {

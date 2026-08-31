@@ -92,6 +92,7 @@ export const VERBS: NavItem[] = [
       '/admin/packages',
       '/admin/categories',
       '/admin/email',
+      '/admin/territories',
       '/admin/account',
     ],
   },

@@ -94,5 +94,6 @@ export const MORE_TABS: SectionTab[] = [
   { href: '/admin/pricing', label: 'Pricing & packages' },
   { href: '/admin/messages', label: 'Templates' },
   { href: '/admin/email', label: 'Emails' },
+  { href: '/admin/territories', label: 'Markets' },
   { href: '/admin/account', label: 'Account' },
 ]

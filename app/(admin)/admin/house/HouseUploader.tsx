@@ -7,7 +7,8 @@ import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { CREATIVE_ACCEPT, validateCreativeFile } from '@/lib/adCreative'
-import { setHouseCreative, type HouseKind } from './actions'
+import type { HouseKind } from '@/lib/houseSlides'
+import { setHouseCreative } from './actions'
 
 // Upload a replacement for one of the built-in house slides. Same bucket and the
 // same validation a paid ad creative goes through, so the size/type rules a screen

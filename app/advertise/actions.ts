@@ -62,11 +62,13 @@ export async function submitInquiry(input: {
 
   // Land it in the market whose name matches the city they typed, else the
   // first real market. An enquiry pointed at the wrong board is recoverable;
-  // one that fails to save is not.
+  // one that fails to save is not. Archived markets are skipped — we are not
+  // selling into those, so a lead should never queue up inside one.
   const { data: terrData } = await admin
     .from('territories')
     .select('id, name')
     .eq('is_holding', false)
+    .eq('status', 'active')
     .order('name')
   const territories = (terrData ?? []) as { id: string; name: string }[]
   if (!territories.length) return { ok: false, error: 'We are not set up in any market yet.' }

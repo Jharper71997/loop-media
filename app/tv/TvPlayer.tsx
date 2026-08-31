@@ -156,9 +156,13 @@ const LOAD_GRACE_MS = 10_000
 
 function buildPlaylist(m: Manifest): Slide[] {
   const slot = m.tv.slot_seconds || 15
-  // The Jville Brew Loop house ad plays on EVERY screen (only when the manifest
-  // carries it). It leads the loop so a screen opens with real content.
+  // Both house slides are OMITTED FROM THE MANIFEST in a market that turned them
+  // off (see app/api/tv/loop), so "did the manifest carry it" is the whole test —
+  // an older cached manifest always carries both and keeps playing them.
+  // The Jville Brew Loop ad leads the loop so a screen opens with real content.
   const brewloop: Slide[] = m.brewloop ? [{ kind: 'brewloop' }] : []
+  // The "advertise on this screen" card.
+  const promo: Slide[] = m.advertise ? [{ kind: 'promo' as const }] : []
   // The live trivia teaser — shown ONCE per loop cycle when the venue has trivia
   // on, not repeated between ads.
   const triviaOnce: Slide[] = m.trivia ? [{ kind: 'trivia' as const }] : []
@@ -167,7 +171,7 @@ function buildPlaylist(m: Manifest): Slide[] {
     // No ads sold yet: lead with the Brew Loop ad, then the single trivia teaser,
     // then the "advertise on this screen" house slide LAST — a new screen
     // shouldn't open by begging for advertisers.
-    return [...brewloop, ...triviaOnce, { kind: 'promo' }]
+    return [...brewloop, ...triviaOnce, ...promo]
   }
   const out: Slide[] = [...brewloop]
   m.items.forEach((it, i) => {
@@ -176,7 +180,7 @@ function buildPlaylist(m: Manifest): Slide[] {
     // back to back.
     if (i === 0 && triviaOnce.length) out.push(triviaOnce[0])
   })
-  out.push({ kind: 'promo' })
+  out.push(...promo)
   return out
 }
 
@@ -704,7 +708,11 @@ function Player({
   const advance = () => setIndex((i) => (i + 1) % Math.max(playlist.length, 1))
 
   if (fatal) return <Splash retry>{fatal}</Splash>
-  if (!manifest || !slide) return <Splash>Loading loop…</Splash>
+  if (!manifest) return <Splash>Loading loop…</Splash>
+  // Nothing to play: no ads sold, no trivia, and this market has both house
+  // slides switched off. Hold the branded black screen rather than "Loading
+  // loop…", which on a wall in a bar reads as a screen that has broken.
+  if (!slide) return <Splash />
 
   const venueName = manifest.venue?.name ?? ''
   // Effective safe-area inset for this screen: live calibration preview if active,
@@ -1553,7 +1561,7 @@ function AdvertiseAd({ qrImage }: { qrImage: string }) {
   )
 }
 
-function Splash({ children, retry }: { children: React.ReactNode; retry?: boolean }) {
+function Splash({ children, retry }: { children?: React.ReactNode; retry?: boolean }) {
   return (
     <div className="flex h-screen w-screen flex-col items-center justify-center gap-5 bg-black text-white/60">
       {/* Branded splash to match the 404 / error pages instead of a bare screen. */}
