@@ -65,6 +65,7 @@ public class MainActivity extends Activity {
     private FrameLayout root;
     private WebView web;
     private PowerManager.WakeLock cpuLock;
+    private PowerManager.WakeLock screenLock;
     private WifiManager.WifiLock wifiLock;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private volatile long lastAlive;
@@ -89,7 +90,21 @@ public class MainActivity extends Activity {
         // Never dim or sleep while the app is foreground. (The TV's own
         // screensaver/auto-power-off must still be disabled in its settings —
         // no app can override that from inside.)
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+                | WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+                | WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
+                | WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED);
+        // FLAG_KEEP_SCREEN_ON only holds while this window is actually
+        // foreground and visible. The moment the stick is put to sleep from
+        // outside the app (an HDMI-CEC standby broadcast when someone switches
+        // the TV off, or Fire OS own idle timer) the flag stops applying, the
+        // activity is paused, and nothing here ever brings it back. These two
+        // extra flags let the activity itself wake the display when the
+        // watchdog relaunches it.
+        if (android.os.Build.VERSION.SDK_INT >= 27) {
+            setTurnScreenOn(true);
+            setShowWhenLocked(true);
+        }
 
         setupKiosk();
         acquireLocks();
@@ -224,6 +239,25 @@ public class MainActivity extends Activity {
             cpuLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "loopnetwork:cpu");
             cpuLock.setReferenceCounted(false);
             cpuLock.acquire();
+        } catch (Exception ignored) {}
+        try {
+            // A PARTIAL lock keeps the CPU alive but explicitly lets the DISPLAY
+            // sleep, which is exactly the failure we keep seeing: the stick is
+            // powered, online, and the page is loaded, but nothing is painting.
+            // The player treats no painted frames as offline (see app/tv, the
+            // MIN_PAINT_FPS gate) and stops both the heartbeat and proof of
+            // play, so a slept display and a dead stick look identical from the
+            // dashboard. Deprecated since API 17 and ignored on some builds,
+            // which is why it is additive and wrapped rather than a replacement.
+            @SuppressWarnings("deprecation")
+            PowerManager.WakeLock bright = pm.newWakeLock(
+                    PowerManager.SCREEN_BRIGHT_WAKE_LOCK
+                            | PowerManager.ACQUIRE_CAUSES_WAKEUP
+                            | PowerManager.ON_AFTER_RELEASE,
+                    "loopnetwork:screen");
+            bright.setReferenceCounted(false);
+            bright.acquire();
+            screenLock = bright;
         } catch (Exception ignored) {}
         try {
             WifiManager wm = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
@@ -445,6 +479,7 @@ public class MainActivity extends Activity {
     protected void onDestroy() {
         handler.removeCallbacksAndMessages(null);
         try { if (cpuLock != null && cpuLock.isHeld()) cpuLock.release(); } catch (Exception ignored) {}
+        try { if (screenLock != null && screenLock.isHeld()) screenLock.release(); } catch (Exception ignored) {}
         try { if (wifiLock != null && wifiLock.isHeld()) wifiLock.release(); } catch (Exception ignored) {}
         if (web != null) {
             root.removeView(web);

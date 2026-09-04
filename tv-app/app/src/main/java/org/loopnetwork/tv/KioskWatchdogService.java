@@ -4,6 +4,8 @@ import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.Service;
+import android.content.BroadcastReceiver;
+import android.content.IntentFilter;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
@@ -50,10 +52,41 @@ public class KioskWatchdogService extends Service {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private boolean running;
 
+    /**
+     * Relaunch the player the instant the display comes back.
+     *
+     * The watchdog tick below only fires while the device is awake enough to run
+     * our handler, and after a standby it is the Fire TV home screen that comes
+     * back, not us. ACTION_SCREEN_ON is the earliest signal that the display is
+     * live again, and a start from a broadcast receiver is exempt from some of
+     * the background-activity-launch restrictions that block the tick on newer
+     * Fire OS. ACTION_SCREEN_ON and ACTION_SCREEN_OFF cannot be declared in the
+     * manifest, so this is registered at runtime and the service is START_STICKY
+     * so it outlives the activity.
+     */
+    private final BroadcastReceiver wake = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context c, Intent i) {
+            try {
+                Intent launch = new Intent(c, MainActivity.class);
+                launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                        | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                c.startActivity(launch);
+            } catch (Exception ignored) {}
+        }
+    };
+
     @Override
     public void onCreate() {
         super.onCreate();
         startForeground(NOTIF_ID, buildNotification());
+        IntentFilter f = new IntentFilter();
+        f.addAction(Intent.ACTION_SCREEN_ON);
+        f.addAction(Intent.ACTION_USER_PRESENT);
+        f.addAction("android.intent.action.DREAMING_STOPPED");
+        try {
+            registerReceiver(wake, f);
+        } catch (Exception ignored) {}
     }
 
     @Override
@@ -122,6 +155,9 @@ public class KioskWatchdogService extends Service {
 
     @Override
     public void onDestroy() {
+        try {
+            unregisterReceiver(wake);
+        } catch (Exception ignored) {}
         running = false;
         handler.removeCallbacksAndMessages(null);
         super.onDestroy();

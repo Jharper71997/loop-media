@@ -21,6 +21,34 @@ type Admin = ReturnType<typeof createAdminClient>
 const OFFLINE_AFTER_MS = 30 * 60 * 1000
 // At most one alert per screen per this window, so an ongoing outage emails once.
 const COOLDOWN_MS = 12 * 60 * 60 * 1000
+// A screen must have missed at least this much ACTUAL open time before we tell
+// the host. Replaces the old "is the venue open at this exact instant" gate.
+const MIN_OPEN_DARK_MS = 30 * 60 * 1000
+// How far back to bother measuring. A screen dark longer than this is already a
+// known problem and the number stops changing the decision.
+const LOOKBACK_MS = 7 * 24 * 60 * 60 * 1000
+// Resolution of the open-hours sweep below.
+const STEP_MS = 15 * 60 * 1000
+
+// How many milliseconds of the venue OPEN time elapsed while the screen was
+// dark. Sweeping the interval is what makes this correct for a venue that is
+// shut at the moment the cron happens to run.
+//
+// The gate this replaces asked "is the venue open right now". Because the only
+// schedule Vercel Hobby allows is daily, "right now" was always 11:00 ET, so a
+// venue opening at noon could never be alerted at all. On 2026-08-31 Twin Ravens
+// Tavern (opens 15:00) went dark and stayed dark for 94 hours with its host
+// never told, and Good Times Tattoo (opens 12:00) did the same. Neither had a
+// single row in tv_alerts. Both were active, both had a host: the only thing
+// wrong was the clock.
+function openDarkMs(sinceMs: number, nowMs: number, hours: HoursOnly): number {
+  const from = Math.max(sinceMs, nowMs - LOOKBACK_MS)
+  let open = 0
+  for (let t = from; t < nowMs; t += STEP_MS) {
+    if (isWithinOpenHours(new Date(t).toISOString(), hours)) open += STEP_MS
+  }
+  return open
+}
 
 function renderHtml(
   base: string,
@@ -45,6 +73,13 @@ function renderHtml(
     </a>
     <p style="font-size:12px;color:#777;margin-top:28px">If it is already back on, thank you and please ignore this.</p>
   </div></body></html>`
+}
+
+type HoursOnly = {
+  business_open: string | null
+  business_close: string | null
+  business_days: number[] | null
+  business_hours: Record<string, { open: string; close: string }> | null
 }
 
 type VenueRow = {
@@ -107,13 +142,14 @@ export async function runOfflineAlerts(
       business_days: v.business_days,
       business_hours: v.business_hours,
     }
-    // Only alert while the venue is actually open — a dark screen when closed is fine.
-    if (!isWithinOpenHours(new Date(now).toISOString(), hours)) continue
-
     for (const tv of v.tvs ?? []) {
-      const last = tv.last_heartbeat_at ? Date.parse(tv.last_heartbeat_at) : 0
-      const stale = now - last > OFFLINE_AFTER_MS
-      if (!stale) continue
+      // A screen that has never checked in was never installed, not an incident.
+      if (!tv.last_heartbeat_at) continue
+      const last = Date.parse(tv.last_heartbeat_at)
+      if (now - last <= OFFLINE_AFTER_MS) continue
+      // Judge it on earning time lost, not on the wall clock at cron time. A
+      // screen dark at 3am in a bar that opens at 4pm still scores zero here.
+      if (openDarkMs(last, now, hours) < MIN_OPEN_DARK_MS) continue
 
       // Cooldown: skip if we alerted this screen recently.
       const { data: recent } = await admin
