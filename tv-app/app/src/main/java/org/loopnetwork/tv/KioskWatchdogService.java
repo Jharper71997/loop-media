@@ -56,8 +56,8 @@ public class KioskWatchdogService extends Service {
      * Relaunch the player the instant the display comes back.
      *
      * The watchdog tick below only fires while the device is awake enough to run
-     * our handler, and after a standby it is the Fire TV home screen that comes
-     * back, not us. ACTION_SCREEN_ON is the earliest signal that the display is
+     * our handler, and after a Fire OS standby or an overnight OS update reboot
+     * it is the Fire TV home screen that comes back, not us. ACTION_SCREEN_ON is the earliest signal that the display is
      * live again, and a start from a broadcast receiver is exempt from some of
      * the background-activity-launch restrictions that block the tick on newer
      * Fire OS. ACTION_SCREEN_ON and ACTION_SCREEN_OFF cannot be declared in the

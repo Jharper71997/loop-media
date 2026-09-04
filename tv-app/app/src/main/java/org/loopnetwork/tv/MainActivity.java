@@ -95,12 +95,14 @@ public class MainActivity extends Activity {
                 | WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
                 | WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED);
         // FLAG_KEEP_SCREEN_ON only holds while this window is actually
-        // foreground and visible. The moment the stick is put to sleep from
-        // outside the app (an HDMI-CEC standby broadcast when someone switches
-        // the TV off, or Fire OS own idle timer) the flag stops applying, the
-        // activity is paused, and nothing here ever brings it back. These two
-        // extra flags let the activity itself wake the display when the
-        // watchdog relaunches it.
+        // foreground and visible, and it suppresses the screensaver but NOT
+        // Amazon device-level inactivity power-off, which is keyed on remote
+        // input rather than on the screen being on. The fleet runs Fire TV
+        // televisions, so Fire OS owns the panel directly: there is no separate
+        // stick and no HDMI-CEC standby involved. When Fire OS powers the panel
+        // down, or an overnight OS update reboots it, this activity is paused
+        // and nothing here ever brought it back. These flags let the activity
+        // wake the display itself when the watchdog relaunches it.
         if (android.os.Build.VERSION.SDK_INT >= 27) {
             setTurnScreenOn(true);
             setShowWhenLocked(true);
@@ -242,7 +244,7 @@ public class MainActivity extends Activity {
         } catch (Exception ignored) {}
         try {
             // A PARTIAL lock keeps the CPU alive but explicitly lets the DISPLAY
-            // sleep, which is exactly the failure we keep seeing: the stick is
+            // sleep, which is exactly the failure we keep seeing: the TV is
             // powered, online, and the page is loaded, but nothing is painting.
             // The player treats no painted frames as offline (see app/tv, the
             // MIN_PAINT_FPS gate) and stops both the heartbeat and proof of
