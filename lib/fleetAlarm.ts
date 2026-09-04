@@ -26,13 +26,21 @@ type Admin = ReturnType<typeof createAdminClient>
 const STALE_AFTER_MS = 12 * 60 * 1000
 // Only screens that stopped recently are news; a TV dark for a week is a separate
 // (already known) problem and must not keep re-triggering the alarm.
-const RECENT_WINDOW_MS = 6 * 60 * 60 * 1000
+//
+// This MUST cover the whole gap between runs. It used to be 6h while the only
+// caller (/api/cron/screen-live) runs once a day at 15:00 UTC, which meant the
+// alarm could physically only see screens that stopped between 05:00 and 10:48
+// ET. Every evening outage was invisible: on 2026-08-22 five screens across five
+// venues stopped inside 60 seconds at 18:49 ET and nothing ever fired. Repeat
+// alarms are held off by alreadyAlarmed() below, which is keyed on the screens
+// themselves, not on how long ago they stopped.
+const RECENT_WINDOW_MS = 26 * 60 * 60 * 1000
 // Stops this close together are correlated — no plausible independent cause.
 const CLUSTER_MS = 10 * 60 * 1000
 // Below these, treat it as ordinary venue trouble and stay quiet.
 const MIN_SCREENS = 3
 const MIN_VENUES = 2
-// One alarm per outage, not one per run.
+// Floor between alarms, so a fault that flaps cannot page repeatedly.
 const COOLDOWN_MS = 6 * 60 * 60 * 1000
 
 type VenueHours = {
@@ -135,7 +143,7 @@ export async function detectFleetOutage(admin: Admin, now = Date.now()): Promise
   }
 }
 
-// True when we already alarmed recently, so an ongoing outage emails once.
+// True when we already alarmed recently, so a flapping fault cannot page repeatedly.
 async function recentlyAlarmed(admin: Admin, now: number): Promise<boolean> {
   const { data } = await admin
     .from('tv_alerts')
@@ -145,6 +153,30 @@ async function recentlyAlarmed(admin: Admin, now: number): Promise<boolean> {
     .limit(1)
     .maybeSingle()
   return !!data
+}
+
+// True when every screen in this cluster has ALREADY produced a fleet_outage row
+// since it stopped, i.e. we have said this exact thing before.
+//
+// This replaces the old job that RECENT_WINDOW_MS was doing. Suppressing by "it
+// stopped more than six hours ago" also suppressed every outage the daily cron
+// was too late to witness. Suppressing by "we already told you about these
+// screens" is the check that was actually wanted: a still-dark fleet stays quiet,
+// and one more screen joining the cluster still alarms.
+async function alreadyReported(
+  admin: Admin,
+  screens: Array<{ id: string; stoppedAt: string }>
+): Promise<boolean> {
+  const oldest = Math.min(...screens.map((s) => Date.parse(s.stoppedAt)))
+  const { data, error } = await admin
+    .from('tv_alerts')
+    .select('tv_id')
+    .eq('kind', 'fleet_outage')
+    .gte('created_at', new Date(oldest).toISOString())
+  // On a failed read, prefer the alarm over the silence.
+  if (error || !data) return false
+  const reported = new Set(data.map((r) => (r as { tv_id: string }).tv_id))
+  return screens.every((s) => reported.has(s.id))
 }
 
 function renderHtml(base: string, o: FleetOutage): string {
@@ -205,6 +237,8 @@ export async function runFleetAlarm(
   if (!outage) return { outage: null, sent: 0 }
   if (opts.dry) return { outage, sent: 0, skipped: 'dry' }
   if (await recentlyAlarmed(admin, now)) return { outage, sent: 0, skipped: 'cooldown' }
+  if (await alreadyReported(admin, outage.screens))
+    return { outage, sent: 0, skipped: 'already-reported' }
 
   const to = await adminRecipients(admin)
   if (!to.length) return { outage, sent: 0, skipped: 'no-admin-recipients' }
