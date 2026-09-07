@@ -2,8 +2,7 @@
 
 import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
-import { MAP_TILE_ATTRIBUTION } from '@/lib/mapTiles'
-import { useMapTileUrl } from '@/components/app/useMapTiles'
+import { useMapTiles } from '@/components/app/useMapTiles'
 import { formatNumber } from '@/lib/format'
 import { MapFitBounds } from '@/components/app/MapFitBounds'
 
@@ -27,7 +26,7 @@ export default function CampaignMapView({
   center: [number, number]
   showScans?: boolean
 }) {
-  const tileUrl = useMapTileUrl()
+  const basemap = useMapTiles()
   const points = venues
     .filter((v) => v.lat != null && v.lng != null)
     .map((v) => [v.lat as number, v.lng as number] as [number, number])
@@ -39,8 +38,8 @@ export default function CampaignMapView({
       className="h-[50vh] w-full overflow-hidden rounded-lg"
     >
       <TileLayer
-        attribution={MAP_TILE_ATTRIBUTION}
-        url={tileUrl}
+        attribution={basemap.attribution}
+        url={basemap.url}
       />
       <MapFitBounds points={points} />
       {venues
