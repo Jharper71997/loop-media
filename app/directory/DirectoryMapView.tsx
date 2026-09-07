@@ -2,8 +2,7 @@
 
 import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
-import { MAP_TILE_ATTRIBUTION } from '@/lib/mapTiles'
-import { useMapTileUrl } from '@/components/app/useMapTiles'
+import { useMapTiles } from '@/components/app/useMapTiles'
 import { MapFitBounds } from '@/components/app/MapFitBounds'
 
 export type DirectoryMapVenue = {
@@ -23,7 +22,7 @@ export default function DirectoryMapView({
   venues: DirectoryMapVenue[]
   center: [number, number]
 }) {
-  const tileUrl = useMapTileUrl()
+  const basemap = useMapTiles()
   const points = venues
     .filter((v) => v.lat != null && v.lng != null)
     .map((v) => [v.lat as number, v.lng as number] as [number, number])
@@ -35,7 +34,7 @@ export default function DirectoryMapView({
       // 52vh is most of a phone screen for a map that's context, not the content.
       className="h-[36vh] min-h-56 w-full overflow-hidden rounded-2xl sm:h-[50vh]"
     >
-      <TileLayer attribution={MAP_TILE_ATTRIBUTION} url={tileUrl} />
+      <TileLayer attribution={basemap.attribution} url={basemap.url} />
       <MapFitBounds points={points} />
       {venues
         .filter((v) => v.lat != null && v.lng != null)

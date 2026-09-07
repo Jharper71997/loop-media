@@ -3,8 +3,7 @@
 import Link from 'next/link'
 import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
-import { MAP_TILE_ATTRIBUTION } from '@/lib/mapTiles'
-import { useMapTileUrl } from '@/components/app/useMapTiles'
+import { useMapTiles } from '@/components/app/useMapTiles'
 import { US_CENTER, US_ZOOM } from '@/lib/geo'
 import { MapFitBounds } from '@/components/app/MapFitBounds'
 
@@ -35,7 +34,7 @@ export function MapCanvas({
   venues: VenuePin[]
   highlightIds: string[] | null
 }) {
-  const tileUrl = useMapTileUrl()
+  const basemap = useMapTiles()
   const highlight = highlightIds ? new Set(highlightIds) : null
   const geo = venues.filter((v) => v.lat != null && v.lng != null)
   const points = geo.map((v) => [v.lat as number, v.lng as number] as [number, number])
@@ -48,8 +47,8 @@ export function MapCanvas({
       className="h-[70vh] w-full overflow-hidden rounded-lg"
     >
       <TileLayer
-        attribution={MAP_TILE_ATTRIBUTION}
-        url={tileUrl}
+        attribution={basemap.attribution}
+        url={basemap.url}
       />
       <MapFitBounds points={points} />
       {geo.map((v) => {
