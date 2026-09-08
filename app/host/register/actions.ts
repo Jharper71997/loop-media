@@ -104,8 +104,8 @@ export async function requestVenue(input: RegisterVenueInput) {
     return { error: 'You already have a screen registered at this address.' }
   }
 
-  const territoryId = await findOrCreateTerritory(admin, input.city, input.state)
-  if (!territoryId) return { error: 'Could not set up your city. Try again.' }
+  const territoryId = await findOrCreateTerritory(admin, input.state)
+  if (!territoryId) return { error: 'Could not set up your state. Try again.' }
 
   const geo = await geocodeAddress({
     street: input.address,

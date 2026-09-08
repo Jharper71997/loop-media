@@ -74,13 +74,14 @@ export async function saveHostVenue(input: HostVenueInput) {
     zip: input.postal_code,
   })
 
-  // Moving cities changes the market. Re-derive the territory only when the city
-  // or state actually changed (reusing the same helper as registration); otherwise
-  // leave territory_id untouched so an unrelated edit never reshuffles the market.
+  // A market is a STATE, so only moving states changes it — fixing a typo in the
+  // city, or moving across town, leaves the venue in the market it's already in.
+  // Re-derived with the same helper registration uses; otherwise territory_id is
+  // left untouched so an unrelated edit never reshuffles the market.
   let territoryId: string | undefined
-  if (norm(input.city) !== norm(venue.city) || norm(input.state) !== norm(venue.state)) {
-    const t = await findOrCreateTerritory(admin, input.city, input.state)
-    if (!t) return { error: 'Could not set up that city. Try again.' }
+  if (norm(input.state) !== norm(venue.state)) {
+    const t = await findOrCreateTerritory(admin, input.state)
+    if (!t) return { error: 'Could not set up that state. Try again.' }
     territoryId = t
   }
 
