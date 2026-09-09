@@ -142,18 +142,47 @@ export async function placeCampaign(
 
   // One read of active placements gives us slot occupancy per TV and which TVs
   // this campaign already runs on.
+  //
+  // We need the actual slot NUMBERS in use, not a count. uq_placement_tv_slot is
+  // unique on (tv_id, slot_position) among active rows, and real screens have gaps
+  // in their slot numbering (a placement ends or pauses out of the middle of the
+  // loop, leaving e.g. 0,1,2,3,5 with five rows). Deriving the next slot from the
+  // COUNT then aims straight at an occupied slot — and because placements go in as
+  // ONE batch insert, that single collision threw away every other screen in the
+  // run too, silently, every night. Two paid, approved campaigns sat unplaced for
+  // exactly this reason.
   const { data: activePl } = await admin
     .from('ad_placements')
-    .select('tv_id, campaign_id')
+    .select('tv_id, campaign_id, slot_position')
     .eq('status', 'active')
-  const usedByTv = new Map<string, number>()
+  const slotsByTv = new Map<string, Set<number>>()
   const myTvs = new Set<string>()
   for (const p of (activePl ?? []) as unknown as {
     tv_id: string
     campaign_id: string | null
+    slot_position: number
   }[]) {
-    usedByTv.set(p.tv_id, (usedByTv.get(p.tv_id) ?? 0) + 1)
+    let set = slotsByTv.get(p.tv_id)
+    if (!set) slotsByTv.set(p.tv_id, (set = new Set<number>()))
+    set.add(p.slot_position)
     if (p.campaign_id === campaignId) myTvs.add(p.tv_id)
+  }
+
+  // uq_placement_ad_tv is unique on (ad_id, tv_id) for every row that is not
+  // ended, so a PAUSED placement of this same ad still blocks a fresh one. Those
+  // TVs are not free even though no active row occupies a slot there.
+  const { data: heldPl } = await admin
+    .from('ad_placements')
+    .select('tv_id')
+    .eq('ad_id', ad.id)
+    .neq('status', 'ended')
+  const heldTvs = new Set((heldPl ?? []).map((p) => (p as { tv_id: string }).tv_id))
+
+  /** Lowest slot in the loop nobody is using, or null when the loop is full. */
+  const firstFreeSlot = (tvId: string, maxSlots: number): number | null => {
+    const taken = slotsByTv.get(tvId)
+    for (let i = 0; i < maxSlots; i++) if (!taken?.has(i)) return i
+    return null
   }
 
   // Host-slot guarantee: reserve one slot per screen for the venue's OWN host
@@ -190,15 +219,18 @@ export async function placeCampaign(
     if (exclOwner && exclOwner !== camp.advertiser_id) continue
     for (const t of v.tvs ?? []) {
       if (myTvs.has(t.id)) continue // already running here
+      if (heldTvs.has(t.id)) continue // a paused row for this ad still holds this screen
       if (excludedTvs.has(t.id)) continue // admin pulled this campaign off this screen
       const maxSlots = Math.max(1, Math.floor((t.loop_length_seconds || 360) / (t.slot_seconds || 15)))
       // Hold one slot for the host's own promo (see host-slot guarantee above),
       // except for the host's own promo itself, a 1-slot loop, or a screen whose
       // host promo already holds a slot.
       const reserved = isHostPromo || maxSlots <= 1 || hostPromoTvs.has(t.id) ? 0 : 1
-      const used = usedByTv.get(t.id) ?? 0
+      const used = slotsByTv.get(t.id)?.size ?? 0
       if (used >= maxSlots - reserved) continue // loop full (reserve held for host)
-      candidates.push({ tvId: t.id, venueId: v.id, traffic: v.foot_traffic_estimate ?? 0, slot: used })
+      const slot = firstFreeSlot(t.id, maxSlots)
+      if (slot == null) continue // every slot in the loop is taken
+      candidates.push({ tvId: t.id, venueId: v.id, traffic: v.foot_traffic_estimate ?? 0, slot })
     }
   }
   candidates.sort((a, b) => b.traffic - a.traffic)
@@ -232,6 +264,11 @@ export async function placeCampaign(
       start_date: today,
       status: 'active',
     })
+    // Claim it locally too: candidates are per-TV here, but recording the claim
+    // keeps slotsByTv honest for anything that reads it after this loop.
+    const claimed = slotsByTv.get(c.tvId)
+    if (claimed) claimed.add(c.slot)
+    else slotsByTv.set(c.tvId, new Set([c.slot]))
     est += c.traffic
     screensUsed.add(c.tvId)
   }

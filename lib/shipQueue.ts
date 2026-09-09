@@ -14,23 +14,46 @@
 //   1. paid       — money taken, no creative exists yet
 //   2. building   — they asked us to make it; we owe them
 //   3. review     — submitted, waiting on you
-//   4. placing    — approved, but on no screen
-//   5. live       — running
+//   4. placing    — cleared to air, but on no live screen
+//   5. rejected   — reviewed and turned down; it can never air as it stands
+//   6. paused     — deliberately off
+//   7. live       — running
+//
+// An ad is CLEARED TO AIR at status 'approved' OR 'active'. Both are real: the
+// admin queue approves to 'approved', and the placement engine flips the ad to
+// 'active' the moment it puts it on a screen (lib/placement.ts). Reading only
+// 'approved' as cleared filed every genuinely-running ad under "paid, nothing
+// made" — the loudest possible false alarm, on the accounts that were fine.
 //
 // A step is a state of the WORLD, derived every load. Nothing here is a status
 // column somebody has to remember to update.
 import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 
-export type ShipStep = 'paid' | 'building' | 'review' | 'placing' | 'live'
+export type ShipStep = 'paid' | 'building' | 'review' | 'placing' | 'rejected' | 'paused' | 'live'
 
-export const STEP_ORDER: ShipStep[] = ['paid', 'building', 'review', 'placing', 'live']
+export const STEP_ORDER: ShipStep[] = [
+  'paid',
+  'building',
+  'review',
+  'placing',
+  'rejected',
+  'paused',
+  'live',
+]
+
+/** Ad statuses that are cleared to air. 'active' is what the placement engine
+ *  sets once the ad is actually on screens, so it is a success state, not a
+ *  problem — see the note at the top of this file. */
+const CLEARED = new Set(['approved', 'active'])
 
 export const STEP_LABEL: Record<ShipStep, string> = {
   paid: 'Paid, nothing made',
   building: 'We owe them creative',
   review: 'Waiting on your review',
   placing: 'Approved, not on a screen',
+  rejected: 'Rejected, still being paid for',
+  paused: 'Paused, not airing',
   live: 'Running',
 }
 
@@ -39,6 +62,8 @@ export const STEP_NOTE: Record<ShipStep, string> = {
   building: 'They asked us to build it. Nothing moves until we do.',
   review: 'Submitted and blocked on you. This is the fastest thing on the page to clear.',
   placing: 'Approved and airing nowhere. The work is done; it just was not put on a screen.',
+  rejected: 'Turned down at review. It will never air as it stands — they need new creative.',
+  paused: 'Switched off on purpose. Only fine if the billing stopped too.',
   live: 'On at least one live screen.',
 }
 
@@ -48,6 +73,8 @@ export const STEP_IS_WORK: Record<ShipStep, boolean> = {
   building: true,
   review: true,
   placing: true,
+  rejected: true,
+  paused: true,
   live: false,
 }
 
@@ -61,7 +88,8 @@ export interface ShipItem {
   monthlyCents: number
   /** How long it has been sitting on this step. */
   since: string | null
-  /** Screens it is placed on, once it gets that far. */
+  /** Live screens it is placed on, once it gets that far. A placement at a venue
+   *  that has left the network is not a screen anybody is watching. */
   screens: number
   /** One line of what is actually blocking it. */
   blocker: string
@@ -110,16 +138,20 @@ export const loadShipQueue = cache(async (territoryId: string | null): Promise<S
 
   // Where each campaign is actually placed. An approved ad on zero screens is
   // the failure this queue exists to make visible.
+  // A placement only counts if the venue is still in the network — a row pointing
+  // at a screen in a venue that went inactive is not somebody seeing the ad, and
+  // counting it hides the exact failure this page is for.
   const { data: placeData } = await supabase
     .from('ad_placements')
-    .select('campaign_id')
+    .select('campaign_id, tv:tvs!inner(venue:venues!inner(status))')
     .eq('status', 'active')
+    .eq('tv.venue.status', 'active')
     .in(
       'campaign_id',
       campaigns.map((c) => c.id)
     )
   const screensByCampaign = new Map<string, number>()
-  for (const p of (placeData ?? []) as { campaign_id: string | null }[]) {
+  for (const p of (placeData ?? []) as unknown as { campaign_id: string | null }[]) {
     if (!p.campaign_id) continue
     screensByCampaign.set(p.campaign_id, (screensByCampaign.get(p.campaign_id) ?? 0) + 1)
   }
@@ -196,7 +228,36 @@ export const loadShipQueue = cache(async (territoryId: string | null): Promise<S
       continue
     }
 
-    if (c.ad.status === 'approved' && screens === 0) {
+    if (c.ad.status === 'rejected') {
+      out.push({
+        ...base,
+        step: 'rejected',
+        title: c.ad.title,
+        since: c.ad.created_at,
+        blocker: 'Rejected at review — it needs new creative before it can air',
+        href: '/admin/queue',
+      })
+      continue
+    }
+
+    // Paused is a decision, not a breakdown. It still earns a line, because the
+    // money usually did not pause with it.
+    if (c.status === 'paused' || c.ad.status === 'paused') {
+      out.push({
+        ...base,
+        step: 'paused',
+        title: c.ad.title,
+        since: c.ad.created_at,
+        blocker:
+          c.status === 'paused'
+            ? 'Campaign paused — check the billing stopped too'
+            : 'Ad paused — the campaign is still active',
+        href: `/admin/advertisers/${c.advertiser_id}`,
+      })
+      continue
+    }
+
+    if (CLEARED.has(c.ad.status) && screens === 0) {
       out.push({
         ...base,
         step: 'placing',
@@ -208,7 +269,7 @@ export const loadShipQueue = cache(async (territoryId: string | null): Promise<S
       continue
     }
 
-    if (c.ad.status === 'approved') {
+    if (CLEARED.has(c.ad.status)) {
       out.push({
         ...base,
         step: 'live',
@@ -220,11 +281,11 @@ export const loadShipQueue = cache(async (territoryId: string | null): Promise<S
       continue
     }
 
-    // Rejected, draft, or anything else an ad row can be: it is not on its way
+    // Anything an ad row can be that is not handled above: it is not on its way
     // to a screen, and saying so is better than leaving it off the list.
     out.push({
       ...base,
-      step: 'paid',
+      step: 'rejected',
       title: c.ad.title,
       since: c.ad.created_at,
       blocker: `Ad is ${c.ad.status} — it cannot air until that changes`,
