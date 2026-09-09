@@ -28,6 +28,8 @@ const STEP_TONE: Record<ShipStep, string> = {
   building: 'bg-warning',
   review: 'bg-primary',
   placing: 'bg-warning',
+  rejected: 'bg-destructive',
+  paused: 'bg-muted-foreground',
   live: 'bg-success',
 }
 
