@@ -31,6 +31,10 @@ android {
             def storePath = System.getenv("LOOP_KEYSTORE_PATH")
             if (storePath) {
                 storeFile file(storePath)
+                // PKCS12, which is both what keytool has produced since JDK 9 and
+                // what openssl writes — the key for this fleet was made with
+                // openssl, since the machine that made it has no JDK.
+                storeType "PKCS12"
                 storePassword System.getenv("LOOP_KEYSTORE_PASSWORD")
                 keyAlias System.getenv("LOOP_KEY_ALIAS")
                 keyPassword System.getenv("LOOP_KEY_PASSWORD")

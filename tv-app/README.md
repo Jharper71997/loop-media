@@ -62,15 +62,25 @@ gradle assembleRelease
   `adb install -r` across a key change, and updating a wall-mounted TV then means
   uninstalling — which wipes its pairing. To set the key up once:
 
+  **This is already set up** (2026-09-21). The key is a PKCS12 keystore, alias
+  `loop`, CN `Loop Network`, valid ~30 years, and the four repo secrets
+  (`LOOP_KEYSTORE_BASE64`, `LOOP_KEYSTORE_PASSWORD`, `LOOP_KEY_ALIAS`,
+  `LOOP_KEY_PASSWORD`) are set. **Keep the keystore file and its password
+  somewhere safe and off this repo: GitHub will not give a secret back, and
+  losing the key means an uninstall/reinstall on every screen in the fleet to
+  move to a new one.**
+
+  It was made with openssl rather than keytool, because the machine that made it
+  has no JDK. To make another (a new fleet, or a rotation):
+
   ```bash
-  keytool -genkeypair -v -keystore loop-release.jks -alias loop     -keyalg RSA -keysize 2048 -validity 10000
-  base64 -w0 loop-release.jks     # paste into the LOOP_KEYSTORE_BASE64 secret
+  openssl req -x509 -newkey rsa:2048 -sha256 -days 10950 -nodes     -keyout key.pem -out cert.pem -subj "/CN=Loop Network/O=Loop Network/C=US"
+  openssl pkcs12 -export -inkey key.pem -in cert.pem -name loop     -out loop-release.p12 -passout pass:<password>
+  base64 -w0 loop-release.p12   # -> the LOOP_KEYSTORE_BASE64 secret
   ```
 
-  Repo secrets: `LOOP_KEYSTORE_BASE64`, `LOOP_KEYSTORE_PASSWORD`,
-  `LOOP_KEY_ALIAS`, `LOOP_KEY_PASSWORD`. Keep the `.jks` somewhere safe and
-  off the repo — lose it and every screen needs an uninstall/reinstall again.
-  The switch to it is itself one uninstall/reinstall per screen; after that,
+  Moving an existing screen onto the key costs one uninstall/reinstall (and one
+  re-pair, since the pairing lives in the WebView's localStorage). After that,
   updates install over the top.
 - **Domain:** the URL is hardcoded to `https://loopnetwork.org/tv`. That domain
   must be serving the app before shipping the APK, or every screen shows nothing.
