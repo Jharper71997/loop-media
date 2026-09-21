@@ -158,7 +158,13 @@ const ACTIONS = {
     await adb(ip, ['shell', `am start -n ${ACTIVITY}`], 20000)
     const state = await wakefulness(ip)
     if (state !== 'Awake') throw new Error(`panel still ${state} after wake`)
-    return 'woken over the tailnet; player back in front'
+    // Say which of the two things actually happened. A lit TV showing the Fire
+    // OS home row is not the same as a lit TV showing the ad, and reporting the
+    // first as the second is how a screen sits wrong for a week.
+    const focus = await adb(ip, ['shell', 'dumpsys window | grep -m1 mCurrentFocus'], 15000)
+    return focus.out.includes(PKG)
+      ? 'woken over the tailnet; player back in front'
+      : 'woken over the tailnet, but the kiosk is not in front (is it installed?)'
   },
 
   // KEYCODE_SLEEP is a true display-off and, unlike lockNow, needs no device
