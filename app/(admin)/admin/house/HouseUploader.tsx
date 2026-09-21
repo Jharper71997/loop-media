@@ -4,18 +4,15 @@ import { useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Upload } from 'lucide-react'
 import { toast } from 'sonner'
-import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
-import { CREATIVE_ACCEPT, validateCreativeFile } from '@/lib/adCreative'
+import { CREATIVE_ACCEPT } from '@/lib/adCreative'
 import { setHouseCreative, type HouseKind } from './actions'
+import { uploadHouseCreative } from './upload'
 
-// Upload a replacement for one of the built-in house slides. Same bucket and the
-// same validation a paid ad creative goes through, so the size/type rules a screen
-// can actually play are enforced in one place.
-//
-// The file goes to storage from the browser (under the admin's own uid folder, which
-// the `creatives` RLS requires) and only the resulting URL is handed to the server
-// action — the same split the advertiser upload flow uses.
+// Add a NEW creative for a house slide and put it on the screens. The previous
+// active one is retired (kept in the list, not deleted) by the server action. To
+// change the artwork on an entry that already exists without adding another row,
+// use Replace file on that row instead.
 export function HouseUploader({
   kind,
   label,
@@ -33,24 +30,9 @@ export function HouseUploader({
   const [busy, setBusy] = useState(false)
 
   async function upload(file: File) {
-    const err = validateCreativeFile(file)
-    if (err) return toast.error(err)
-
     setBusy(true)
     try {
-      const supabase = createClient()
-      const ext = file.name.split('.').pop()?.toLowerCase() || 'bin'
-      // Uid folder is required by the storage policy; the timestamp keeps a re-upload
-      // from colliding with a cached copy of the previous file at the same URL.
-      const path = `${userId}/house-${kind}-${Date.now()}.${ext}`
-      const { error: upErr } = await supabase.storage
-        .from('creatives')
-        .upload(path, file, { contentType: file.type, upsert: true })
-      if (upErr) throw new Error(upErr.message)
-
-      const url = supabase.storage.from('creatives').getPublicUrl(path).data.publicUrl
-      const creativeType = file.type.startsWith('video/') ? 'video' : 'image'
-
+      const { url, creativeType } = await uploadHouseCreative(file, userId, kind)
       start(async () => {
         const res = await setHouseCreative({
           kind,

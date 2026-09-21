@@ -224,7 +224,11 @@ export default async function VenuesPage({
                   screens.map((tv, i) => {
                     const occ = loopOccupancy({
                       adSlots: adSlotCount(tv.loop_length_seconds, tv.slot_seconds),
-                      houseSlides: houseSlideCount({ triviaEnabled: v.trivia_enabled }),
+                      houseSlides: houseSlideCount({
+                        triviaEnabled: v.trivia_enabled,
+                        brewloopEnabled: tv.brewloop_enabled,
+                        advertiseEnabled: tv.advertise_enabled,
+                      }),
                       paidSold: adsByTv.get(tv.id) ?? 0,
                     })
                     return (

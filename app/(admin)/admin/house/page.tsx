@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { formatDateTime } from '@/lib/format'
 import { HouseUploader } from './HouseUploader'
 import { HouseRowActions } from './HouseRowActions'
+import { HouseEnabledControl } from './HouseEnabledControl'
 import type { HouseKind } from './actions'
 
 export const dynamic = 'force-dynamic'
@@ -31,6 +32,9 @@ type Row = {
   kind: HouseKind
   creative_type: 'image' | 'video'
   creative_url: string
+  // Admin-given name (migration 0077). Null on anything uploaded before naming
+  // existed, which falls back to the upload date.
+  label: string | null
   active: boolean
   created_at: string
   territory_id: string | null
@@ -51,12 +55,25 @@ export default async function HouseSlidesPage() {
   let q = supabase
     .from('house_creatives')
     .select(
-      'id, kind, creative_type, creative_url, active, created_at, territory_id, territory:territories(name)'
+      'id, kind, creative_type, creative_url, label, active, created_at, territory_id, territory:territories(name)'
     )
     .order('created_at', { ascending: false })
   if (t) q = q.or(`territory_id.is.null,territory_id.eq.${t}`)
   const { data } = await q
   const rows = (data ?? []) as unknown as Row[]
+
+  // Whether each slide plays at all, for this scope (migration 0075). Same scope
+  // resolution as the creative above and as the TV manifest: a market row beats the
+  // network-wide one, and no row at all means it plays.
+  let sq = supabase.from('house_slide_settings').select('kind, enabled, territory_id')
+  if (t) sq = sq.or(`territory_id.is.null,territory_id.eq.${t}`)
+  else sq = sq.is('territory_id', null)
+  const { data: settingsData } = await sq
+  const settings = (settingsData ?? []) as {
+    kind: HouseKind
+    enabled: boolean
+    territory_id: string | null
+  }[]
 
   return (
     <>
@@ -64,8 +81,8 @@ export default async function HouseSlidesPage() {
         title="House slides"
         description={
           t
-            ? `Replace the built-in house slides for ${activeName ?? 'this market'}, or leave them on the network default.`
-            : 'Replace the built-in house slides across every screen. Pick a market to override just that market.'
+            ? `Replace or switch off the house slides for ${activeName ?? 'this market'}, or leave them on the network default.`
+            : 'Replace the house slides across every screen, or take one off the screens entirely. Pick a market to override just that market.'
         }
       />
       <SectionTabs tabs={SHIP_TABS} />
@@ -81,12 +98,25 @@ export default async function HouseSlidesPage() {
             forSlide.find((r) => r.active && !r.territory_id) ??
             null
 
+          // On/off for this scope, resolved the same way: this market's own row if
+          // it has one, else the network-wide row, else on.
+          const ownSetting = settings.find(
+            (s) => s.kind === slide.kind && (t ? s.territory_id === t : !s.territory_id)
+          )
+          const globalSetting = settings.find((s) => s.kind === slide.kind && !s.territory_id)
+          const playing = (ownSetting ?? globalSetting)?.enabled ?? true
+
           return (
             <div key={slide.kind} className="rounded-xl border border-border bg-card p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="font-medium">{slide.label}</h3>
+                    {!playing && (
+                      <Badge variant="destructive">
+                        {t ? `Off in ${activeName ?? 'this market'}` : 'Off on every screen'}
+                      </Badge>
+                    )}
                     <Badge variant={live ? 'secondary' : 'outline'}>
                       {live ? 'Custom upload' : 'Built-in design'}
                     </Badge>
@@ -98,13 +128,29 @@ export default async function HouseSlidesPage() {
                     )}
                   </div>
                   <p className="mt-1 text-sm text-muted-foreground">{slide.blurb}</p>
+                  {!playing && (
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Not playing{t ? ` in ${activeName ?? 'this market'}` : ' anywhere'}. The upload
+                      below is kept — putting it back on restores it.
+                    </p>
+                  )}
                 </div>
-                <HouseUploader
-                  kind={slide.kind}
-                  label={slide.label}
-                  territoryId={t}
-                  userId={profile.id}
-                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <HouseEnabledControl
+                    kind={slide.kind}
+                    label={slide.label}
+                    territoryId={t}
+                    territoryName={t ? (activeName ?? 'this market') : null}
+                    enabled={playing}
+                    hasOwnSetting={!!ownSetting}
+                  />
+                  <HouseUploader
+                    kind={slide.kind}
+                    label={slide.label}
+                    territoryId={t}
+                    userId={profile.id}
+                  />
+                </div>
               </div>
 
               {/* What's on the screens right now */}
@@ -148,29 +194,59 @@ export default async function HouseSlidesPage() {
               </div>
 
               {/* Every upload for this slide, so an old one can be brought back */}
+              {/* Every upload for this slide. A thumbnail and a name, because four
+                  rows reading the same upload date is how the wrong ad ends up on
+                  ten screens. */}
               {forSlide.length > 0 && (
-                <div className="mt-4 space-y-2 border-t border-border pt-3">
+                <div className="mt-4 divide-y divide-border border-t border-border">
                   {forSlide.map((r) => (
                     <div
                       key={r.id}
-                      className="flex flex-wrap items-center justify-between gap-2 text-sm"
+                      className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm"
                     >
-                      <div className="flex min-w-0 items-center gap-2">
-                        <Badge variant="outline">{r.creative_type}</Badge>
-                        {r.id === live?.id ? (
-                          <Badge variant="secondary">On screens</Badge>
-                        ) : (
-                          !r.active && <Badge variant="outline">Paused</Badge>
-                        )}
-                        <span className="truncate text-muted-foreground">
-                          {formatDateTime(r.created_at)}
-                        </span>
-                        {!t && r.territory?.name && (
-                          <Badge variant="outline">{r.territory.name}</Badge>
-                        )}
-                        {!t && !r.territory_id && <Badge variant="outline">All markets</Badge>}
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div className="h-10 w-16 shrink-0 overflow-hidden rounded border border-border bg-black">
+                          {r.creative_type === 'video' ? (
+                            <video src={r.creative_url} className="h-full w-full object-contain" muted />
+                          ) : (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={r.creative_url}
+                              alt=""
+                              loading="lazy"
+                              decoding="async"
+                              className="h-full w-full object-contain"
+                            />
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="truncate font-medium">
+                              {r.label || formatDateTime(r.created_at)}
+                            </span>
+                            <Badge variant="outline">{r.creative_type}</Badge>
+                            {r.id === live?.id ? (
+                              <Badge variant="secondary">On screens</Badge>
+                            ) : (
+                              !r.active && <Badge variant="outline">Paused</Badge>
+                            )}
+                            {!t && r.territory?.name && (
+                              <Badge variant="outline">{r.territory.name}</Badge>
+                            )}
+                            {!t && !r.territory_id && <Badge variant="outline">All markets</Badge>}
+                          </div>
+                          <p className="truncate text-xs text-muted-foreground">
+                            Uploaded {formatDateTime(r.created_at)}
+                          </p>
+                        </div>
                       </div>
-                      <HouseRowActions id={r.id} active={r.active} />
+                      <HouseRowActions
+                        id={r.id}
+                        active={r.active}
+                        label={r.label}
+                        kind={slide.kind}
+                        userId={profile.id}
+                      />
                     </div>
                   ))}
                 </div>
@@ -180,8 +256,9 @@ export default async function HouseSlidesPage() {
         })}
 
         <p className="text-xs text-muted-foreground">
-          Screens re-read their loop about every 30 seconds, so a change shows up on the TVs
-          within a minute. Nothing here needs a deploy.
+          Screens re-read their loop about every 30 seconds, so a change shows up on the TVs within
+          a minute. Nothing here needs a deploy. To keep a slide off just one TV, use the Take off
+          button on that screen&apos;s page instead.
         </p>
       </div>
     </>

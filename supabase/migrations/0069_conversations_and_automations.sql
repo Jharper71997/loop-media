@@ -109,7 +109,7 @@ create table if not exists public.automations (
   -- 'no_next_step'  open, no follow-up set, for `days`
   -- 'won'           fires once when a deal is won
   -- 'lost'          fires once when a deal is lost
-  trigger      text not null check (trigger in ('stage_stale', 'no_next_step', 'won', 'lost')),
+  "trigger"    text not null check ("trigger" in ('stage_stale', 'no_next_step', 'won', 'lost')),
   stage        text,
   days         integer check (days is null or days > 0),
 
