@@ -66,11 +66,16 @@ export async function GET(req: Request) {
     return NextResponse.json({ wake: true, reason: 'open' })
   }
 
-  // 3. The schedule was switched off while the screen slept: nothing should keep
-  // a panel dark that has no schedule to obey.
-  if (!tv.sleep_when_closed) {
-    return NextResponse.json({ wake: true, reason: 'no-schedule' })
-  }
-
+  // A screen with no schedule STAYS ASLEEP. This used to answer "wake" here, on
+  // the reasoning that nothing should hold a panel dark with no schedule to obey
+  // — which quietly undid every manual sleep about sixty seconds after it was
+  // given, because a dark screen asks this question once a minute. "No schedule"
+  // is not "should be lit": an admin pressing Turn screen off is a perfectly good
+  // reason to be dark, and on a screen without a schedule it is the ONLY reason
+  // it is ever asleep.
+  //
+  // Switching a schedule off while a screen sleeps is handled where it belongs,
+  // in setSleepWhenClosed, which queues an explicit wake — and that arrives as
+  // case 1 above, so nothing is lost by refusing to guess here.
   return NextResponse.json({ wake: false })
 }
