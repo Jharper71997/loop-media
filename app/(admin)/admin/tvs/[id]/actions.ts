@@ -322,3 +322,34 @@ export async function setSleepWhenClosed(tvId: string, enabled: boolean) {
   revalidatePath(`/admin/tvs/${tvId}`)
   return { error: null as string | null }
 }
+
+// Name this screen's device on the tailnet, which is what lets the command
+// runner reach it over adb in about a second instead of waiting for the screen
+// to ask. Empty clears it, and a cleared screen simply goes back to the poll.
+export async function setTailscaleHost(tvId: string, host: string) {
+  const profile = await requireAdmin()
+  const supabase = await createClient()
+  const denied = await guardTv(supabase, profile, tvId)
+  if (denied) return { error: denied }
+
+  const value = host.trim().toLowerCase()
+  if (value && !/^[a-z0-9][a-z0-9-]{0,62}$/.test(value)) {
+    return { error: 'That is not a tailnet hostname (letters, numbers and hyphens, e.g. loops-7th-tv).' }
+  }
+
+  const { error } = await supabase
+    .from('tvs')
+    .update({ tailscale_host: value || null })
+    .eq('id', tvId)
+  // The unique index means one device cannot be claimed by two screens: without
+  // it, a typo would quietly send one venue's commands to another venue's TV.
+  if (error) {
+    return {
+      error: error.code === '23505'
+        ? 'Another screen already claims that tailnet device.'
+        : error.message,
+    }
+  }
+  revalidatePath(`/admin/tvs/${tvId}`)
+  return { error: null as string | null }
+}

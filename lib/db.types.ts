@@ -128,6 +128,10 @@ export interface Tv {
   // true = the panel sleeps outside the venue's open hours and wakes before it
   // opens, on the shell's own alarms. See migration 0078.
   sleep_when_closed: boolean
+  // MagicDNS hostname of this screen on the tailnet (e.g. loops-7th-tv), which
+  // lets the command runner reach it over adb directly. Null = poll only.
+  // See migration 0079.
+  tailscale_host: string | null
   last_sync_at: string | null
   last_heartbeat_at: string | null
   created_at: string

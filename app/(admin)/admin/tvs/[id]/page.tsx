@@ -456,6 +456,7 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
               tvId={tv.id}
               sleepWhenClosed={tv.sleep_when_closed}
               hoursLabel={formatOpenHours(venueHours)}
+              tailscaleHost={tv.tailscale_host}
             />
             {commands.length > 0 && (
               <ul className="space-y-1 text-xs text-muted-foreground">

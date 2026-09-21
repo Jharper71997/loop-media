@@ -24,6 +24,7 @@ import {
   updateOverscan,
   sendTvCommand,
   setSleepWhenClosed,
+  setTailscaleHost,
 } from './actions'
 
 // --- Loop capacity: how many AD slots this screen sells + seconds per slot ---
@@ -398,13 +399,16 @@ export function ScreenPower({
   tvId,
   sleepWhenClosed,
   hoursLabel,
+  tailscaleHost,
 }: {
   tvId: string
   sleepWhenClosed: boolean
   hoursLabel: string | null
+  tailscaleHost: string | null
 }) {
   const router = useRouter()
   const [pending, start] = useTransition()
+  const [host, setHost] = useState(tailscaleHost ?? '')
 
   function send(command: ScreenCommand, done: string) {
     start(async () => {
@@ -490,6 +494,44 @@ export function ScreenPower({
             {sleepWhenClosed ? 'Keep it on 24/7' : 'Sleep when closed'}
           </Button>
         </div>
+      </div>
+
+      {/* The direct path. With it, the buttons above reach this screen in about a
+          second over the tailnet instead of waiting up to a minute for it to ask
+          — and they still work when the player itself has died, which the poll
+          can never do. Blank is not a fault: that screen just uses the poll. */}
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground">Tailnet device name</Label>
+          <Input
+            className="h-8 w-56"
+            placeholder="loops-7th-tv"
+            value={host}
+            onChange={(e) => setHost(e.target.value)}
+          />
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={pending || host.trim().toLowerCase() === (tailscaleHost ?? '').toLowerCase()}
+          onClick={() =>
+            start(async () => {
+              const res = await setTailscaleHost(tvId, host)
+              if (res.error) toast.error(res.error)
+              else {
+                toast.success(host.trim() ? 'Direct path set.' : 'Direct path cleared.')
+                router.refresh()
+              }
+            })
+          }
+        >
+          <Save className="size-4" /> Save
+        </Button>
+        <p className="text-xs text-muted-foreground">
+          {tailscaleHost
+            ? 'Buttons above reach this screen directly, in about a second.'
+            : 'No direct path: this screen picks commands up on its own sync, within about a minute.'}
+        </p>
       </div>
     </div>
   )
