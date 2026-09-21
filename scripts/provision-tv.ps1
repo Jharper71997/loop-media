@@ -186,6 +186,20 @@ Say "Display sleep disabled." 'Green'
 # The screen is then unreachable AND selling nothing, and someone drives out.
 Say "Making the way back in survive a reboot ..."
 
+# 0. Let the kiosk pull itself back to the front from the background. Fire OS
+#    silently refuses a background activity start, which is why a rebooted screen
+#    sat on the Amazon home row with the watchdog running and trying every 700ms
+#    and failing every time, with nothing in the log to say so. Granting
+#    SYSTEM_ALERT_WINDOW restores the permission to do it. Verified on AFTALMO:
+#    the player came back within ten seconds of this line.
+& $adb -s $target shell appops set $PKG SYSTEM_ALERT_WINDOW allow | Out-Null
+$op = (& $adb -s $target shell appops get $PKG SYSTEM_ALERT_WINDOW) -join ' '
+if ($op -match 'allow') {
+  Say "  Kiosk can relaunch itself after a reboot." 'Green'
+} else {
+  Say "  Could not grant SYSTEM_ALERT_WINDOW: this screen will sit on the Fire TV home row after a power cut." 'Red'
+}
+
 # 1. Tailscale as Android's always-on VPN: brought up by the system at boot,
 #    before and regardless of any app. Lockdown stays OFF on purpose — with it
 #    on, a tailnet outage would take the venue's own traffic down with it, and
@@ -199,17 +213,17 @@ if ($aov -eq 'com.tailscale.ipn') {
   Say "  Could not set always-on VPN (got '$aov'). This screen will lose the tunnel on reboot." 'Yellow'
 }
 
-# 2. Network ADB at boot. persist.* properties are usually refused from shell on
-#    Fire OS, so this is best effort and its failure is not fatal: with the
-#    always-on tunnel and the kiosk relaunching itself, adb is the third string,
-#    not the only one.
-& $adb -s $target shell setprop persist.adb.tcp.port 5555 2>$null | Out-Null
-$pp = (& $adb -s $target shell getprop persist.adb.tcp.port).Trim()
-if ($pp -eq '5555') {
-  Say "  Network ADB will come back on boot." 'Green'
+# 2. Network ADB. No setprop needed: Fire OS refuses persist.adb.tcp.port from
+#    shell, and it turns out not to matter — with the ADB debugging toggle on,
+#    service.adb.tcp.port comes back as 5555 by itself after a reboot (verified
+#    on AFTALMO / Fire OS 7.6.9.1). What actually made a rebooted screen look
+#    unreachable was the panel being off, which the Doze exemptions above and the
+#    always-on tunnel are what fix.
+$port = (& $adb -s $target shell getprop service.adb.tcp.port).Trim()
+if ($port -eq '5555') {
+  Say "  Network ADB is listening on 5555." 'Green'
 } else {
-  Say "  Network ADB will NOT come back on its own after a reboot (Fire OS refuses the persist property)." 'Yellow'
-  Say "  The screen still recovers itself: the kiosk relaunches at boot and polls, and Tailscale returns." 'Yellow'
+  Say "  Network ADB is NOT listening (got '$port'). Turn ADB debugging off and on in Developer options." 'Yellow'
 }
 
 if (-not $SkipLaunch) {
