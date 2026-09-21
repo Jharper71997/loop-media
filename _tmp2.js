@@ -1,0 +1,11 @@
+const { createClient } = require('@supabase/supabase-js')
+const s = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+;(async()=>{
+  const { data: tvs } = await s.from('tvs').select('*').limit(1)
+  console.log('TV COLS:', Object.keys(tvs[0]).join(', '))
+  console.log('SAMPLE:', JSON.stringify(tvs[0]))
+  const { data: pc, error: e2 } = await s.from('pricing_config').select('*')
+  console.log('\nPRICING:', e2?e2.message:JSON.stringify(pc,null,1))
+  const { data: pk } = await s.from('packages').select('*')
+  console.log('\nPACKAGES:', JSON.stringify(pk,null,1))
+})()

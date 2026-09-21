@@ -102,8 +102,42 @@ type Manifest = {
   trivia?: { code: string; url: string; qr_image: string } | null
   advertise?: HouseSlide | null
   brewloop?: HouseSlide | null
+  // The venue's open hours, handed to the native shell so it can sleep and wake
+  // the panel on its own alarms (migration 0078). Absent in older cached
+  // manifests and in a plain browser, where it simply does nothing.
+  power?: PowerSchedule
+  // Remote commands queued by an admin, delivered on this poll and acked below.
+  commands?: { id: string; command: string }[]
   generated_at: string
   build?: string
+}
+
+type PowerSchedule = {
+  sleep_when_closed: boolean
+  tz: string
+  // Keys '0'..'6' (0=Sunday); a missing day is closed all day.
+  windows: Record<string, { open: string; close: string }>
+}
+
+// The native kiosk shell (tv-app) injects this object into the page. Everything
+// on it is optional on purpose: the player runs in a plain browser (admin
+// preview, a laptop at a venue) and on shells older than the command that needs
+// it, so every call below is guarded rather than assumed.
+type KioskShell = {
+  alive?: () => void
+  setDevice?: (deviceId: string, secret: string) => void
+  setPowerSchedule?: (json: string) => void
+  screenOff?: () => void
+  screenOn?: () => void
+  relaunch?: () => void
+  // Whether this screen was provisioned as device owner, which decides whether
+  // "off" means the display is powered down or merely painted black.
+  deviceOwner?: () => boolean
+}
+
+function kioskShell(): KioskShell | null {
+  if (typeof window === 'undefined') return null
+  return (window as unknown as { AndroidKiosk?: KioskShell }).AndroidKiosk ?? null
 }
 
 type Slide =
@@ -457,12 +491,95 @@ function Player({
     return () => document.removeEventListener('fullscreenchange', sync)
   }, [])
 
+  // Tell the native shell who this screen is, hand it the sleep/wake schedule,
+  // and carry out anything an admin queued for it. All of it is a no-op in a
+  // browser and in the admin preview, which must never act as the screen.
+  const applyShellState = useCallback(
+    async (data: Manifest) => {
+      if (preview) return
+      const shell = kioskShell()
+      // The shell needs the device identity to ask "should I wake?" while the
+      // panel is off — at that point this page is paused and cannot be asked.
+      try {
+        shell?.setDevice?.(deviceId, deviceSecret ?? '')
+      } catch {}
+      try {
+        if (data.power) shell?.setPowerSchedule?.(JSON.stringify(data.power))
+      } catch {}
+
+      for (const cmd of data.commands ?? []) {
+        // Work out what WILL happen, and say so, before doing it. Three of the
+        // four commands end this page's ability to speak — a reload navigates
+        // away, a relaunch rebuilds the WebView, a sleep pauses it — so an ack
+        // sent afterwards is an ack that may never arrive, and the admin would
+        // be left looking at a command that appears ignored.
+        let ok = true
+        let detail: string | null = null
+        if (cmd.command === 'sleep') {
+          if (!shell?.screenOff) {
+            ok = false
+            detail = 'No kiosk shell on this screen: it is running in a browser.'
+          } else if (!shell.deviceOwner?.()) {
+            // Honest about the half-measure: the room sees a dark TV, but the
+            // panel is still lit and still drawing power.
+            detail =
+              'Not device owner: the screen goes black at minimum backlight rather than powering the panel down.'
+          }
+        } else if (cmd.command === 'wake') {
+          if (!shell?.screenOn) {
+            detail = 'No kiosk shell: the page was already awake to receive this.'
+          }
+        } else if (cmd.command === 'relaunch') {
+          if (!shell?.relaunch) {
+            detail = 'No kiosk shell: reloaded the page instead.'
+          }
+        }
+        try {
+          await fetch('/api/tv/command', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(deviceSecret ? { 'x-device-secret': deviceSecret } : {}),
+            },
+            body: JSON.stringify({
+              device_id: deviceId,
+              command_id: cmd.id,
+              ok,
+              detail,
+            }),
+            keepalive: true,
+          })
+        } catch {}
+        // Now do it.
+        try {
+          if (cmd.command === 'sleep') shell?.screenOff?.()
+          else if (cmd.command === 'wake') shell?.screenOn?.()
+          else if (cmd.command === 'reload') {
+            window.location.reload()
+            return
+          } else if (cmd.command === 'relaunch') {
+            if (shell?.relaunch) shell.relaunch()
+            else window.location.reload()
+            return
+          }
+        } catch {
+          // Nothing useful left to report: the ack is already sent, and the
+          // screen keeps playing either way.
+        }
+      }
+    },
+    [deviceId, deviceSecret, preview]
+  )
+
   const loadLoop = useCallback(async () => {
     try {
-      const res = await fetch(`/api/tv/loop?device=${encodeURIComponent(deviceId)}`, {
-        cache: 'no-store',
-        headers: deviceSecret ? { 'x-device-secret': deviceSecret } : undefined,
-      })
+      const res = await fetch(
+        `/api/tv/loop?device=${encodeURIComponent(deviceId)}${preview ? '&preview=1' : ''}`,
+        {
+          cache: 'no-store',
+          headers: deviceSecret ? { 'x-device-secret': deviceSecret } : undefined,
+        }
+      )
       if (res.status === 404 || res.status === 403) {
         // 404 = unpaired/unknown device; 403 = device secret rejected (e.g. the
         // code was regenerated to move the screen). Both are real states, but
@@ -493,6 +610,9 @@ function Player({
       setManifest(data)
       setStale(false)
       localStorage.setItem(cacheKey(deviceId), JSON.stringify(data))
+      // After the loop is safely cached, so a command that ends the page (reload,
+      // relaunch) never costs the screen its offline copy.
+      await applyShellState(data)
     } catch {
       // Offline: fall back to the cached loop so playback continues.
       const cached = localStorage.getItem(cacheKey(deviceId))
@@ -503,7 +623,7 @@ function Player({
         setFatal('No connection and nothing cached yet.')
       }
     }
-  }, [deviceId, deviceSecret, onUnpair, preview])
+  }, [deviceId, deviceSecret, onUnpair, preview, applyShellState])
 
   // Initial load + periodic resync (30s) so a newly approved ad shows up on the
   // screen within ~30s without anyone touching the TV. Also re-sync whenever

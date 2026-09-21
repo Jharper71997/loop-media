@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Save, X } from 'lucide-react'
+import { MonitorX, Plus, Power, RefreshCw, RotateCcw, Save, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -22,6 +22,8 @@ import {
   setAllAdDurations,
   updateHouseSlideSeconds,
   updateOverscan,
+  sendTvCommand,
+  setSleepWhenClosed,
 } from './actions'
 
 // --- Loop capacity: how many AD slots this screen sells + seconds per slot ---
@@ -378,6 +380,117 @@ export function AddPlacement({
       >
         <Plus className="size-4" /> Add to loop
       </Button>
+    </div>
+  )
+}
+
+// --- Remote power: turn this screen's panel off and on, and let it keep its own
+// hours (migration 0078) --------------------------------------------------
+//
+// None of these buttons reach the TV directly. A venue's router NATs the screen,
+// so nothing can dial in; the screen asks the server for work every ~30s and this
+// queues it. That means up to ~30 seconds between the click and the panel, and it
+// means a screen that is off the network simply does it when it comes back. The
+// command list under these buttons is how you tell those apart.
+type ScreenCommand = 'sleep' | 'wake' | 'reload' | 'relaunch'
+
+export function ScreenPower({
+  tvId,
+  sleepWhenClosed,
+  hoursLabel,
+}: {
+  tvId: string
+  sleepWhenClosed: boolean
+  hoursLabel: string | null
+}) {
+  const router = useRouter()
+  const [pending, start] = useTransition()
+
+  function send(command: ScreenCommand, done: string) {
+    start(async () => {
+      const res = await sendTvCommand(tvId, command)
+      if (res.error) toast.error(res.error)
+      else {
+        toast.success(done)
+        router.refresh()
+      }
+    })
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={pending}
+          onClick={() => send('sleep', 'Sleep queued â€” the screen takes it on its next sync.')}
+        >
+          <Power className="size-4" /> Turn screen off
+        </Button>
+        <Button
+          size="sm"
+          disabled={pending}
+          onClick={() => send('wake', 'Wake queued â€” the screen takes it within a minute.')}
+        >
+          <Power className="size-4" /> Turn screen on
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={pending}
+          onClick={() => send('reload', 'Reload queued.')}
+        >
+          <RefreshCw className="size-4" /> Reload the player
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={pending}
+          onClick={() => send('relaunch', 'Restart queued.')}
+        >
+          <RotateCcw className="size-4" /> Restart the app
+        </Button>
+      </div>
+
+      <div className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p className="text-sm text-foreground">
+              {sleepWhenClosed
+                ? 'This screen sleeps when the venue is closed.'
+                : 'This screen stays on 24/7.'}
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {hoursLabel
+                ? `Venue hours: ${hoursLabel}. The screen wakes itself a few minutes before open and sleeps at close, on its own alarm â€” so it keeps the schedule even if the internet is down.`
+                : 'Set this venueâ€™s open hours first, or the screen has no schedule to keep.'}
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant={sleepWhenClosed ? 'outline' : 'default'}
+            disabled={pending || (!sleepWhenClosed && !hoursLabel)}
+            onClick={() =>
+              start(async () => {
+                const res = await setSleepWhenClosed(tvId, !sleepWhenClosed)
+                if (res.error) toast.error(res.error)
+                else {
+                  toast.success(
+                    sleepWhenClosed
+                      ? 'Back to 24/7 â€” a wake is on its way to the screen.'
+                      : 'Scheduled. The screen picks up its hours on the next sync.'
+                  )
+                  router.refresh()
+                }
+              })
+            }
+          >
+            <MonitorX className="size-4" />
+            {sleepWhenClosed ? 'Keep it on 24/7' : 'Sleep when closed'}
+          </Button>
+        </div>
+      </div>
     </div>
   )
 }

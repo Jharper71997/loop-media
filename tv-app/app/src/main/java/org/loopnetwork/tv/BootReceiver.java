@@ -16,6 +16,12 @@ public class BootReceiver extends BroadcastReceiver {
             launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             context.startActivity(launch);
 
+            // Re-arm the sleep/wake schedule: alarms do not survive a reboot, and
+            // a screen that rebooted overnight (an OS update, a power blip) would
+            // otherwise sit lit until someone noticed. Acts on the current state
+            // too, so a boot during closed hours goes straight back to sleep.
+            try { ScreenPower.arm(context, true); } catch (Exception ignored) {}
+
             // Also start the watchdog directly, so the soft kiosk lock is armed
             // even in the window before MainActivity finishes coming up.
             try {

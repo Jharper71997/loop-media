@@ -15,7 +15,7 @@ import { isWithinOpenHours, localDate, formatOpenHours } from '@/lib/openHours'
 import { LiveStatus } from '@/components/app/LiveStatus'
 import { CopyField } from '@/components/app/CopyField'
 import { AutoRefresh } from '@/components/app/AutoRefresh'
-import type { Tv } from '@/lib/db.types'
+import type { Tv, TvCommandRow } from '@/lib/db.types'
 import { RegenerateButton } from '../RegenerateButton'
 import { deleteTv } from '../actions'
 import { loopOccupancy } from '@/lib/loop'
@@ -28,6 +28,7 @@ import {
   HouseDurationField,
   OverscanControl,
   LoopConfig,
+  ScreenPower,
 } from './TvControls'
 
 type TvFull = Tv & {
@@ -92,6 +93,18 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
       .maybeSingle()
     provisioning = (prov as ProvisioningInfo | null) ?? null
   }
+
+  // The last few remote commands sent to this screen (migration 0078). Shown
+  // under the power buttons because "I pressed it" and "the screen did it" are
+  // different facts, and the gap between them is the only diagnostic you get
+  // without driving to the venue.
+  const { data: cmdData } = await supabase
+    .from('tv_commands')
+    .select('id, command, created_at, delivered_at, acked_at, ok, detail')
+    .eq('tv_id', id)
+    .order('created_at', { ascending: false })
+    .limit(5)
+  const commands = (cmdData ?? []) as unknown as TvCommandRow[]
 
   const maxSlots = Math.max(1, Math.floor(tv.loop_length_seconds / tv.slot_seconds))
 
@@ -423,6 +436,51 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
               </p>
             </div>
             <OverscanControl id={tv.id} overscan={tv.overscan_pct ?? 0} />
+          </CardContent>
+        </Card>
+
+        {/* Power: turn the panel off and on from here, and let the screen keep
+            the venue's hours by itself. */}
+        <Card>
+          <CardContent className="space-y-3 p-5">
+            <div>
+              <p className="text-sm font-medium">Power</p>
+              <p className="text-xs text-muted-foreground">
+                The screen asks for work every ~30 seconds, so a button here reaches the panel
+                within about a minute — and a screen that is offline right now does it the moment
+                it comes back. Turning it off needs the kiosk app installed as device owner; without
+                that the screen goes black at minimum backlight instead, and says so below.
+              </p>
+            </div>
+            <ScreenPower
+              tvId={tv.id}
+              sleepWhenClosed={tv.sleep_when_closed}
+              hoursLabel={formatOpenHours(venueHours)}
+            />
+            {commands.length > 0 && (
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                {commands.map((c) => (
+                  <li key={c.id} className="flex flex-wrap items-baseline gap-x-2">
+                    <span className="font-medium text-foreground">{c.command}</span>
+                    <span>{timeAgo(c.created_at)}</span>
+                    <span aria-hidden>·</span>
+                    <span
+                      className={
+                        c.acked_at && c.ok === false ? 'text-destructive' : undefined
+                      }
+                    >
+                      {c.acked_at
+                        ? c.ok === false
+                          ? `the screen could not: ${c.detail ?? 'no reason given'}`
+                          : 'done'
+                        : c.delivered_at
+                          ? 'handed to the screen, no answer yet'
+                          : 'queued — waiting for the screen to ask'}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </CardContent>
         </Card>
 

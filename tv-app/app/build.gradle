@@ -14,19 +14,40 @@ android {
         applicationId "org.loopnetwork.kiosk"
         minSdk 22          // Fire OS 5 (API 22) and up
         targetSdk 34
-        versionCode 8
-        versionName "1.7"
+        versionCode 9
+        versionName "1.8"
+    }
+
+    // A STABLE key, when CI has one. This mattered the moment screens became
+    // remotely updatable: Android refuses `adb install -r` across a key change,
+    // and the CI runner mints a FRESH debug keystore every run — so every build
+    // was a different signer, and updating a wall-mounted TV meant uninstalling
+    // (which wipes the pairing) instead of installing over the top. Set the
+    // LOOP_KEYSTORE_* env vars in CI and every build from then on upgrades in
+    // place. Absent them the build still works and still signs with the debug
+    // key, so a local or forked build needs no secrets.
+    signingConfigs {
+        release {
+            def storePath = System.getenv("LOOP_KEYSTORE_PATH")
+            if (storePath) {
+                storeFile file(storePath)
+                // PKCS12, which is both what keytool has produced since JDK 9 and
+                // what openssl writes — the key for this fleet was made with
+                // openssl, since the machine that made it has no JDK.
+                storeType "PKCS12"
+                storePassword System.getenv("LOOP_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("LOOP_KEY_ALIAS")
+                keyPassword System.getenv("LOOP_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
             minifyEnabled false
-            // Signed with the auto-generated debug key so the APK installs via
-            // sideload with ZERO secret setup. The native shell almost never
-            // changes — all product logic lives in loopnetwork.org/tv and
-            // self-updates over the web — so stable release-key signing isn't
-            // needed for v1. See README for the upgrade path.
-            signingConfig signingConfigs.debug
+            signingConfig System.getenv("LOOP_KEYSTORE_PATH")
+                    ? signingConfigs.release
+                    : signingConfigs.debug
         }
     }
 

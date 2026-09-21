@@ -1,0 +1,13 @@
+const { createClient } = require('@supabase/supabase-js')
+const s = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+;(async()=>{
+  const { data: tvs } = await s.from('tvs').select('id,venue_id,last_heartbeat_at')
+  const { data: venues } = await s.from('venues').select('id,name,status')
+  const vm = Object.fromEntries(venues.map(v=>[v.id,v]))
+  const now = Date.now()
+  const live = tvs.filter(t=>vm[t.venue_id]?.status==='active')
+  console.log('active-venue TVs:', live.length)
+  live.forEach(t=>console.log(vm[t.venue_id].name, '| hb age hrs:', ((now-new Date(t.last_heartbeat_at))/3.6e6).toFixed(1)))
+  const { data: ap } = await s.from('ad_placements').select('*')
+  console.log('\nplacements:', ap.length, 'cols:', ap[0]?Object.keys(ap[0]).join(','):'')
+})()
