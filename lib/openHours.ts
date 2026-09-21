@@ -189,6 +189,37 @@ export function isWithinOpenHours(playedAt: string | Date, hours: VenueHours): b
   return min >= open || min < close
 }
 
+// The instant the venue's CURRENT open window began, or null when it is closed
+// right now. Same window rules as isWithinOpenHours, including overnight wrap.
+//
+// This exists so a caller can ask "did something happen during this open stretch,
+// or during an earlier one" without having to build a local-midnight instant in
+// the venue's timezone. We already know the local wall-clock minute, so how far
+// we are INTO the window is plain arithmetic, and subtracting that from `now`
+// lands on the opening instant. A DST change inside the window skews the result
+// by an hour twice a year, which no caller of this is sensitive to.
+export function openWindowStart(now: Date, hours: VenueHours): Date | null {
+  const tz = hours.timezone || NETWORK_TZ
+  const { day, min } = localParts(now, tz)
+  const w = windowForDay(hours, day)
+  if (!w) return null
+  const open = toMin(w.open)
+  const close = toMin(w.close)
+  let elapsed: number
+  if (close > open) {
+    if (min < open || min >= close) return null
+    elapsed = min - open
+  } else if (min >= open) {
+    elapsed = min - open
+  } else if (min < close) {
+    // Past midnight, still inside the window that opened yesterday evening.
+    elapsed = min + (1440 - open)
+  } else {
+    return null
+  }
+  return new Date(now.getTime() - elapsed * 60_000)
+}
+
 // --- Editor <-> DB conversion, shared by the BusinessHoursPicker (client) and the
 // save actions (server). The editor is one row per weekday, 0=Sun .. 6=Sat.
 

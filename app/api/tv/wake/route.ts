@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { deviceSecretOk } from '@/lib/tv'
-import { isWithinOpenHours } from '@/lib/openHours'
+import { isWithinOpenHours, openWindowStart } from '@/lib/openHours'
 
 // "Should I wake up?" — the one question a sleeping screen can still ask.
 //
@@ -58,16 +58,48 @@ export async function GET(req: Request) {
     return NextResponse.json({ wake: true, reason: 'command' })
   }
 
-  // 2. The venue is open and this screen is asleep, which means it missed its own
-  // wake alarm (a reboot at the wrong moment, a clock adjustment, a schedule
-  // edited while it slept). The server knows the hours too, so the screen never
-  // depends on a single alarm having survived the night.
-  if (tv.sleep_when_closed && tv.venue && isWithinOpenHours(new Date(), tv.venue)) {
-    return NextResponse.json({ wake: true, reason: 'open' })
+  // 2. The venue is open and this screen is asleep, which USUALLY means it missed
+  // its own wake alarm (a reboot at the wrong moment, a clock adjustment, a
+  // schedule edited while it slept). The server knows the hours too, so a screen
+  // never depends on a single alarm having survived the night.
+  //
+  // But "asleep during open hours" has a second cause this cannot see from the
+  // hours alone: an admin pressed Turn screen off a minute ago. That is a
+  // deliberate instruction, not a missed alarm, and waking over the top of it
+  // undoes the button about sixty seconds after it was pressed — the same bug
+  // the no-schedule branch below had, in the branch that fires for every screen
+  // that HAS a schedule.
+  //
+  // So the safety net still fires, unless this screen was deliberately darkened
+  // during the open stretch it is in right now. Scoping it to the current window
+  // is what keeps the net: yesterday's manual sleep says nothing about whether
+  // this morning's alarm worked, so once the venue closes and opens again the
+  // server is back to guarding the schedule. An admin who wants it lit sooner
+  // presses Turn screen on, which arrives as case 1 above.
+  const now = new Date()
+  if (tv.sleep_when_closed && tv.venue && isWithinOpenHours(now, tv.venue)) {
+    const windowStart = openWindowStart(now, tv.venue)
+    const { data: recent } = await supabase
+      .from('tv_commands')
+      .select('command')
+      .eq('tv_id', tv.id)
+      .in('command', ['sleep', 'wake'])
+      .not('delivered_at', 'is', null)
+      .gte('created_at', (windowStart ?? now).toISOString())
+      .order('created_at', { ascending: false })
+      .limit(1)
+    // The newest power instruction this screen actually received in this window.
+    // A wake after a sleep hands control back to the schedule, which is why this
+    // reads the latest of the two rather than merely looking for a sleep.
+    const darkenedOnPurpose = (recent ?? [])[0]?.command === 'sleep'
+    if (!darkenedOnPurpose) {
+      return NextResponse.json({ wake: true, reason: 'open' })
+    }
   }
 
-  // A screen with no schedule STAYS ASLEEP. This used to answer "wake" here, on
-  // the reasoning that nothing should hold a panel dark with no schedule to obey
+  // A screen with no schedule, or one an admin darkened on purpose, STAYS ASLEEP.
+  // This used to answer "wake" here, on the
+  // reasoning that nothing should hold a panel dark with no schedule to obey
   // — which quietly undid every manual sleep about sixty seconds after it was
   // given, because a dark screen asks this question once a minute. "No schedule"
   // is not "should be lit": an admin pressing Turn screen off is a perfectly good
