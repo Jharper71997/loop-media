@@ -21,18 +21,32 @@
 .PARAMETER SkipLaunch
   Install without launching. Default is to launch so the pairing screen appears.
 
+.PARAMETER PairingCode
+  The screen's 8-character code from the Loop Network dashboard. Given it, this
+  types the code into the pairing screen and submits it, so a TV can be taken
+  from unboxed to live without anyone touching the remote.
+
+.NOTES
+  NEVER `adb uninstall` the kiosk app on a screen you cannot physically reach.
+  The app holds the CPU and Wi-Fi wake locks; with it gone the device dozes and
+  drops off the network entirely (adb AND Tailscale), and only a human with the
+  remote gets it back. Updates always go over the top with `install -r`, which is
+  what the release signing key exists for. See tv-app/README.md.
+
 .EXAMPLE
-  .\provision-tv.ps1 -Ip 192.168.1.57
+  .\provision-tv.ps1 -Ip 192.168.1.57 -PairingCode D2M8YZET
 #>
 [CmdletBinding()]
 param(
   [Parameter(Mandatory = $true)][string]$Ip,
   [string]$Apk,
-  [switch]$SkipLaunch
+  [switch]$SkipLaunch,
+  [string]$PairingCode
 )
 
 $ErrorActionPreference = 'Stop'
 $PKG    = 'org.loopnetwork.kiosk'
+$TSPKG  = 'com.tailscale.ipn'
 $APKURL = 'https://www.loopnetwork.org/app'
 $target = "${Ip}:5555"
 
@@ -125,11 +139,58 @@ $ver = (& $adb -s $target shell dumpsys package $PKG) |
        Where-Object { $_ -match 'versionName' } | Select-Object -First 1
 Say ("Installed: {0} {1}" -f $PKG, $ver.Trim()) 'Green'
 
+# --- keep it reachable ------------------------------------------------------
+# The one failure that costs a site visit is a screen that stops answering. Doze
+# is how that happens: Android suspends background work, the device stops serving
+# inbound connections, and both adb and the Tailscale tunnel go with it. The
+# kiosk app's own wake locks cover it only while the app is running, which is
+# exactly not the case when something has gone wrong. Exempting both packages
+# means a screen stays reachable even when the player has died.
+Say "Exempting the kiosk and Tailscale from Doze ..."
+foreach ($p in @($PKG, $TSPKG)) {
+  & $adb -s $target shell dumpsys deviceidle whitelist +$p 2>$null | Out-Null
+}
+$wl = (& $adb -s $target shell dumpsys deviceidle whitelist) -join "`n"
+foreach ($p in @($PKG, $TSPKG)) {
+  if ($wl -match [regex]::Escape($p)) {
+    Say "  exempt: $p" 'Green'
+  } elseif ($p -eq $TSPKG) {
+    # Not fatal: a screen with no Tailscale is still reachable on the venue LAN.
+    Say "  Tailscale is not installed here, so this screen has no off-LAN path back." 'Yellow'
+  } else {
+    Say "  FAILED to exempt $p - this screen may doze out of reach." 'Red'
+  }
+}
+
+# The panel must not sleep on its own: no app can override these from inside, and
+# a screen that dozes mid-shift reads as a dead screen to the host.
+& $adb -s $target shell settings put system screen_off_timeout 2147483647 | Out-Null
+& $adb -s $target shell settings put secure sleep_timeout -1 | Out-Null
+Say "Display sleep disabled." 'Green'
+
 if (-not $SkipLaunch) {
   # monkey narrates to stderr; silence it so the operator sees only the result.
   & $adb -s $target shell monkey -p $PKG -c android.intent.category.LAUNCHER 1 2>$null | Out-Null
-  Say "Launched. The pairing screen should be on the TV." 'Green'
-  Say "Enter the pairing code from the Loop Network dashboard." 'Green'
+  Say "Launched." 'Green'
+
+  if ($PairingCode) {
+    $code = $PairingCode.Trim().ToUpper()
+    if ($code -notmatch '^[A-Z0-9]{4,8}$') {
+      Say "PairingCode '$code' does not look like a dashboard code; skipping." 'Yellow'
+    } else {
+      # Give the WebView time to load /tv and focus the code field before typing.
+      Start-Sleep -Seconds 12
+      & $adb -s $target shell input text $code | Out-Null
+      # The pairing form submits on Enter (see app/tv/TvPlayer.tsx).
+      & $adb -s $target shell input keyevent 66 | Out-Null
+      Start-Sleep -Seconds 6
+      $focus = (& $adb -s $target shell dumpsys window) | Where-Object { $_ -match 'mCurrentFocus' } | Select-Object -First 1
+      Say "Typed pairing code $code. Foreground: $($focus -replace '\s+', ' ')" 'Green'
+      Say "Confirm the screen is live on its page in the admin." 'Green'
+    }
+  } else {
+    Say "Enter the pairing code from the Loop Network dashboard, or re-run with -PairingCode." 'Green'
+  }
 }
 
 & $adb disconnect $target | Out-Null

@@ -90,6 +90,28 @@ gradle assembleRelease
 - **package:** `org.loopnetwork.tv` (distinct from the phone/host app
   `org.loopnetwork.app`).
 
+## Never uninstall a screen you cannot reach
+
+`adb uninstall` on a remote TV takes the whole device off the network, not just
+the app. The kiosk holds the CPU (`PARTIAL_WAKE_LOCK`) and Wi-Fi
+(`WIFI_MODE_FULL_HIGH_PERF`) locks; with it gone the device dozes, stops serving
+inbound connections, and **adb and the Tailscale tunnel both go dark**. The
+tailnet still lists the peer as active, which makes it look like a tunnel problem
+it is not. Only someone with the remote gets it back. Learned on a bench unit,
+2026-09-21.
+
+Updates go over the top with `adb install -r`, which works because the APK is
+signed with a stable key. Two defences make the hole smaller for every screen,
+both applied by `scripts/provision-tv.ps1`:
+
+```bash
+adb shell dumpsys deviceidle whitelist +org.loopnetwork.kiosk
+adb shell dumpsys deviceidle whitelist +com.tailscale.ipn
+```
+
+With Tailscale exempt from Doze, a screen stays reachable even when the player
+itself has died — which is exactly when you need it.
+
 ## Panel power (v1.8)
 
 A screen can now be turned off and on remotely, and can keep the venue's hours by
