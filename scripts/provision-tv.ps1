@@ -26,6 +26,10 @@
   types the code into the pairing screen and submits it, so a TV can be taken
   from unboxed to live without anyone touching the remote.
 
+.PARAMETER HardenOnly
+  Skip the install and just apply the survive-a-power-cut settings to a screen
+  that is already provisioned.
+
 .NOTES
   NEVER `adb uninstall` the kiosk app on a screen you cannot physically reach.
   The app holds the CPU and Wi-Fi wake locks; with it gone the device dozes and
@@ -41,7 +45,8 @@ param(
   [Parameter(Mandatory = $true)][string]$Ip,
   [string]$Apk,
   [switch]$SkipLaunch,
-  [string]$PairingCode
+  [string]$PairingCode,
+  [switch]$HardenOnly
 )
 
 $ErrorActionPreference = 'Stop'
@@ -124,6 +129,10 @@ $rel   = (& $adb -s $target shell getprop ro.build.version.release).Trim()
 Say "Device: $model (Android $rel)"
 
 # --- install ----------------------------------------------------------------
+if ($HardenOnly) {
+  Say "Hardening only; skipping the install." 'Yellow'
+}
+if (-not $HardenOnly) {
 Say "Installing $PKG ..."
 $out = & $adb -s $target install -r $Apk
 $out | ForEach-Object { Say "  $_" }
@@ -138,6 +147,7 @@ if (-not $installed) { Say "Package not present after install." 'Red'; exit 1 }
 $ver = (& $adb -s $target shell dumpsys package $PKG) |
        Where-Object { $_ -match 'versionName' } | Select-Object -First 1
 Say ("Installed: {0} {1}" -f $PKG, $ver.Trim()) 'Green'
+}
 
 # --- keep it reachable ------------------------------------------------------
 # The one failure that costs a site visit is a screen that stops answering. Doze
@@ -167,6 +177,40 @@ foreach ($p in @($PKG, $TSPKG)) {
 & $adb -s $target shell settings put system screen_off_timeout 2147483647 | Out-Null
 & $adb -s $target shell settings put secure sleep_timeout -1 | Out-Null
 Say "Display sleep disabled." 'Green'
+
+# --- survive a power cut ----------------------------------------------------
+# A venue loses power, the TV comes back, and every way in closes at once: adb
+# over network does NOT survive a reboot (service.adb.tcp.port is a runtime
+# property, and the ADB debugging toggle does not restore port 5555 at boot),
+# and Tailscale does not restart either unless Android is told to hold it open.
+# The screen is then unreachable AND selling nothing, and someone drives out.
+Say "Making the way back in survive a reboot ..."
+
+# 1. Tailscale as Android's always-on VPN: brought up by the system at boot,
+#    before and regardless of any app. Lockdown stays OFF on purpose — with it
+#    on, a tailnet outage would take the venue's own traffic down with it, and
+#    the player needs the open internet far more than it needs the tunnel.
+& $adb -s $target shell settings put secure always_on_vpn_app com.tailscale.ipn | Out-Null
+& $adb -s $target shell settings put secure always_on_vpn_lockdown 0 | Out-Null
+$aov = (& $adb -s $target shell settings get secure always_on_vpn_app).Trim()
+if ($aov -eq 'com.tailscale.ipn') {
+  Say "  Tailscale set as always-on VPN." 'Green'
+} else {
+  Say "  Could not set always-on VPN (got '$aov'). This screen will lose the tunnel on reboot." 'Yellow'
+}
+
+# 2. Network ADB at boot. persist.* properties are usually refused from shell on
+#    Fire OS, so this is best effort and its failure is not fatal: with the
+#    always-on tunnel and the kiosk relaunching itself, adb is the third string,
+#    not the only one.
+& $adb -s $target shell setprop persist.adb.tcp.port 5555 2>$null | Out-Null
+$pp = (& $adb -s $target shell getprop persist.adb.tcp.port).Trim()
+if ($pp -eq '5555') {
+  Say "  Network ADB will come back on boot." 'Green'
+} else {
+  Say "  Network ADB will NOT come back on its own after a reboot (Fire OS refuses the persist property)." 'Yellow'
+  Say "  The screen still recovers itself: the kiosk relaunches at boot and polls, and Tailscale returns." 'Yellow'
+}
 
 if (-not $SkipLaunch) {
   # monkey narrates to stderr; silence it so the operator sees only the result.
