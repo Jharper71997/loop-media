@@ -141,6 +141,15 @@ async function connect(ip) {
   return state === 'device' ? { ok: true } : { ok: false, state }
 }
 
+const pause = (ms) => new Promise((r) => setTimeout(r, ms))
+
+// Does this screen still have the kiosk on it? Decides whether a command can be
+// routed THROUGH the app or has to be fired at Android directly.
+async function hasKiosk(ip) {
+  const r = await adb(ip, ['shell', `pm list packages ${PKG}`], 15000)
+  return r.out.includes(PKG)
+}
+
 async function wakefulness(ip) {
   const r = await adb(ip, ['shell', 'dumpsys power | grep -m1 mWakefulness='], 15000)
   const m = r.out.match(/mWakefulness=(\w+)/)
@@ -155,7 +164,14 @@ const ACTIONS = {
   // is the ad, not the Amazon home row.
   async wake(ip) {
     await adb(ip, ['shell', 'input keyevent 224'], 15000)
-    await adb(ip, ['shell', `am start -n ${ACTIVITY}`], 20000)
+    // Through the app again, so it re-takes the locks and clears any black
+    // sheet it painted — a lit panel still showing a black rectangle is not a
+    // woken screen.
+    const viaApp = (await hasKiosk(ip))
+      ? `am start -n ${ACTIVITY} --es lm_command wake`
+      : `am start -n ${ACTIVITY}`
+    await adb(ip, ['shell', viaApp], 20000)
+    await pause(2000)
     const state = await wakefulness(ip)
     if (state !== 'Awake') throw new Error(`panel still ${state} after wake`)
     // Say which of the two things actually happened. A lit TV showing the Fire
@@ -167,13 +183,24 @@ const ACTIONS = {
       : 'woken over the tailnet, but the kiosk is not in front (is it installed?)'
   },
 
-  // KEYCODE_SLEEP is a true display-off and, unlike lockNow, needs no device
-  // owner — so over this path even an un-provisioned screen really goes dark.
+  // Sleep has to go THROUGH the app, not around it. The kiosk holds a
+  // SCREEN_BRIGHT wake lock and FLAG_KEEP_SCREEN_ON so these panels stay lit
+  // 24/7; a bare keyevent turns the display off and the app lights it straight
+  // back up about a second later. So: ask the shell to drop both first, then
+  // send the key, then WAIT and look again. Checking immediately is how this
+  // reported success twice while the screen was on.
   async sleep(ip) {
+    if (await hasKiosk(ip)) {
+      await adb(ip, ['shell', `am start -n ${ACTIVITY} --es lm_command sleep`], 20000)
+      await pause(2000)
+    }
     await adb(ip, ['shell', 'input keyevent 223'], 15000)
+    await pause(6000)
     const state = await wakefulness(ip)
-    if (state === 'Awake') throw new Error('panel still awake after sleep')
-    return `panel off over the tailnet (${state})`
+    if (state === 'Awake') {
+      throw new Error('the panel lit itself back up (something on the screen is holding it on)')
+    }
+    return `panel off over the tailnet, still off six seconds later (${state})`
   },
 
   async relaunch(ip) {

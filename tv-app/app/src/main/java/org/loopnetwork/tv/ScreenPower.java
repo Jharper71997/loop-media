@@ -100,9 +100,14 @@ final class ScreenPower {
         setAsleep(ctx, true);
         armCheck(ctx);
         MainActivity act = MainActivity.current;
-        // The app holds a screen-bright wake lock to keep the panel up 24/7; it
-        // has to let go first, whichever way we darken the screen.
-        if (act != null) act.releaseScreenLock();
+        // The app holds a screen-bright wake lock AND the keep-screen-on window
+        // flag to keep the panel up 24/7. Both have to go, whichever way we
+        // darken the screen, or the display goes off for an instant and the app
+        // turns it straight back on.
+        if (act != null) {
+            act.releaseScreenLock();
+            act.allowDisplaySleep(true);
+        }
         DevicePolicyManager dpm =
                 (DevicePolicyManager) ctx.getSystemService(Context.DEVICE_POLICY_SERVICE);
         ComponentName admin = new ComponentName(ctx.getApplicationContext(), KioskAdminReceiver.class);
@@ -144,6 +149,7 @@ final class ScreenPower {
         if (act != null) {
             act.setDark(false);
             act.reacquireScreenLock();
+            act.allowDisplaySleep(false);
         }
         // Start the activity regardless: after a real display-off the launcher is
         // often what comes back, and the point of waking is the ad, not the Fire

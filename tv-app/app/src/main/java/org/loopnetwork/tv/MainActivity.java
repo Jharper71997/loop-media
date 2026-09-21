@@ -127,6 +127,8 @@ public class MainActivity extends Activity {
         setContentView(root);
         buildWebView();
 
+        handleCommandIntent(getIntent());
+
         // Alarms don't survive a process death any more than a reboot, so re-arm
         // on every cold start and act on the state the schedule calls for: a
         // screen that restarted at 3am should go straight back to sleep, not sit
@@ -135,6 +137,36 @@ public class MainActivity extends Activity {
 
         handler.postDelayed(watchdog, WATCHDOG_CHECK_MS);
         handler.postDelayed(safetyReload, SAFETY_RELOAD_MS);
+    }
+
+    /** A command delivered as an intent extra:
+     *  {@code am start -n …/.MainActivity --es lm_command sleep}.
+     *
+     *  The tailnet runner uses this instead of firing a raw key event, because a
+     *  key event goes AROUND the app and the app is the thing holding the screen
+     *  on. Routed through here, the shell drops its locks first and the panel
+     *  stays off. MainActivity is already the exported launcher activity, so
+     *  this adds no new way in. */
+    private void handleCommandIntent(Intent intent) {
+        if (intent == null) return;
+        String cmd = intent.getStringExtra("lm_command");
+        if (cmd == null) return;
+        // Consume it: a singleTask activity is handed the same intent again on
+        // every later resume, and a sleep that re-fires on wake is a screen that
+        // will not stay on.
+        intent.removeExtra("lm_command");
+        if ("sleep".equals(cmd)) {
+            ScreenPower.sleepNow(this);
+        } else if ("wake".equals(cmd)) {
+            ScreenPower.wakeNow(this);
+        }
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleCommandIntent(intent);
     }
 
     private void buildWebView() {
@@ -318,6 +350,29 @@ public class MainActivity extends Activity {
                         darkSheet.bringToFront();
                     } else if (darkSheet != null) {
                         darkSheet.setVisibility(View.GONE);
+                    }
+                } catch (Exception ignored) {}
+            }
+        });
+    }
+
+    /**
+     * Stop holding the display on, or start again.
+     *
+     * Two things keep these panels lit around the clock and BOTH have to go, or
+     * the screen turns off for an instant and the app lights it straight back
+     * up: the screen-bright wake lock (released separately) and this window
+     * flag. Missing the flag is exactly how "turn the screen off" looked like it
+     * worked and didn't.
+     */
+    void allowDisplaySleep(final boolean allow) {
+        handler.post(new Runnable() {
+            @Override public void run() {
+                try {
+                    if (allow) {
+                        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                    } else {
+                        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
                     }
                 } catch (Exception ignored) {}
             }

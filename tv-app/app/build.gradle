@@ -14,8 +14,8 @@ android {
         applicationId "org.loopnetwork.kiosk"
         minSdk 22          // Fire OS 5 (API 22) and up
         targetSdk 34
-        versionCode 9
-        versionName "1.8"
+        versionCode 10
+        versionName "1.8.1"
     }
 
     // A STABLE key, when CI has one. This mattered the moment screens became
