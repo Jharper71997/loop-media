@@ -126,6 +126,11 @@ public class KioskWatchdogService extends Service {
 
     /** True when our activity has been out of the foreground longer than grace. */
     private boolean shouldPullForward() {
+        // A sleeping panel looks exactly like a Home press from here: the activity
+        // is paused either way. Pulling it forward would relaunch an activity that
+        // carries FLAG_TURN_SCREEN_ON and light the TV back up — so the watchdog
+        // would undo every scheduled sleep, seconds after it happened.
+        if (ScreenPower.isAsleep(this)) return false;
         if (MainActivity.foreground) return false;
         long away = SystemClock.elapsedRealtime() - MainActivity.lastForegroundAt;
         return away >= AWAY_GRACE_MS;

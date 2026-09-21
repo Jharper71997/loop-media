@@ -3,6 +3,7 @@ import QRCode from 'qrcode'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { genPairingCode, deviceSecretOk } from '@/lib/tv'
 import { QR_SIZE_DEFAULT } from '@/lib/adCreative'
+import { NETWORK_TZ, windowForDay, type PerDayHours } from '@/lib/openHours'
 
 // Public base URL the phone-scannable QR must point at (the deployed domain in
 // prod; localhost in dev). Prefers explicit env, then forwarded host headers.
@@ -26,9 +27,13 @@ const BREWLOOP_OFFER_URL =
 // learn about Loop Network. Override via env if the domain changes.
 const LOOP_SITE_URL = process.env.NEXT_PUBLIC_LOOP_SITE_URL || 'https://loopnetwork.org'
 
+// The two built-in slides the network plays for itself rather than for a paying
+// advertiser. Each can be replaced (0063) or switched off entirely (0075).
+type HouseKind = 'brewloop' | 'advertise'
+
 // An admin-uploaded replacement for one of the built-in house slides (0063).
 type HouseCreative = {
-  kind: 'brewloop' | 'advertise'
+  kind: HouseKind
   creative_type: 'image' | 'video'
   creative_url: string
   territory_id: string | null
@@ -56,7 +61,7 @@ export async function GET(req: Request) {
   const supabase = createAdminClient()
   const { data: tvRow, error: tvErr } = await supabase
     .from('tvs')
-    .select('id, device_secret, loop_length_seconds, slot_seconds, brewloop_seconds, advertise_seconds, trivia_slide_seconds, overscan_pct, venue:venues(id, name, lat, lng, play_code, trivia_enabled, territory:territories(id, name))')
+    .select('id, device_secret, loop_length_seconds, slot_seconds, brewloop_seconds, advertise_seconds, trivia_slide_seconds, brewloop_enabled, advertise_enabled, overscan_pct, sleep_when_closed, venue:venues(id, name, lat, lng, play_code, trivia_enabled, business_open, business_close, business_days, business_hours, territory:territories(id, name))')
     .eq('device_id', device)
     .maybeSingle()
 
@@ -80,7 +85,10 @@ export async function GET(req: Request) {
     brewloop_seconds: number | null
     advertise_seconds: number | null
     trivia_slide_seconds: number | null
+    brewloop_enabled: boolean | null
+    advertise_enabled: boolean | null
     overscan_pct: number | null
+    sleep_when_closed: boolean | null
     venue: {
       id: string
       name: string
@@ -88,6 +96,10 @@ export async function GET(req: Request) {
       lng: number | null
       play_code: string | null
       trivia_enabled: boolean | null
+      business_open: string | null
+      business_close: string | null
+      business_days: number[] | null
+      business_hours: PerDayHours | null
       territory: { id: string; name: string } | null
     } | null
   }
@@ -101,6 +113,56 @@ export async function GET(req: Request) {
 
   const now = new Date().toISOString()
   await supabase.from('tvs').update({ status: 'online', last_sync_at: now }).eq('id', tv.id)
+
+  // Remote commands an admin queued for this screen (migration 0078). This poll
+  // is the only inbound channel a screen has — a venue router NATs it and nothing
+  // can dial in — so a button in the admin becomes an action here, up to ~30s
+  // later. Marked delivered as they go out; the player acks separately via
+  // /api/tv/command so "sent" and "done" stay different facts. Capped so a queue
+  // that somehow ran away can't hand a screen a hundred things to do at once.
+  // The admin "Watch screen" preview polls this same endpoint from a browser tab.
+  // It must never DEQUEUE: a peek at a screen would otherwise swallow the command
+  // meant for the TV, mark it delivered, and leave an admin watching a preview
+  // that obeys while the real screen never hears a thing.
+  const isPreview = new URL(req.url).searchParams.get('preview') === '1'
+  const commands: { id: string; command: string }[] = []
+  if (!isPreview) {
+    const { data: queued } = await supabase
+      .from('tv_commands')
+      .select('id, command')
+      .eq('tv_id', tv.id)
+      .is('delivered_at', null)
+      .order('created_at')
+      .limit(5)
+    for (const c of (queued ?? []) as { id: string; command: string }[]) {
+      commands.push({ id: c.id, command: c.command })
+    }
+    if (commands.length) {
+      await supabase
+        .from('tv_commands')
+        .update({ delivered_at: now })
+        .in('id', commands.map((c) => c.id))
+    }
+  }
+
+  // The venue's open hours, restated as a plain 7-day table the screen can act on
+  // by itself. The native shell arms an exact alarm from this and sleeps/wakes the
+  // panel on the edges, so an overnight network outage can't leave a screen lit
+  // all night (or, worse, asleep all day). Only sent when the screen has opted in;
+  // otherwise the shell is handed nothing and behaves exactly as it does today.
+  const power = tv.sleep_when_closed
+    ? {
+        sleep_when_closed: true,
+        tz: NETWORK_TZ,
+        // Keys '0'..'6', 0=Sunday. A missing day means closed all day, which the
+        // shell reads as "stay asleep" rather than "stay awake".
+        windows: Object.fromEntries(
+          [0, 1, 2, 3, 4, 5, 6]
+            .map((d) => [d, tv.venue ? windowForDay(tv.venue, d) : null] as const)
+            .filter(([, w]) => w !== null)
+        ) as Record<string, { open: string; close: string }>,
+      }
+    : { sleep_when_closed: false, tz: NETWORK_TZ, windows: {} }
 
   const { data: placements } = await supabase
     .from('ad_placements')
@@ -218,29 +280,62 @@ export async function GET(req: Request) {
     }
   }
 
-  // Scan QR for the house / "advertise on this screen" slide: a business owner who
-  // sees it scans to reach the Loop Network site and learn more. Points at the
-  // marketing site (not the in-app signup flow). Always present (unlike ads/trivia).
-  const advertise = {
-    url: LOOP_SITE_URL,
-    qr_image: await QRCode.toDataURL(LOOP_SITE_URL, {
-      margin: 1,
-      width: 240,
-      color: { dark: '#000000', light: '#ffffff' },
-    }),
-    ...creativeFields(houseOverride.advertise),
+  // Is each house slide switched ON for this screen (migration 0075)? Two levels,
+  // and BOTH have to say yes: the network/market setting in house_slide_settings,
+  // and this screen's own column. No setting row and a null column both mean "on",
+  // so an untouched database plays what it always played.
+  const houseEnabled: Record<HouseKind, boolean> = { brewloop: true, advertise: true }
+  {
+    let sq = supabase.from('house_slide_settings').select('kind, enabled, territory_id')
+    sq = tv.venue?.territory?.id
+      ? sq.or(`territory_id.is.null,territory_id.eq.${tv.venue.territory.id}`)
+      : sq.is('territory_id', null)
+    const { data: settings } = await sq
+    const held: Record<string, { enabled: boolean; territory_id: string | null }> = {}
+    for (const row of (settings ?? []) as {
+      kind: HouseKind
+      enabled: boolean
+      territory_id: string | null
+    }[]) {
+      // Same "more specific wins" pick as the creative override above: a row naming
+      // this market beats the network-wide one whichever order they arrive in.
+      const prev = held[row.kind]
+      if (!prev || (!prev.territory_id && row.territory_id)) held[row.kind] = row
+    }
+    houseEnabled.brewloop = (held.brewloop?.enabled ?? true) && tv.brewloop_enabled !== false
+    houseEnabled.advertise = (held.advertise?.enabled ?? true) && tv.advertise_enabled !== false
   }
 
-  // Jville Brew Loop house ad ($5 off, scan to book) — plays on every screen.
-  const brewloop = {
-    url: BREWLOOP_OFFER_URL,
-    qr_image: await QRCode.toDataURL(BREWLOOP_OFFER_URL, {
-      margin: 1,
-      width: 240,
-      color: { dark: '#000000', light: '#ffffff' },
-    }),
-    ...creativeFields(houseOverride.brewloop),
-  }
+  // Scan QR for the house / "advertise on this screen" slide: a business owner who
+  // sees it scans to reach the Loop Network site and learn more. Points at the
+  // marketing site (not the in-app signup flow). NULL when the slide is switched
+  // off — the player drops a house slide it wasn't handed, the same way it already
+  // drops trivia at a venue without it.
+  const advertise = houseEnabled.advertise
+    ? {
+        url: LOOP_SITE_URL,
+        qr_image: await QRCode.toDataURL(LOOP_SITE_URL, {
+          margin: 1,
+          width: 240,
+          color: { dark: '#000000', light: '#ffffff' },
+        }),
+        ...creativeFields(houseOverride.advertise),
+      }
+    : null
+
+  // Jville Brew Loop house ad ($5 off, scan to book) — plays on every screen that
+  // hasn't switched it off.
+  const brewloop = houseEnabled.brewloop
+    ? {
+        url: BREWLOOP_OFFER_URL,
+        qr_image: await QRCode.toDataURL(BREWLOOP_OFFER_URL, {
+          margin: 1,
+          width: 240,
+          color: { dark: '#000000', light: '#ffffff' },
+        }),
+        ...creativeFields(houseOverride.brewloop),
+      }
+    : null
 
   return NextResponse.json({
     tv: {
@@ -256,6 +351,8 @@ export async function GET(req: Request) {
     trivia,
     advertise,
     brewloop,
+    power,
+    commands,
     generated_at: now,
     // Deployment id so the long-running TV page can detect a new release and
     // reload itself (a screen otherwise runs the JS it booted with forever).

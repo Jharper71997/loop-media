@@ -55,11 +55,23 @@ gradle assembleRelease
 
 ## Notes / upgrade path
 
-- **Signing:** v1 uses the debug key (installs via sideload, zero secrets). The
-  web app self-updates, so the shell rarely changes. If you ever ship a new
-  shell version and want in-place updates, add a release keystore as GitHub
-  secrets and switch `signingConfig` in `app/build.gradle`. (Different signing
-  key = uninstall/reinstall on devices.)
+- **Signing:** the build uses a stable release key when CI has one, and falls
+  back to the debug key when it doesn't (so a local or forked build needs no
+  secrets). This stopped being cosmetic the moment screens became remotely
+  updatable: the runner mints a FRESH debug keystore every run, Android refuses
+  `adb install -r` across a key change, and updating a wall-mounted TV then means
+  uninstalling — which wipes its pairing. To set the key up once:
+
+  ```bash
+  keytool -genkeypair -v -keystore loop-release.jks -alias loop     -keyalg RSA -keysize 2048 -validity 10000
+  base64 -w0 loop-release.jks     # paste into the LOOP_KEYSTORE_BASE64 secret
+  ```
+
+  Repo secrets: `LOOP_KEYSTORE_BASE64`, `LOOP_KEYSTORE_PASSWORD`,
+  `LOOP_KEY_ALIAS`, `LOOP_KEY_PASSWORD`. Keep the `.jks` somewhere safe and
+  off the repo — lose it and every screen needs an uninstall/reinstall again.
+  The switch to it is itself one uninstall/reinstall per screen; after that,
+  updates install over the top.
 - **Domain:** the URL is hardcoded to `https://loopnetwork.org/tv`. That domain
   must be serving the app before shipping the APK, or every screen shows nothing.
 - **Branding:** launcher icon = `apple-touch-icon.png`, TV banner =
@@ -67,3 +79,27 @@ gradle assembleRelease
   files to rebrand.
 - **package:** `org.loopnetwork.tv` (distinct from the phone/host app
   `org.loopnetwork.app`).
+
+## Panel power (v1.8)
+
+A screen can now be turned off and on remotely, and can keep the venue's hours by
+itself. The mechanism matters, because a venue's router NATs the TV and nothing
+can dial in to it:
+
+- The player polls `/api/tv/loop` every ~30s. That response now carries any
+  commands an admin queued (`sleep`, `wake`, `reload`, `relaunch`) and the
+  venue's open hours. The player hands the hours to the shell over the JS bridge
+  (`AndroidKiosk.setPowerSchedule`) and acks each command to `/api/tv/command`,
+  so the admin page can show queued / delivered / done rather than just "sent".
+- `ScreenPower` arms an exact alarm for the next open or close. Alarms, not a
+  timer in the page: the page is paused while the panel is dark, and alarms
+  survive Doze and are re-armed on boot.
+- **While the panel is off the player is not running**, so the shell asks
+  `/api/tv/wake?device=…` once a minute (`PowerAlarmReceiver`). That is the only
+  inbound path a dark screen has, and it is what makes "turn it on" work on a
+  screen that is currently off.
+- **Turning off properly needs device owner.** `lockNow()` (declared via
+  `<force-lock/>` in `res/xml/device_admin.xml`) is a real display-off. Without
+  device owner the app blacks the screen at minimum backlight instead — the room
+  sees a dark TV, the panel is still lit — and the ack says so rather than
+  reporting a half-measure as success.

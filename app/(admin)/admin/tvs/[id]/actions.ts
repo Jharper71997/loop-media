@@ -139,6 +139,31 @@ export async function updateHouseSlideSeconds(tvId: string, kind: string, second
   return { error: null as string | null }
 }
 
+// House slide kind -> the tvs column that switches it off for THIS screen. Trivia
+// isn't here on purpose: it's a venue-level setting (venues.trivia_enabled), so it
+// is turned off on the venue, not one screen at a time.
+const HOUSE_ENABLED_COLUMN: Record<string, string> = {
+  brewloop: 'brewloop_enabled',
+  advertise: 'advertise_enabled',
+}
+
+// Take a HOUSE slide off THIS screen (or put it back). The screen picks the change
+// up on its next ~30s manifest poll — no deploy, nothing to restart. A network- or
+// market-wide switch lives on /admin/house; either one being off keeps the slide
+// off here. Territory-guarded like every other screen action. See migration 0075.
+export async function updateHouseSlideEnabled(tvId: string, kind: string, enabled: boolean) {
+  const profile = await requireAdmin()
+  const supabase = await createClient()
+  const denied = await guardTv(supabase, profile, tvId)
+  if (denied) return { error: denied }
+  const column = HOUSE_ENABLED_COLUMN[kind]
+  if (!column) return { error: 'Unknown house slide.' }
+  const { error } = await supabase.from('tvs').update({ [column]: enabled }).eq('id', tvId)
+  if (error) return { error: error.message }
+  revalidatePath(`/admin/tvs/${tvId}`)
+  return { error: null as string | null }
+}
+
 // Set the per-screen overscan safe-area inset (percent per side). Compensates for a
 // TV that zooms past its panel edges and clips content (the corner QR, ad edges).
 // 0 = edge-to-edge; the player defaults to 3 when never set. The screen applies it
@@ -254,6 +279,70 @@ export async function addPlacement(tvId: string, adId: string) {
       .delete()
       .eq('campaign_id', campaignId)
       .eq('tv_id', tvId)
+  }
+  revalidatePath(`/admin/tvs/${tvId}`)
+  return { error: null as string | null }
+}
+
+// ---- Remote power (migration 0078) --------------------------------------
+
+// Queue a command for a screen. It leaves here as a row; the screen picks it up
+// on its next ~30s poll of /api/tv/loop and acks it, so the admin page shows
+// three distinct states rather than one hopeful one: queued, delivered, done.
+//
+// Nothing here talks to the TV directly. A venue's router NATs the screen, so
+// there is no inbound path to it at all — which is exactly why the outbound poll
+// is the control channel.
+// Not exported: a 'use server' module may only export async functions, so the
+// admin UI names the four commands in its own union (see TvControls).
+const TV_COMMANDS = ['sleep', 'wake', 'reload', 'relaunch'] as const
+type TvCommand = (typeof TV_COMMANDS)[number]
+
+export async function sendTvCommand(tvId: string, command: TvCommand) {
+  const profile = await requireAdmin()
+  const supabase = await createClient()
+  const denied = await guardTv(supabase, profile, tvId)
+  if (denied) return { error: denied }
+  if (!TV_COMMANDS.includes(command)) return { error: 'Unknown command.' }
+
+  // Supersede anything still undelivered for this screen. Two presses of Sleep
+  // 20 seconds apart should be one instruction, not a queue the screen works
+  // through afterwards — and an admin who hits Wake right after Sleep means the
+  // second one, not both in order.
+  await supabase.from('tv_commands').delete().eq('tv_id', tvId).is('delivered_at', null)
+
+  const { error } = await supabase
+    .from('tv_commands')
+    .insert({ tv_id: tvId, command, issued_by: profile.id })
+  if (error) return { error: error.message }
+  revalidatePath(`/admin/tvs/${tvId}`)
+  return { error: null as string | null }
+}
+
+// Opt this screen into sleeping outside its venue's open hours. The hours
+// themselves live on the venue (business_hours, else business_open/close/days)
+// and are edited there — this is only "does this screen obey them".
+export async function setSleepWhenClosed(tvId: string, enabled: boolean) {
+  const profile = await requireAdmin()
+  const supabase = await createClient()
+  const denied = await guardTv(supabase, profile, tvId)
+  if (denied) return { error: denied }
+
+  const { error } = await supabase
+    .from('tvs')
+    .update({ sleep_when_closed: enabled })
+    .eq('id', tvId)
+  if (error) return { error: error.message }
+
+  // The screen re-reads its schedule on the next poll either way, but a screen
+  // that is asleep right now would not poll until it woke — so turning the
+  // schedule OFF also queues an explicit wake. Otherwise "stop doing that" would
+  // leave a dark screen dark until the next open time it was told about.
+  if (!enabled) {
+    await supabase.from('tv_commands').delete().eq('tv_id', tvId).is('delivered_at', null)
+    await supabase
+      .from('tv_commands')
+      .insert({ tv_id: tvId, command: 'wake', issued_by: profile.id })
   }
   revalidatePath(`/admin/tvs/${tvId}`)
   return { error: null as string | null }

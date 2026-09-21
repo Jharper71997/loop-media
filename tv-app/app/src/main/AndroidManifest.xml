@@ -7,6 +7,10 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- Sleep/wake the panel on the venue's hours (0078). The exact-alarm
+         permission matters only on Android 12+; Fire OS 7 is API 28, and
+         ScreenPower falls back to an inexact alarm wherever it is withheld. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <!-- Granting this via `appops set ... SYSTEM_ALERT_WINDOW allow` restores
          background-activity-launch on newer Fire OS, so the watchdog keeps
          working there too. Harmless (and unused) if never granted. -->
@@ -67,6 +71,12 @@
              OS (protected launcher + parental-controls profile owner). -->
         <service
             android:name=".KioskWatchdogService"
+            android:exported="false" />
+
+        <!-- Sleep/wake alarms. Not exported: only this app's own alarms fire it,
+             and a screen must never take a power instruction from another app. -->
+        <receiver
+            android:name=".PowerAlarmReceiver"
             android:exported="false" />
 
         <!-- Relaunch the kiosk automatically after a reboot / OS update. -->

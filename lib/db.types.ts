@@ -123,12 +123,38 @@ export interface Tv {
   advertise_seconds: number | null
   trivia_slide_seconds: number | null
   filler_seconds: number | null
+  // Per-screen house-slide on/off. false = this screen doesn't play that slide at
+  // all; a network/market setting can switch it off too. See migration 0075.
+  brewloop_enabled: boolean
+  advertise_enabled: boolean
   // Per-screen overscan safe-area inset % (null = player default 3). See migration 0052.
   overscan_pct: number | null
+  // true = the panel sleeps outside the venue's open hours and wakes before it
+  // opens, on the shell's own alarms. See migration 0078.
+  sleep_when_closed: boolean
   last_sync_at: string | null
   last_heartbeat_at: string | null
   created_at: string
   updated_at: string
+}
+
+// A remote instruction queued for one screen (migration 0078). Delivered on the
+// screen's next /api/tv/loop poll and acked by the player, so the three states
+// stay distinguishable: queued (delivered_at null), delivered, done (acked_at).
+export type TvCommandName = 'sleep' | 'wake' | 'reload' | 'relaunch'
+
+export interface TvCommandRow {
+  id: string
+  tv_id: string
+  command: TvCommandName
+  issued_by: string | null
+  created_at: string
+  delivered_at: string | null
+  acked_at: string | null
+  // false = the screen heard the command and could not carry it out; `detail`
+  // says why. A different problem from a screen that never answered at all.
+  ok: boolean | null
+  detail: string | null
 }
 
 // Which corner the scan QR sits in on an ad creative (TV overlay + preview).

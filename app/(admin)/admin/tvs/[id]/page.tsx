@@ -15,7 +15,7 @@ import { isWithinOpenHours, localDate, formatOpenHours } from '@/lib/openHours'
 import { LiveStatus } from '@/components/app/LiveStatus'
 import { CopyField } from '@/components/app/CopyField'
 import { AutoRefresh } from '@/components/app/AutoRefresh'
-import type { Tv } from '@/lib/db.types'
+import type { Tv, TvCommandRow } from '@/lib/db.types'
 import { RegenerateButton } from '../RegenerateButton'
 import { deleteTv } from '../actions'
 import { loopOccupancy } from '@/lib/loop'
@@ -25,8 +25,10 @@ import {
   AdDurationField,
   SetAllDurations,
   HouseDurationField,
+  HouseEnabledToggle,
   OverscanControl,
   LoopConfig,
+  ScreenPower,
 } from './TvControls'
 
 type TvFull = Tv & {
@@ -92,6 +94,18 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
     provisioning = (prov as ProvisioningInfo | null) ?? null
   }
 
+  // The last few remote commands sent to this screen (migration 0078). Shown
+  // under the power buttons because "I pressed it" and "the screen did it" are
+  // different facts, and the gap between them is the only diagnostic you get
+  // without driving to the venue.
+  const { data: cmdData } = await supabase
+    .from('tv_commands')
+    .select('id, command, created_at, delivered_at, acked_at, ok, detail')
+    .eq('tv_id', id)
+    .order('created_at', { ascending: false })
+    .limit(5)
+  const commands = (cmdData ?? []) as unknown as TvCommandRow[]
+
   const maxSlots = Math.max(1, Math.floor(tv.loop_length_seconds / tv.slot_seconds))
 
   // Current loop: active placements in slot order.
@@ -146,22 +160,51 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
   const used = placements.length
   const open = Math.max(0, maxSlots - used)
 
-  // Slides the app ALWAYS injects on top of paid ads, so "used of maxSlots" (paid
+  // Slides the app injects on top of paid ads, so "used of maxSlots" (paid
   // inventory) isn't everything on the TV. The Brew Loop ad + "Advertise here" card
-  // always play and the trivia teaser plays where trivia is on. Each is fixed-time
-  // (15s) and is NOT a paid slot. We list them as rows below so the admin matches
-  // the real screen. The fallbacks mirror the player's (HOUSE_SLIDE_SECONDS in
-  // app/tv/TvPlayer.tsx) so a screen with no stored value reads here as it plays.
-  const houseSlides: { kind: string; label: string; seconds: number }[] = [
-    { kind: 'brewloop', label: 'Brew Loop ad', seconds: tv.brewloop_seconds ?? 15 },
-    { kind: 'advertise', label: '“Advertise on this screen” card', seconds: tv.advertise_seconds ?? 15 },
+  // play unless they've been switched off (migration 0075), and the trivia teaser
+  // plays where trivia is on. Each is fixed-time (15s) and is NOT a paid slot. We
+  // list them as rows below so the admin matches the real screen — including the
+  // ones that are OFF, greyed, so "why isn't that playing?" is answerable here. The
+  // fallbacks mirror the player's (HOUSE_SLIDE_SECONDS in app/tv/TvPlayer.tsx) so a
+  // screen with no stored value reads here as it plays.
+  const houseSlides: {
+    kind: string
+    label: string
+    seconds: number
+    enabled: boolean
+    canToggle: boolean
+  }[] = [
+    {
+      kind: 'brewloop',
+      label: 'Brew Loop ad',
+      seconds: tv.brewloop_seconds ?? 15,
+      enabled: tv.brewloop_enabled !== false,
+      canToggle: true,
+    },
+    {
+      kind: 'advertise',
+      label: '“Advertise on this screen” card',
+      seconds: tv.advertise_seconds ?? 15,
+      enabled: tv.advertise_enabled !== false,
+      canToggle: true,
+    },
   ]
   if (tv.venue?.trivia_enabled)
-    houseSlides.push({ kind: 'trivia', label: 'Trivia teaser', seconds: tv.trivia_slide_seconds ?? 15 })
-  // Loop occupancy with the always-on house slides counted as filled: `used` and
-  // `total` include them; `open` is the sellable remainder advertisers can buy.
-  const houseSeconds = houseSlides.reduce((s, h) => s + h.seconds, 0)
-  const occ = loopOccupancy({ adSlots: maxSlots, houseSlides: houseSlides.length, paidSold: used })
+    houseSlides.push({
+      kind: 'trivia',
+      label: 'Trivia teaser',
+      seconds: tv.trivia_slide_seconds ?? 15,
+      enabled: true,
+      // Trivia is a venue setting, not a per-screen one — it's turned off on the venue.
+      canToggle: false,
+    })
+  // Loop occupancy with the PLAYING house slides counted as filled: `used` and
+  // `total` include them; `open` is the sellable remainder advertisers can buy. A
+  // house slide switched off frees its time, so it stops counting here too.
+  const playingHouse = houseSlides.filter((h) => h.enabled)
+  const houseSeconds = playingHouse.reduce((s, h) => s + h.seconds, 0)
+  const occ = loopOccupancy({ adSlots: maxSlots, houseSlides: playingHouse.length, paidSold: used })
 
   // Seed the "apply to all" box with the first image ad's current time (else the
   // screen's slot length) so it opens on a sensible value.
@@ -296,7 +339,7 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
                 {occ.used}/{occ.total}
               </p>
               <p className="text-xs text-muted-foreground">
-                {occ.open} open · {used} paid + {houseSlides.length} house
+                {occ.open} open · {used} paid + {playingHouse.length} house
               </p>
             </CardContent>
           </Card>
@@ -378,8 +421,8 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
               <p className="text-sm font-medium">Loop capacity</p>
               <p className="text-xs text-muted-foreground">
                 Set how many ad spots this screen sells and the slot length used to size the loop.
-                The always-on house slides (Brew Loop, “Advertise here”, trivia) play on top and are
-                counted in the loop below. The exact on-screen time for each ad is set per ad in the
+                The house slides (Brew Loop, “Advertise here”, trivia) play on top and are counted
+                in the loop below — unless one has been taken off this screen. The exact on-screen time for each ad is set per ad in the
                 loop list further down.
               </p>
             </div>
@@ -387,7 +430,7 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
               id={tv.id}
               adSlots={maxSlots}
               slotSeconds={tv.slot_seconds}
-              houseCount={houseSlides.length}
+              houseCount={playingHouse.length}
               houseSeconds={houseSeconds}
               paidSold={used}
             />
@@ -407,6 +450,51 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
               </p>
             </div>
             <OverscanControl id={tv.id} overscan={tv.overscan_pct ?? 0} />
+          </CardContent>
+        </Card>
+
+        {/* Power: turn the panel off and on from here, and let the screen keep
+            the venue's hours by itself. */}
+        <Card>
+          <CardContent className="space-y-3 p-5">
+            <div>
+              <p className="text-sm font-medium">Power</p>
+              <p className="text-xs text-muted-foreground">
+                The screen asks for work every ~30 seconds, so a button here reaches the panel
+                within about a minute — and a screen that is offline right now does it the moment
+                it comes back. Turning it off needs the kiosk app installed as device owner; without
+                that the screen goes black at minimum backlight instead, and says so below.
+              </p>
+            </div>
+            <ScreenPower
+              tvId={tv.id}
+              sleepWhenClosed={tv.sleep_when_closed}
+              hoursLabel={tv.venue ? formatOpenHours(tv.venue) : null}
+            />
+            {commands.length > 0 && (
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                {commands.map((c) => (
+                  <li key={c.id} className="flex flex-wrap items-baseline gap-x-2">
+                    <span className="font-medium text-foreground">{c.command}</span>
+                    <span>{timeAgo(c.created_at)}</span>
+                    <span aria-hidden>·</span>
+                    <span
+                      className={
+                        c.acked_at && c.ok === false ? 'text-destructive' : undefined
+                      }
+                    >
+                      {c.acked_at
+                        ? c.ok === false
+                          ? `the screen could not: ${c.detail ?? 'no reason given'}`
+                          : 'done'
+                        : c.delivered_at
+                          ? 'handed to the screen, no answer yet'
+                          : 'queued — waiting for the screen to ask'}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </CardContent>
         </Card>
 
@@ -456,13 +544,14 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
           <CardContent className="space-y-4 p-5">
             <div className="space-y-1">
               <p className="text-sm font-medium">
-                On this screen — {used + houseSlides.length} slide
-                {used + houseSlides.length === 1 ? '' : 's'} in the loop
+                On this screen — {used + playingHouse.length} slide
+                {used + playingHouse.length === 1 ? '' : 's'} in the loop
               </p>
               <p className="text-xs text-muted-foreground">
                 {used} paid ad{used === 1 ? '' : 's'} ({used} of {maxSlots} paid slots) plus{' '}
-                {houseSlides.length} house slide{houseSlides.length === 1 ? '' : 's'} that always
-                play. Set each one&apos;s seconds below too; house slides can&apos;t be removed.
+                {playingHouse.length} house slide{playingHouse.length === 1 ? '' : 's'}. Set each
+                one&apos;s seconds below, or take a house slide off this screen entirely — to switch
+                one off everywhere, use Operations → House slides.
               </p>
             </div>
             {placements.length > 0 && (
@@ -524,7 +613,10 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
                 </div>
               ))}
               {houseSlides.map((h, i) => (
-                <div key={`house-${i}`} className="flex items-center gap-4 py-3 first:pt-0">
+                <div
+                  key={`house-${i}`}
+                  className={`flex items-center gap-4 py-3 first:pt-0 ${h.enabled ? '' : 'opacity-55'}`}
+                >
                   <span className="w-12 shrink-0 text-center font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
                     house
                   </span>
@@ -534,15 +626,27 @@ export default async function TvDetail({ params }: { params: Promise<{ id: strin
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium">{h.label}</p>
                     <p className="truncate text-sm text-muted-foreground">
-                      Always plays · not a paid slot
+                      {h.enabled
+                        ? 'Plays every loop · not a paid slot'
+                        : 'Off — not playing on this screen'}
                     </p>
                   </div>
-                  <HouseDurationField
-                    key={`${h.kind}-${h.seconds}`}
-                    tvId={tv.id}
-                    slideKind={h.kind}
-                    seconds={h.seconds}
-                  />
+                  {h.enabled && (
+                    <HouseDurationField
+                      key={`${h.kind}-${h.seconds}`}
+                      tvId={tv.id}
+                      slideKind={h.kind}
+                      seconds={h.seconds}
+                    />
+                  )}
+                  {h.canToggle && (
+                    <HouseEnabledToggle
+                      tvId={tv.id}
+                      slideKind={h.kind}
+                      enabled={h.enabled}
+                      label={h.label}
+                    />
+                  )}
                 </div>
               ))}
             </div>

@@ -55,6 +55,12 @@ public class MainActivity extends Activity {
     static volatile boolean foreground = false;
     static volatile long lastForegroundAt = 0;
 
+    // The live activity, so an alarm firing behind a dark screen (ScreenPower)
+    // can reach the window it needs to darken or light. Null whenever the
+    // activity isn't alive, and every caller treats that as "do the part that
+    // doesn't need a window".
+    static volatile MainActivity current = null;
+
     // Watchdog: the page pings us through the JS bridge. Hear nothing for this
     // long and the page has hung / white-screened, so reload it.
     private static final long WATCHDOG_TIMEOUT_MS = 90_000L;
@@ -64,6 +70,9 @@ public class MainActivity extends Activity {
 
     private FrameLayout root;
     private WebView web;
+    // Opaque black sheet over the player, used when the panel can't truly be
+    // powered down (no device owner). See setDark().
+    private View darkSheet;
     private PowerManager.WakeLock cpuLock;
     private PowerManager.WakeLock screenLock;
     private WifiManager.WifiLock wifiLock;
@@ -108,6 +117,8 @@ public class MainActivity extends Activity {
             setShowWhenLocked(true);
         }
 
+        current = this;
+
         setupKiosk();
         acquireLocks();
         startWatchdog();
@@ -115,6 +126,12 @@ public class MainActivity extends Activity {
         root = new FrameLayout(this);
         setContentView(root);
         buildWebView();
+
+        // Alarms don't survive a process death any more than a reboot, so re-arm
+        // on every cold start and act on the state the schedule calls for: a
+        // screen that restarted at 3am should go straight back to sleep, not sit
+        // lit until opening time.
+        try { ScreenPower.arm(this, true); } catch (Exception ignored) {}
 
         handler.postDelayed(watchdog, WATCHDOG_CHECK_MS);
         handler.postDelayed(safetyReload, SAFETY_RELOAD_MS);
@@ -216,10 +233,109 @@ public class MainActivity extends Activity {
         }
     };
 
-    /** Called from injected page JS every 15s while the loop is healthy. */
+    /** The page's line to the shell. Every method here is called on a WebView
+     *  thread, never the UI thread, so anything touching the window is posted. */
     private class KioskBridge {
         @JavascriptInterface
         public void alive() { lastAlive = SystemClock.elapsedRealtime(); }
+
+        /** Who this screen is. The shell needs its own copy to ask the server
+         *  "should I wake?" while the page is paused behind a dark panel. */
+        @JavascriptInterface
+        public void setDevice(String deviceId, String secret) {
+            try { ScreenPower.setDevice(MainActivity.this, deviceId, secret); } catch (Exception ignored) {}
+        }
+
+        /** The venue's open hours, from the latest /api/tv/loop poll. */
+        @JavascriptInterface
+        public void setPowerSchedule(String json) {
+            try { ScreenPower.setSchedule(MainActivity.this, json); } catch (Exception ignored) {}
+        }
+
+        /** Was this screen provisioned as device owner? Decides whether "off"
+         *  powers the panel down or only paints it black, and the player says
+         *  which one in its ack instead of calling both a success. */
+        @JavascriptInterface
+        public boolean deviceOwner() {
+            try {
+                return dpm != null
+                        && dpm.isAdminActive(new ComponentName(MainActivity.this, KioskAdminReceiver.class));
+            } catch (Exception e) {
+                return false;
+            }
+        }
+
+        @JavascriptInterface
+        public void screenOff() {
+            handler.post(new Runnable() {
+                @Override public void run() { ScreenPower.sleepNow(MainActivity.this); }
+            });
+        }
+
+        @JavascriptInterface
+        public void screenOn() {
+            handler.post(new Runnable() {
+                @Override public void run() { ScreenPower.wakeNow(MainActivity.this); }
+            });
+        }
+
+        /** Restart the kiosk itself, for when the shell (not just the page) is
+         *  wedged. recreate() rebuilds the activity, WebView and all. */
+        @JavascriptInterface
+        public void relaunch() {
+            handler.post(new Runnable() {
+                @Override public void run() {
+                    try { recreate(); } catch (Exception e) {
+                        if (web != null) web.loadUrl(TV_URL);
+                    }
+                }
+            });
+        }
+    }
+
+    // ---- Panel power --------------------------------------------------------
+
+    /** Black the screen out where a true display-off isn't available (no device
+     *  owner). Minimum backlight plus an opaque sheet: the room sees a dark TV,
+     *  though the panel is still lit — which is why sleepNow() reports which of
+     *  the two actually happened instead of calling both a success. */
+    void setDark(final boolean dark) {
+        handler.post(new Runnable() {
+            @Override public void run() {
+                try {
+                    WindowManager.LayoutParams lp = getWindow().getAttributes();
+                    lp.screenBrightness = dark ? 0.0f : -1.0f; // -1 = follow the system again
+                    getWindow().setAttributes(lp);
+                    if (dark) {
+                        if (darkSheet == null) {
+                            darkSheet = new View(MainActivity.this);
+                            darkSheet.setBackgroundColor(0xFF000000);
+                            root.addView(darkSheet, new FrameLayout.LayoutParams(
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                                ViewGroup.LayoutParams.MATCH_PARENT));
+                        }
+                        darkSheet.setVisibility(View.VISIBLE);
+                        darkSheet.bringToFront();
+                    } else if (darkSheet != null) {
+                        darkSheet.setVisibility(View.GONE);
+                    }
+                } catch (Exception ignored) {}
+            }
+        });
+    }
+
+    /** Let the display sleep. The screen-bright lock is what keeps this panel up
+     *  24/7, so it has to go before anything can turn the screen off. */
+    void releaseScreenLock() {
+        try {
+            if (screenLock != null && screenLock.isHeld()) screenLock.release();
+        } catch (Exception ignored) {}
+    }
+
+    void reacquireScreenLock() {
+        try {
+            if (screenLock != null && !screenLock.isHeld()) screenLock.acquire();
+        } catch (Exception ignored) {}
     }
 
     /** Start the soft-kiosk watchdog that bounces the app back after a Home press.
@@ -236,8 +352,11 @@ public class MainActivity extends Activity {
     }
 
     private void acquireLocks() {
+        // Hoisted out of the first try: the screen-bright lock below needs it
+        // too, and as a block-local it didn't compile — which is why the
+        // "display must not sleep" fix has never actually reached a TV.
+        final PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
         try {
-            PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
             cpuLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "loopnetwork:cpu");
             cpuLock.setReferenceCounted(false);
             cpuLock.acquire();
@@ -289,12 +408,36 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        current = this;
         foreground = true;
         lastForegroundAt = SystemClock.elapsedRealtime();
         hideSystemBars();
         enterKioskIfLocked();
         if (web != null) web.onResume();
+        // Coming back up means awake, so never resume behind a black sheet left
+        // over from a sleep — a screen that woke and still looks off is the same
+        // support call as one that never woke.
+        if (!ScreenPower.isAsleep(this)) {
+            setDark(false);
+        } else {
+            // We are up but the schedule says this screen should be asleep: a
+            // host pressed a remote button at 3am, or something else woke the
+            // panel. Give them a couple of minutes with it, then put it back the
+            // way the schedule says — rather than fighting the remote instantly,
+            // or leaving the TV lit until opening time tomorrow.
+            handler.removeCallbacks(resettle);
+            handler.postDelayed(resettle, RESETTLE_MS);
+        }
     }
+
+    /** Grace after an unscheduled wake before the schedule reasserts itself. */
+    private static final long RESETTLE_MS = 2 * 60_000L;
+
+    private final Runnable resettle = new Runnable() {
+        @Override public void run() {
+            try { ScreenPower.resettle(MainActivity.this); } catch (Exception ignored) {}
+        }
+    };
 
     @Override
     protected void onPause() {
@@ -479,6 +622,7 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        if (current == this) current = null;
         handler.removeCallbacksAndMessages(null);
         try { if (cpuLock != null && cpuLock.isHeld()) cpuLock.release(); } catch (Exception ignored) {}
         try { if (screenLock != null && screenLock.isHeld()) screenLock.release(); } catch (Exception ignored) {}
