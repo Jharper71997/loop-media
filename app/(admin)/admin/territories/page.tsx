@@ -13,9 +13,8 @@ export const dynamic = 'force-dynamic'
 
 // Markets — the list every other page is scoped by.
 //
-// Until now the only way to get one was for a host to register a venue in a city
-// we did not have yet (findOrCreateTerritory), which meant a typo in that form
-// became a permanent market in the switcher and there was no way to take it out.
+// One per state. A host registering in a state we don't have yet creates it
+// (findOrCreateTerritory); an admin can add one here by state. Never per city.
 export default async function TerritoriesPage() {
   const profile = await requireAdmin()
   const canEdit = isGlobalAdmin(profile)
@@ -33,7 +32,7 @@ export default async function TerritoriesPage() {
     <>
       <PageHeader
         title="Markets"
-        description="The cities the network runs in. Everything else on the network is scoped to one of these."
+        description="The states the network runs in. Everything else on the network is scoped to one of these."
       />
       <SectionTabs tabs={MORE_TABS} />
       <HudBody>
@@ -73,7 +72,7 @@ export default async function TerritoriesPage() {
                       </div>
                       <p className="mt-0.5 text-xs text-muted-foreground">
                         {t.is_holding
-                          ? 'Sits above the city markets. Nothing is sold in it.'
+                          ? 'Sits above the state markets. Nothing is sold in it.'
                           : blockers
                             ? `Holds ${blockers}.`
                             : 'Nothing in it yet — safe to delete.'}

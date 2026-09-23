@@ -138,7 +138,7 @@ const GROUPS: Group[] = [
       {
         href: '/admin/territories',
         label: 'Markets',
-        detail: 'The cities the network runs in. Add one, archive one, delete a stray one.',
+        detail: 'The states the network runs in. Add one, archive one, delete a stray one.',
         icon: Globe,
       },
       {

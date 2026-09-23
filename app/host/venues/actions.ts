@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { requireProfile } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { geocodeAddress } from '@/lib/geocode'
-import { findOrCreateTerritory } from '@/lib/territory'
+import { findOrCreateTerritory, INVALID_STATE_ERROR } from '@/lib/territory'
 import type { PerDayHours } from '@/lib/openHours'
 
 // Host self-service editing of THEIR OWN venue. `venues` / `venue_provisioning`
@@ -81,7 +81,7 @@ export async function saveHostVenue(input: HostVenueInput) {
   let territoryId: string | undefined
   if (norm(input.state) !== norm(venue.state)) {
     const t = await findOrCreateTerritory(admin, input.state)
-    if (!t) return { error: 'Could not set up that state. Try again.' }
+    if (!t) return { error: INVALID_STATE_ERROR }
     territoryId = t
   }
 
@@ -106,6 +106,7 @@ export async function saveHostVenue(input: HostVenueInput) {
       input.business_hours && Object.keys(input.business_hours).length ? input.business_hours : null,
     ...(territoryId ? { territory_id: territoryId } : {}),
     ...(geo ? { lat: geo.lat, lng: geo.lng } : {}),
+    ...(geo?.county ? { county: geo.county } : {}),
   }
 
   const { error } = await admin.from('venues').update(payload).eq('id', input.id)

@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireAdmin } from '@/lib/auth'
 import { geocodeAddress } from '@/lib/geocode'
+import { findOrCreateTerritory, INVALID_STATE_ERROR } from '@/lib/territory'
 import {
   genPairingCode,
   TV_PAIRING_CODE_LEN,
@@ -18,12 +19,13 @@ import type { PerDayHours } from '@/lib/openHours'
 
 export interface VenueInput {
   id?: string
-  territory_id: string
   name: string
   address: string
   city: string
   state: string
   postal_code: string
+  // Blank = take the county the geocoder puts the address in.
+  county: string
   venue_type: string
   category_id: string | null
   host_user_id: string | null
@@ -57,7 +59,13 @@ export interface VenueInput {
 export async function saveVenue(input: VenueInput) {
   await requireAdmin()
   const supabase = await createClient()
-  const { id, create_screen, ...rest } = input
+  const { id, create_screen, county, ...rest } = input
+
+  // The market is the venue's STATE — never picked by hand, never a city. Same
+  // helper host registration uses, so an admin-added venue lands in the same row.
+  const admin = createAdminClient()
+  const territoryId = await findOrCreateTerritory(admin, rest.state)
+  if (!territoryId) return { error: INVALID_STATE_ERROR }
 
   // Coordinates come ONLY from the address (no lat/lng inputs). Re-geocode on
   // every save so editing the address moves the pin.
@@ -72,6 +80,10 @@ export async function saveVenue(input: VenueInput) {
   // it off the advertiser map (and out of the coming-soon list).
   const payload = {
     ...rest,
+    territory_id: territoryId,
+    // A typed county wins; otherwise the geocoder's. Neither -> leave the column
+    // alone, so one lookup that came back without a county never blanks a known one.
+    ...(county.trim() || geo?.county ? { county: county.trim() || geo?.county } : {}),
     host_user_id: rest.host_user_id || null,
     // 0/empty means "not stated" -> null, so reach falls back to foot traffic / 30.
     median_daily_customers:
@@ -103,7 +115,6 @@ export async function saveVenue(input: VenueInput) {
     // so the location is usable without a second click. Best-effort with a retry on
     // the rare pairing-code clash.
     if (create_screen) {
-      const admin = createAdminClient()
       for (let attempt = 0; attempt < 5; attempt++) {
         const { error: tvErr } = await admin.from('tvs').insert({
           venue_id: created.id,

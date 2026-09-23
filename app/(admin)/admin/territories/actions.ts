@@ -3,7 +3,12 @@
 import { revalidatePath } from 'next/cache'
 import { requireAdmin, isGlobalAdmin } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
-import { slugify, territoryUsage, usageSummary } from '@/lib/territory'
+import {
+  resolveStateMarket,
+  territoryUsage,
+  usageSummary,
+  INVALID_STATE_ERROR,
+} from '@/lib/territory'
 
 // Markets are Holdings-level: a city admin runs the market they are pinned to,
 // they do not get to invent or remove one. RLS says the same thing
@@ -21,48 +26,35 @@ function revalidateMarkets() {
   revalidatePath('/admin', 'layout')
 }
 
-// Create a market.
-//
-// The name shape matters: hosts registering a venue create markets on the fly
-// through findOrCreateTerritory(), which builds "City, ST" and slugifies it. A
-// market typed here has to land on the SAME slug or the next host in that city
-// silently creates a duplicate alongside it. That is why this takes a city and a
-// state rather than free text.
-export async function createTerritory(input: {
-  city: string
-  state: string
-  timezone: string
-}) {
+// Create a market. A market is a STATE — the admin types the state, and it lands on
+// the same row findOrCreateTerritory() would give a host registering there, so the
+// two paths can never make a duplicate. The timezone comes with the state.
+export async function createTerritory(input: { state: string }) {
   const denied = await requireGlobalAdmin()
   if (denied) return { error: denied }
 
-  const city = input.city.trim()
-  const state = input.state.trim().toUpperCase()
-  if (!city) return { error: 'City is required.' }
-  if (!/^[A-Z]{2}$/.test(state)) return { error: 'State has to be the two-letter code, e.g. NC.' }
-
-  const name = `${city}, ${state}`
-  const slug = slugify(name)
+  const market = resolveStateMarket(input.state)
+  if (!market.timezone) return { error: INVALID_STATE_ERROR }
   const supabase = await createClient()
 
   const { data: existing } = await supabase
     .from('territories')
     .select('id, name')
-    .eq('slug', slug)
+    .eq('slug', market.slug)
     .maybeSingle()
   if (existing) return { error: `${(existing as { name: string }).name} already exists.` }
 
   const { error } = await supabase.from('territories').insert({
-    name,
-    slug,
+    name: market.name,
+    slug: market.slug,
     is_holding: false,
     status: 'active',
-    timezone: input.timezone,
+    timezone: market.timezone,
   })
   if (error) return { error: error.message }
 
   revalidateMarkets()
-  return { error: null }
+  return { error: null, name: market.name }
 }
 
 // Archive / restore. An archived market keeps every venue, ad and number it ever

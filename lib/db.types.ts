@@ -74,6 +74,8 @@ export interface Venue {
   address: string | null
   city: string | null
   state: string | null
+  // Only classification below the state market; set from the geocoder.
+  county: string | null
   postal_code: string | null
   lat: number | null
   lng: number | null

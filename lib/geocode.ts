@@ -4,6 +4,10 @@
 // result anywhere on Earth (an Indiana street landed in California). Hosts and
 // admins only enter an address — never coordinates. Returns null on any failure
 // (the venue just won't map until the address is fixed).
+//
+// Also returns the COUNTY Nominatim puts the point in. A venue is classified by
+// state (its market) and county, never by city, so county comes from the same
+// lookup rather than from anything the host types.
 
 export interface AddressParts {
   street?: string | null
@@ -33,21 +37,31 @@ export function cleanStreet(street: string): string {
     .trim()
 }
 
-type NominatimRow = { lat: string; lon: string; address?: { country_code?: string } }
+type NominatimRow = {
+  lat: string
+  lon: string
+  address?: { country_code?: string; county?: string }
+}
 
-function pickUs(rows: NominatimRow[]): { lat: number; lng: number } | null {
+export interface GeocodeResult {
+  lat: number
+  lng: number
+  county: string | null
+}
+
+function pickUs(rows: NominatimRow[]): GeocodeResult | null {
   const row =
     rows.find((r) => r.address?.country_code?.toLowerCase() === 'us') ?? rows[0]
   if (!row) return null
   const lat = Number(row.lat)
   const lng = Number(row.lon)
   if (Number.isNaN(lat) || Number.isNaN(lng)) return null
-  return { lat, lng }
+  return { lat, lng, county: row.address?.county?.trim() || null }
 }
 
 async function structuredSearch(
   fields: { street?: string; city?: string; state?: string; zip?: string }
-): Promise<{ lat: number; lng: number } | null> {
+): Promise<GeocodeResult | null> {
   try {
     const p = new URLSearchParams({
       format: 'json',
@@ -70,7 +84,7 @@ async function structuredSearch(
 
 export async function geocodeAddress(
   parts: AddressParts
-): Promise<{ lat: number; lng: number } | null> {
+): Promise<GeocodeResult | null> {
   const rawStreet = (parts.street ?? '').trim()
   const city = (parts.city ?? '').trim()
   const state = (parts.state ?? '').trim()

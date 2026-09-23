@@ -20,7 +20,7 @@ import { isVenueListable } from '@/lib/venue'
 import { adSlotCount, houseSlideCount, loopOccupancy } from '@/lib/loop'
 import { HOUSE_SELECT, housePlays, type HouseRow } from '@/lib/houseSlides'
 import { venueBusinessHours, formatBusinessHours } from '@/lib/uptime'
-import type { Category, Territory, Venue, PriceTier, Tv } from '@/lib/db.types'
+import type { Category, Venue, PriceTier, Tv } from '@/lib/db.types'
 import { VenueDialog } from './VenueDialog'
 import { VisibilityToggle } from './VisibilityToggle'
 import { TriviaToggle } from './TriviaToggle'
@@ -93,7 +93,6 @@ export default async function VenuesPage({
   const rows = (venues ?? []) as VenueRow[]
   const houseRows = (houseData ?? []) as HouseRow[]
   const cats = (categories ?? []) as Category[]
-  const territories = territory.territories as Territory[]
   const hosts = (hostProfiles ?? []) as { id: string; email: string; full_name: string | null }[]
 
   // The screens that live at these venues, grouped per venue, plus which ads are
@@ -146,9 +145,7 @@ export default async function VenuesPage({
         action={
           <VenueDialog
             categories={cats}
-            territories={territories}
             hosts={hosts}
-            defaultTerritoryId={t ?? ''}
             pricingConfig={pricingConfig}
           />
         }
@@ -193,6 +190,7 @@ export default async function VenuesPage({
                   <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                     <span>{v.category?.name ?? v.venue_type ?? '—'}</span>
                     {!t && <span>{v.territory?.name ?? '—'}</span>}
+                    {v.county && <span>{v.county}</span>}
                     <span>{formatNumber(v.foot_traffic_estimate)}/mo traffic</span>
                     <span className="font-medium text-primary">
                       {v.price_cents_override != null ? 'Custom' : TIER_LABEL[tier]} ·{' '}
@@ -210,9 +208,7 @@ export default async function VenuesPage({
                   <VenueDialog
                     venue={v}
                     categories={cats}
-                    territories={territories}
                     hosts={hosts}
-                    defaultTerritoryId={t ?? ''}
                     pricingConfig={pricingConfig}
                   />
                   <DeleteButton id={v.id} action={deleteVenue} />

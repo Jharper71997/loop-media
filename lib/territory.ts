@@ -119,8 +119,8 @@ const US_STATES: Record<string, { name: string; timezone: string }> = {
 
 // Accepts what a host actually types in the State box — "nc", "NC", "north
 // carolina", " North Carolina " — and returns the canonical market for it.
-// Anything we don't recognise is passed through as typed rather than rejected, so
-// an odd entry still lands in a market instead of blocking a registration.
+// Anything we don't recognise comes back as typed with a null timezone, which
+// findOrCreateTerritory() treats as "not a state" and refuses.
 export function resolveStateMarket(state: string): {
   name: string
   slug: string
@@ -159,14 +159,21 @@ function stateCandidates(raw: string): string[] {
 // town doesn't spawn a market of one. (It used to be city + state, which turned
 // every new host into a separate "market": Hubert, Swansboro and Jacksonville were
 // three markets on one 20-mile stretch of NC coast, so per-market pricing, category
-// caps and exclusivity all meant nothing.) Returns the territory id (or null on
-// failure). Admin client because `territories` is admin-write under RLS.
+// caps and exclusivity all meant nothing.) Below the state the only classification
+// is the venue's county; city never names or splits a market.
+//
+// A State box we can't read as a US state returns null rather than minting a market
+// named whatever was typed — the passthrough is how "Rockledge, FL" and friends kept
+// appearing. Callers turn null into "enter a US state". Admin client because
+// `territories` is admin-write under RLS.
+export const INVALID_STATE_ERROR = 'Enter a US state, e.g. NC or North Carolina.'
+
 export async function findOrCreateTerritory(
   admin: ReturnType<typeof createAdminClient>,
   state: string
 ): Promise<string | null> {
   const market = resolveStateMarket(state)
-  if (!market.slug) return null
+  if (!market.slug || !market.timezone) return null
   const { data: existing } = await admin
     .from('territories')
     .select('id')
@@ -180,9 +187,7 @@ export async function findOrCreateTerritory(
       slug: market.slug,
       is_holding: false,
       status: 'active',
-      // Let the column default stand for a state we don't know rather than writing
-      // a guess into it.
-      ...(market.timezone ? { timezone: market.timezone } : {}),
+      timezone: market.timezone,
     })
     .select('id')
     .maybeSingle()

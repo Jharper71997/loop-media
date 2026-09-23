@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import type { Category, Territory, Venue, PriceTier } from '@/lib/db.types'
+import type { Category, Venue, PriceTier } from '@/lib/db.types'
 import { TIER_LABEL, TIER_PRICE_CENTS, suggestTier, type PricingConfig } from '@/lib/pricing'
 import { formatCents } from '@/lib/format'
 import { BusinessHoursPicker, type BusinessHoursValue } from '@/components/app/BusinessHoursPicker'
@@ -37,16 +37,12 @@ const NO_HOST = 'none'
 export function VenueDialog({
   venue,
   categories,
-  territories,
   hosts,
-  defaultTerritoryId,
   pricingConfig,
 }: {
   venue?: Venue
   categories: Category[]
-  territories: Territory[]
   hosts: { id: string; email: string; full_name: string | null }[]
-  defaultTerritoryId: string
   pricingConfig?: PricingConfig
 }) {
   const isEdit = !!venue
@@ -57,12 +53,12 @@ export function VenueDialog({
 
   const [form, setForm] = useState<VenueInput>({
     id: venue?.id,
-    territory_id: venue?.territory_id ?? defaultTerritoryId ?? territories[0]?.id ?? '',
     name: venue?.name ?? '',
     address: venue?.address ?? '',
     city: venue?.city ?? '',
     state: venue?.state ?? '',
     postal_code: venue?.postal_code ?? '',
+    county: venue?.county ?? '',
     venue_type: venue?.venue_type ?? '',
     category_id: venue?.category_id ?? null,
     host_user_id: venue?.host_user_id ?? null,
@@ -100,8 +96,8 @@ export function VenueDialog({
 
   function submit(e: React.FormEvent) {
     e.preventDefault()
-    if (!form.name.trim() || !form.territory_id) {
-      toast.error('Name and territory are required.')
+    if (!form.name.trim() || !form.state.trim()) {
+      toast.error('Name and state are required.')
       return
     }
     // A live venue with no foot traffic is hidden from the advertiser map
@@ -150,24 +146,6 @@ export function VenueDialog({
         <form onSubmit={submit} className="grid gap-4 sm:grid-cols-2">
           <Field label="Name" className="sm:col-span-2">
             <Input value={form.name} onChange={(e) => set('name', e.target.value)} required />
-          </Field>
-
-          <Field label="Territory">
-            <Select value={form.territory_id} onValueChange={(v) => set('territory_id', v ?? '')}>
-              <SelectTrigger className="w-full">
-                <SelectValue>
-                  {(v: string | null) =>
-                    territories.find((t) => t.id === v)?.name ?? 'Select…'}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {territories.map((t) => (
-                  <SelectItem key={t.id} value={t.id}>
-                    {t.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </Field>
 
           <Field label="Category (business type)">
@@ -362,6 +340,16 @@ export function VenueDialog({
                 placeholder="46341"
               />
             </div>
+            <p className="text-xs text-muted-foreground">
+              The state is the venue&apos;s market.
+            </p>
+          </Field>
+          <Field label="County">
+            <Input
+              value={form.county}
+              onChange={(e) => set('county', e.target.value)}
+              placeholder="Filled from the address"
+            />
           </Field>
 
           <Field label="Contact name">

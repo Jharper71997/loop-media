@@ -13,7 +13,7 @@ import {
 } from '@/lib/tv'
 import { AGREEMENT_VERSION } from '@/lib/agreement'
 import { DEMO_COMP_CODE } from '@/lib/demo'
-import { findOrCreateTerritory } from '@/lib/territory'
+import { findOrCreateTerritory, INVALID_STATE_ERROR } from '@/lib/territory'
 import type { PerDayHours } from '@/lib/openHours'
 
 export interface RegisterVenueInput {
@@ -105,7 +105,7 @@ export async function requestVenue(input: RegisterVenueInput) {
   }
 
   const territoryId = await findOrCreateTerritory(admin, input.state)
-  if (!territoryId) return { error: 'Could not set up your state. Try again.' }
+  if (!territoryId) return { error: INVALID_STATE_ERROR }
 
   const geo = await geocodeAddress({
     street: input.address,
@@ -125,6 +125,7 @@ export async function requestVenue(input: RegisterVenueInput) {
       postal_code: input.postal_code.trim() || null,
       lat: geo?.lat ?? null,
       lng: geo?.lng ?? null,
+      county: geo?.county ?? null,
       venue_type: input.venue_type?.trim() || null,
       category_id: input.category_id,
       foot_traffic_estimate: Math.max(0, Math.round(input.foot_traffic_estimate || 0)),

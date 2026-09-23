@@ -3,7 +3,6 @@ import { headers } from 'next/headers'
 import { notFound } from 'next/navigation'
 import { ArrowLeft, ChevronRight, Mail, Phone, User, MapPin } from 'lucide-react'
 import { requireAdmin } from '@/lib/auth'
-import { getTerritoryContext } from '@/lib/territory'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { kioskUrl, pairingUrl } from '@/lib/tv'
@@ -16,7 +15,7 @@ import { AutoRefresh } from '@/components/app/AutoRefresh'
 import { formatNumber, formatCents, timeAgo, isTvLive } from '@/lib/format'
 import { suggestTier, venuePriceCents, TIER_LABEL } from '@/lib/pricing'
 import { getPricingConfig } from '@/lib/pricing.server'
-import type { Venue, Tv, Category, Territory, PriceTier } from '@/lib/db.types'
+import type { Venue, Tv, Category, PriceTier } from '@/lib/db.types'
 import { TvDialog } from '../../tvs/TvDialog'
 import { deleteTv } from '../../tvs/actions'
 import { VenueDialog } from '../VenueDialog'
@@ -41,9 +40,8 @@ const venueTier = (v: { price_tier: PriceTier | null; foot_traffic_estimate: num
   v.price_tier ?? suggestTier(v.foot_traffic_estimate)
 
 export default async function VenueDetail({ params }: { params: Promise<{ id: string }> }) {
-  const profile = await requireAdmin()
+  await requireAdmin()
   const { id } = await params
-  const territoryCtx = await getTerritoryContext(profile)
   const supabase = await createClient()
   const pricingConfig = await getPricingConfig()
 
@@ -147,7 +145,6 @@ export default async function VenueDetail({ params }: { params: Promise<{ id: st
     supabase.from('profiles').select('id, email, full_name').in('role', ['host', 'admin']).order('email'),
   ])
   const categories = (cats ?? []) as Category[]
-  const territories = territoryCtx.territories as Territory[]
   const hosts = (hostProfiles ?? []) as { id: string; email: string; full_name: string | null }[]
 
   const tier = venueTier(venue)
@@ -164,9 +161,7 @@ export default async function VenueDetail({ params }: { params: Promise<{ id: st
             <VenueDialog
               venue={venue}
               categories={categories}
-              territories={territories}
               hosts={hosts}
-              defaultTerritoryId={venue.territory_id}
               pricingConfig={pricingConfig}
             />
             <DeleteButton id={venue.id} action={deleteVenue} />
@@ -242,8 +237,10 @@ export default async function VenueDetail({ params }: { params: Promise<{ id: st
                   )}
                 </span>
               </p>
-              {!territoryCtx.activeId && venue.territory?.name && (
-                <p className="text-xs text-muted-foreground">Market: {venue.territory.name}</p>
+              {(venue.territory?.name || venue.county) && (
+                <p className="text-xs text-muted-foreground">
+                  {[venue.territory?.name, venue.county].filter(Boolean).join(' · ')}
+                </p>
               )}
             </CardContent>
           </Card>
