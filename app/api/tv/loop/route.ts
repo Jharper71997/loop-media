@@ -22,6 +22,8 @@ function baseUrl(req: Request): string {
 // checkout. Override via env if the destination changes.
 const BREWLOOP_OFFER_URL =
   process.env.NEXT_PUBLIC_BREWLOOP_OFFER_URL || 'https://jvillebrewloop.com'
+// The only market the Brew Loop slide may ever play in (see below).
+const BREWLOOP_MARKET = 'North Carolina'
 
 // The Loop Network "advertise on this screen" house-slide QR points at the
 // marketing site (not the in-app signup flow) — a business owner scans it to
@@ -277,10 +279,13 @@ export async function GET(req: Request) {
           ...creativeFields(advertiseRow),
         }
 
-  // Jville Brew Loop house ad ($5 off, scan to book) — on every screen whose
-  // market hasn't turned it off.
+  // Jville Brew Loop house ad ($5 off, scan to book) — NORTH CAROLINA ONLY. A
+  // Jacksonville shuttle means nothing to a room in Florida or Indiana, so this is
+  // a hard rule here rather than a setting: no house_creatives row, network-wide
+  // default or newly created market can put it on a screen outside NC. Inside NC a
+  // market row can still take it off.
   const brewloop =
-    brewloopRow?.mode === 'off'
+    tv.venue?.territory?.name !== BREWLOOP_MARKET || brewloopRow?.mode === 'off'
       ? null
       : {
           url: BREWLOOP_OFFER_URL,
