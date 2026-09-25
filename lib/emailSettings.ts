@@ -25,6 +25,7 @@ export type EmailKey =
   | 'monthly_report'
   | 'host_monthly_report'
   | 'screen_offline'
+  | 'host_screen_off'
   | 'screen_live'
   | 'host_screen_live'
 
@@ -149,14 +150,30 @@ export const EMAIL_CATALOG: EmailCatalogEntry[] = [
     key: 'screen_offline',
     label: 'Screen offline (host)',
     audience: 'Host',
-    description: 'Sent to a host when their screen stops checking in during open hours.',
+    description:
+      'Sent once to a host whose screen has been off for 3 days and who has no ads of their own running. Hosts with ads get "Host ads pulled" instead.',
     fields: ['subject', 'heading', 'body'],
-    placeholders: ['venue'],
+    placeholders: ['venue', 'days'],
     default: {
-      subject: 'Your Loop screen at {venue} looks offline',
-      heading: 'Your screen looks offline',
+      subject: 'Your Loop screen at {venue} has been off for {days} days',
+      heading: 'Your screen is off',
       body:
-        'The Loop screen at {venue} has not checked in for a little while during your open hours. It is usually a quick fix: unplug the Fire Stick, wait a few seconds, plug it back in, and make sure the TV input is on Loop.',
+        'The Loop screen at {venue} has not been on for {days} days. Turn your TV back on and make sure it is connected to the internet. If it still does not come up, unplug the Fire Stick, wait a few seconds, and plug it back in.',
+    },
+  },
+  {
+    key: 'host_screen_off',
+    label: 'Host ads pulled (screen off 3 days)',
+    audience: 'Host',
+    description:
+      "Sent once when a host's screen has been off for 3 days and their own ads come off the network. Their ads go back on automatically when the screen reconnects. Turning this off also stops ads being pulled.",
+    fields: ['subject', 'heading', 'body'],
+    placeholders: ['venue', 'days'],
+    default: {
+      subject: 'Your ad is off the Loop screens',
+      heading: 'Your advertisement is off the screens',
+      body:
+        'The Loop screen at {venue} has been off for {days} days, so your advertisement has come off the Loop Network screens. Turn your TV back on and connect it to the network to get your ad live again. It goes back on automatically as soon as your screen reconnects.',
     },
   },
   {

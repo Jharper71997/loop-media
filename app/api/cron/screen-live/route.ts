@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { appUrl } from '@/lib/stripe'
 import { sendEmail } from '@/lib/email'
 import { resolveEmail, escapeHtml } from '@/lib/emailSettings'
-import { runOfflineAlerts } from '@/lib/offlineAlerts'
+import { runHostScreenOff } from '@/lib/hostScreenOff'
 import { runFleetAlarm } from '@/lib/fleetAlarm'
 
 // "A new screen just went live near you" announcement — two emails, one trigger.
@@ -110,11 +110,13 @@ export async function GET(req: Request) {
   // Folded-in host offline-screen alerts (run on this daily cron to respect the
   // Hobby cron cap — see lib/offlineAlerts). Independent of the screen-live email
   // below; a failure here must never block it.
+  // Host screen off 3+ days (lib/hostScreenOff) replaced the daily 30-minute
+  // offline nudge: pulls the host's own ads and emails them once.
   let offline: unknown = null
   try {
-    offline = await runOfflineAlerts(admin, base, { dry, onlyVenue })
-  } catch {
-    offline = { ran: 0, sent: 0, skipped: 'error' }
+    offline = await runHostScreenOff(admin, base, { dry })
+  } catch (e) {
+    offline = { skipped: `error: ${(e as Error).message}` }
   }
 
   // Admin on/off gates. The advertiser announcement and the host one toggle

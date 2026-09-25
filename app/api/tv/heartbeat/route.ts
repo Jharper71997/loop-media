@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { deviceSecretOk } from '@/lib/tv'
 import { rateLimit } from '@/lib/rateLimit'
+import { restoreHostAdsForTv, OFF_AFTER_DAYS } from '@/lib/hostScreenOff'
 
 // Lightweight ping so admins see the screen as online + a fresh "last seen".
 export async function POST(req: Request) {
@@ -44,5 +45,14 @@ export async function POST(req: Request) {
   const elapsed = last ? Math.floor((now - last) / 1000) : 30
   const secs = Math.max(0, Math.min(elapsed, 60))
   if (secs > 0) await supabase.rpc('bump_tv_uptime', { p_tv: tv.id, p_secs: secs })
+
+  // Back after 3+ days off: if this screen's host had their ads pulled for it,
+  // put them back now rather than at the next daily run. Only the first beat
+  // after a long gap gets here, and it must never fail the beat.
+  if (last && now - last > OFF_AFTER_DAYS * 86_400_000) {
+    await restoreHostAdsForTv(supabase, tv.id).catch((e) =>
+      console.error('host ad restore failed for', tv.id, (e as Error).message)
+    )
+  }
   return NextResponse.json({ ok: true })
 }
