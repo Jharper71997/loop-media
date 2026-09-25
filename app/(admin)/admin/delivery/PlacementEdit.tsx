@@ -4,11 +4,13 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, X } from 'lucide-react'
 import { toast } from 'sonner'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ConfirmButton } from '@/components/admin/ConfirmButton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { addPlacement, removePlacement } from '../tvs/[id]/actions'
-import type { ScreenOption, Spot } from '@/lib/delivery'
+import { setHostVenue } from './actions'
+import type { ScreenOption, Spot, VenueOption } from '@/lib/delivery'
 
 // Take an ad off a screen, or put it on another one, without leaving this page.
 // Both reuse the screen page's own actions, so the rules are the same wherever
@@ -103,6 +105,91 @@ export function AddToScreen({
         }
       >
         {pending ? 'Adding…' : 'Add'}
+      </Button>
+      <Button variant="ghost" size="xs" onClick={() => setOpen(false)}>
+        Cancel
+      </Button>
+    </div>
+  )
+}
+
+// Mark an advertiser's ads as a venue host's own ad, or clear it. See
+// ../delivery/actions.ts for what that changes (and that screens do not).
+export function HostMark({
+  adIds,
+  hostVenueName,
+  suggestedVenueId,
+  venues,
+}: {
+  adIds: string[]
+  hostVenueName: string | null
+  suggestedVenueId: string | null
+  venues: VenueOption[]
+}) {
+  const router = useRouter()
+  const [open, setOpen] = useState(false)
+  const [venueId, setVenueId] = useState<string | null>(suggestedVenueId)
+  const [pending, start] = useTransition()
+
+  const save = (id: string | null) =>
+    start(async () => {
+      const { error } = await setHostVenue(adIds, id)
+      if (error) return void toast.error(error)
+      toast.success(id ? `Marked as host ad for ${venues.find((v) => v.id === id)?.name}` : 'No longer a host ad')
+      setOpen(false)
+      router.refresh()
+    })
+
+  if (hostVenueName) {
+    return (
+      <span className="inline-flex items-center gap-1">
+        <Badge variant="secondary">Host · {hostVenueName}</Badge>
+        <ConfirmButton
+          variant="ghost"
+          size="icon-xs"
+          className="size-4 text-muted-foreground"
+          aria-label="Not a host ad"
+          message="Not a host ad?"
+          description="It goes back to being treated as an advertiser's ad. Nothing changes on the screens."
+          confirmLabel="Remove host mark"
+          onConfirm={() => save(null)}
+        >
+          <X />
+        </ConfirmButton>
+      </span>
+    )
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+      >
+        Mark as host ad
+      </button>
+    )
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <Select value={venueId} onValueChange={(v) => setVenueId(v)}>
+        <SelectTrigger size="sm" className="min-w-44 text-xs">
+          <SelectValue>
+            {(v: string | null) => venues.find((x) => x.id === v)?.name ?? 'Which venue do they host?'}
+          </SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          {venues.map((v) => (
+            <SelectItem key={v.id} value={v.id}>
+              {v.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Button size="xs" disabled={!venueId || pending} onClick={() => save(venueId)}>
+        {pending ? 'Saving…' : 'Save'}
       </Button>
       <Button variant="ghost" size="xs" onClick={() => setOpen(false)}>
         Cancel

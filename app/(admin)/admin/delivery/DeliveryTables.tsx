@@ -6,8 +6,8 @@ import { Badge } from '@/components/ui/badge'
 import { DataTable, type Column, type SavedView } from '@/components/admin/DataTable'
 import { formatNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
-import type { AdvertiserDelivery, LocationDelivery, ScreenOption, Spot } from '@/lib/delivery'
-import { AddToScreen, RemoveSpot } from './PlacementEdit'
+import type { AdvertiserDelivery, LocationDelivery, ScreenOption, Spot, VenueOption } from '@/lib/delivery'
+import { AddToScreen, HostMark, RemoveSpot } from './PlacementEdit'
 
 // The two sides of lib/delivery.ts, kept deliberately plain: who, which screens,
 // how often it showed, how many scanned. Each screen chip has an ✕ to take the ad
@@ -61,7 +61,8 @@ const shown = (n: number | null) =>
 const ADVERTISER_VIEWS: SavedView<AdvertiserDelivery>[] = [
   { id: 'all', label: 'All', match: () => true },
   { id: 'dark', label: 'On a screen that is off', match: (r) => r.darkScreens > 0, tone: 'bad' },
-  { id: 'no-account', label: 'No account', match: (r) => r.noAccount, tone: 'warn' },
+  { id: 'host', label: 'Host ads', match: (r) => !!r.hostVenueName },
+  { id: 'no-account', label: 'No account', match: (r) => r.noAccount && !r.hostVenueName, tone: 'warn' },
 ]
 
 function Where({ r, screens }: { r: AdvertiserDelivery; screens: ScreenOption[] }) {
@@ -86,7 +87,7 @@ function Where({ r, screens }: { r: AdvertiserDelivery; screens: ScreenOption[] 
   )
 }
 
-const advertiserColumns = (screens: ScreenOption[]): Column<AdvertiserDelivery>[] => [
+const advertiserColumns = (screens: ScreenOption[], venues: VenueOption[]): Column<AdvertiserDelivery>[] => [
   {
     key: 'name',
     header: 'Advertiser',
@@ -101,12 +102,17 @@ const advertiserColumns = (screens: ScreenOption[]): Column<AdvertiserDelivery>[
         ) : (
           <div className="truncate font-medium">{r.name}</div>
         )}
-        {(r.noAccount || r.canceled) && (
-          <div className="mt-0.5 flex flex-wrap gap-1">
-            {r.noAccount && <Badge variant="warning">No account</Badge>}
-            {r.canceled && <Badge variant="destructive">Canceled, still airing</Badge>}
-          </div>
-        )}
+        <div className="mt-0.5 flex flex-wrap items-center gap-1">
+          {/* A host's own ad airs on the hosting deal, so neither flag applies. */}
+          {!r.hostVenueName && r.noAccount && <Badge variant="warning">No account</Badge>}
+          {!r.hostVenueName && r.canceled && <Badge variant="destructive">Canceled, still airing</Badge>}
+          <HostMark
+            adIds={[...new Set(r.spots.map((s) => s.adId))]}
+            hostVenueName={r.hostVenueName}
+            suggestedVenueId={r.suggestedVenueId}
+            venues={venues}
+          />
+        </div>
         {/* Phones: the screens column is hidden, so it sits under the name. */}
         <div className="mt-1.5 md:hidden">
           <Where r={r} screens={screens} />
@@ -137,8 +143,16 @@ const advertiserColumns = (screens: ScreenOption[]): Column<AdvertiserDelivery>[
   },
 ]
 
-export function ByAdvertiserTable({ rows, screens }: { rows: AdvertiserDelivery[]; screens: ScreenOption[] }) {
-  const columns = useMemo(() => advertiserColumns(screens), [screens])
+export function ByAdvertiserTable({
+  rows,
+  screens,
+  venues,
+}: {
+  rows: AdvertiserDelivery[]
+  screens: ScreenOption[]
+  venues: VenueOption[]
+}) {
+  const columns = useMemo(() => advertiserColumns(screens, venues), [screens, venues])
   return (
     <DataTable
       rows={rows}
