@@ -203,6 +203,7 @@ export const loadAdminReports = cache(
     // ---- Mix: how live money actually arrives ----
     const mix = billingRows.reduce(
       (acc, r) => {
+        if (r.billing.method === 'host') return acc
         const k =
           r.billing.method === 'comp'
             ? 'comp'

@@ -426,7 +426,7 @@ export const loadCases = cache(async (territoryId: string | null): Promise<CaseB
   const methodByCampaign = new Map(billing.map((b) => [b.campaignId, b.billing.method]))
   const isFree = (id: string) => {
     const m = methodByCampaign.get(id)
-    return m === 'comp' || m === 'unbilled'
+    return m === 'comp' || m === 'unbilled' || m === 'host'
   }
 
   // Delivery money that no screen case is already carrying. See the atRisk

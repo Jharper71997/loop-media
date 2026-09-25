@@ -12,6 +12,7 @@ import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { isTvLive } from '@/lib/format'
 import { resolveBilling, billingAction, type BillingState } from '@/lib/billing'
+import { FREE_SCREENS_PER_HOSTED_TV } from '@/lib/hostComp'
 import { getSetting } from '@/lib/settings.server'
 import { loadDueFollowUps } from '@/lib/opportunities'
 
@@ -83,7 +84,18 @@ export interface BillingRow {
   advertiserId: string
   advertiserName: string
   adTitle: string
+  /**
+   * What the account actually brings in each month. For a host this is the list
+   * price less the screens their hosting perk covers, so a host running their
+   * two free screens reads $0 here rather than inflating MRR.
+   */
   monthlyCents: number
+  /** The cart price stored on the campaign, before the host perk. */
+  listCents: number
+  /** Screens the campaign is on right now. */
+  screens: number
+  /** Of those, how many the hosting perk covers. 0 for anyone who hosts nothing. */
+  hostFreeScreens: number
   billing: BillingState
 }
 
@@ -104,13 +116,60 @@ export const loadBillingRows = cache(async (territoryId: string | null): Promise
   if (!campaigns.length) return []
 
   const ids = campaigns.map((c) => c.id)
-  const [{ data: subData }, { data: payData }] = await Promise.all([
+  const advertiserIds = [...new Set(campaigns.map((c) => c.advertiser_id))]
+  const [{ data: subData }, { data: payData }, { data: placeData }, { data: hostVenues }] = await Promise.all([
     supabase
       .from('subscriptions')
       .select('campaign_id, status, stripe_subscription_id, current_period_end')
       .in('campaign_id', ids),
     supabase.from('payments').select('campaign_id, paid_at').in('campaign_id', ids),
+    supabase.from('ad_placements').select('campaign_id').eq('status', 'active').in('campaign_id', ids),
+    // Every venue these accounts host, in any market. The perk is earned by a
+    // screen actually up in their room, so count screens that have checked in at
+    // least once, not the venue's status: the Dragon venues are marked inactive
+    // while their screens play thousands of ads a month, and a paired-but-never-
+    // connected screen has earned nothing yet.
+    supabase
+      .from('venues')
+      .select('host_user_id, is_demo, tvs(id, last_heartbeat_at)')
+      .in('host_user_id', advertiserIds),
   ])
+
+  const screensByCampaign = new Map<string, number>()
+  for (const p of (placeData ?? []) as { campaign_id: string | null }[]) {
+    if (p.campaign_id) screensByCampaign.set(p.campaign_id, (screensByCampaign.get(p.campaign_id) ?? 0) + 1)
+  }
+
+  // Hosting perk: two free advertising screens per screen a host puts up.
+  const allowanceLeft = new Map<string, number>()
+  for (const v of (hostVenues ?? []) as {
+    host_user_id: string
+    is_demo: boolean
+    tvs: { id: string; last_heartbeat_at: string | null }[] | null
+  }[]) {
+    if (v.is_demo) continue
+    const hosted = (v.tvs ?? []).filter((t) => t.last_heartbeat_at).length
+    allowanceLeft.set(
+      v.host_user_id,
+      (allowanceLeft.get(v.host_user_id) ?? 0) + hosted * FREE_SCREENS_PER_HOSTED_TV
+    )
+  }
+  // Spend it on campaigns that are free anyway (comped or $0) first, so a
+  // host's comp does not leave a paid campaign looking covered, then oldest
+  // campaign first so the answer is stable from one load to the next.
+  const hostFreeByCampaign = new Map<string, number>()
+  const byFreeFirst = [...campaigns].sort(
+    (a, b) =>
+      Number(!(a.comp_until || !a.monthly_total_cents)) - Number(!(b.comp_until || !b.monthly_total_cents)) ||
+      a.id.localeCompare(b.id)
+  )
+  for (const c of byFreeFirst) {
+    const left = allowanceLeft.get(c.advertiser_id) ?? 0
+    if (!left) continue
+    const covered = Math.min(left, screensByCampaign.get(c.id) ?? 0)
+    hostFreeByCampaign.set(c.id, covered)
+    allowanceLeft.set(c.advertiser_id, left - covered)
+  }
 
   const subByCampaign = new Map<
     string,
@@ -143,24 +202,47 @@ export const loadBillingRows = cache(async (territoryId: string | null): Promise
     .map((c) => {
       const sub = subByCampaign.get(c.id)
       const adv = one(c.advertiser)
+      const listCents = c.monthly_total_cents ?? 0
+      const screens = screensByCampaign.get(c.id) ?? 0
+      const hostFreeScreens = hostFreeByCampaign.get(c.id) ?? 0
+      const billing = resolveBilling(
+        {
+          campaignStatus: c.status,
+          compUntil: c.comp_until,
+          stripeSubscriptionId: sub?.stripe_subscription_id ?? null,
+          subscriptionStatus: sub?.status ?? null,
+          currentPeriodEnd: sub?.current_period_end ?? null,
+          lastPaidAt: lastPaidByCampaign.get(c.id) ?? null,
+        },
+        now,
+        dueSoonDays
+      )
+      // Fully covered and not an explicit comp: this is the hosting deal, not a
+      // bill. Partly covered: they pay for the screens past the allowance only.
+      const fullyCovered = screens > 0 && hostFreeScreens >= screens
       return {
         campaignId: c.id,
         advertiserId: c.advertiser_id,
         advertiserName: adv?.full_name ?? adv?.email ?? 'Unknown',
         adTitle: one(c.ad)?.title ?? 'Untitled ad',
-        monthlyCents: c.monthly_total_cents ?? 0,
-        billing: resolveBilling(
-          {
-            campaignStatus: c.status,
-            compUntil: c.comp_until,
-            stripeSubscriptionId: sub?.stripe_subscription_id ?? null,
-            subscriptionStatus: sub?.status ?? null,
-            currentPeriodEnd: sub?.current_period_end ?? null,
-            lastPaidAt: lastPaidByCampaign.get(c.id) ?? null,
-          },
-          now,
-          dueSoonDays
-        ),
+        monthlyCents: fullyCovered
+          ? 0
+          : screens > 0
+            ? Math.round((listCents * (screens - hostFreeScreens)) / screens)
+            : listCents,
+        listCents,
+        screens,
+        hostFreeScreens,
+        billing:
+          fullyCovered && billing.method !== 'comp'
+            ? {
+                method: 'host' as const,
+                paidThrough: null,
+                daysLeft: null,
+                health: 'ok' as const,
+                summary: `Host perk, ${hostFreeScreens} free screen${hostFreeScreens === 1 ? '' : 's'}`,
+              }
+            : billing,
       }
     })
     .sort((a, b) => {

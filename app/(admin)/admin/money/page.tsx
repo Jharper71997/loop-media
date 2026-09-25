@@ -74,7 +74,10 @@ export default async function MoneyPage({
   const momPct = lastMonth > 0 ? Math.round(((thisMonth - lastMonth) / lastMonth) * 100) : null
   const payingAdvertisers = new Set(payments.map((p) => p.advertiser_id).filter(Boolean)).size
 
-  const billed = rows.filter((r) => r.billing.method !== 'comp' && r.billing.method !== 'unbilled')
+  // Host-perk rows are $0 by construction; leaving them in would count hosts as paying accounts.
+  const billed = rows.filter(
+    (r) => r.billing.method !== 'comp' && r.billing.method !== 'unbilled' && r.billing.method !== 'host'
+  )
   const mrr = billed.reduce((a, r) => a + r.monthlyCents, 0)
   const compedMrr = rows
     .filter((r) => r.billing.method === 'comp')
