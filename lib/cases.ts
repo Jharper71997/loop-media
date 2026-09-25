@@ -507,13 +507,13 @@ export const loadCases = cache(async (territoryId: string | null): Promise<CaseB
     const { data: ghostRows } = await supabase
       .from('ad_placements')
       .select(
-        'tv_id, ad:ads(title), campaign:campaigns(id, status, deleted_at, monthly_total_cents, advertiser:profiles!advertiser_id(id, full_name, email))'
+        'tv_id, ad:ads(title, host_venue_id), campaign:campaigns(id, status, deleted_at, monthly_total_cents, advertiser:profiles!advertiser_id(id, full_name, email))'
       )
       .eq('status', 'active')
       .not('campaign_id', 'is', null)
     type GhostRow = {
       tv_id: string
-      ad: { title: string } | { title: string }[] | null
+      ad: { title: string; host_venue_id: string | null } | { title: string; host_venue_id: string | null }[] | null
       campaign:
         | {
             id: string
@@ -536,6 +536,9 @@ export const loadCases = cache(async (territoryId: string | null): Promise<CaseB
       if (!c) continue
       const dead = !!c.deleted_at || (c.status !== 'active' && c.status !== 'paused')
       if (!dead) continue
+      // Marked as a host's own ad (Where ads run → Mark as host ad): it airs on
+      // the hosting deal, not the campaign, so an ended campaign is expected.
+      if (pick(raw.ad)?.host_venue_id) continue
       const adv = pick(c.advertiser)
       const cur = byCampaign.get(c.id) ?? {
         name: adv?.full_name ?? adv?.email ?? 'Unknown advertiser',

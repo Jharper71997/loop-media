@@ -21,7 +21,7 @@ export default async function DeliveryPage({
   const territory = await getTerritoryContext(profile)
   const { by } = await searchParams
   const byLocation = by === 'location'
-  const { byAdvertiser, byLocation: locations, screens, totals } = await loadDelivery(territory.activeId)
+  const { byAdvertiser, byLocation: locations, screens, venues, totals } = await loadDelivery(territory.activeId)
 
   return (
     <>
@@ -60,7 +60,7 @@ export default async function DeliveryPage({
           ))}
         </div>
 
-        {byLocation ? <ByLocationTable rows={locations} /> : <ByAdvertiserTable rows={byAdvertiser} screens={screens} />}
+        {byLocation ? <ByLocationTable rows={locations} /> : <ByAdvertiserTable rows={byAdvertiser} screens={screens} venues={venues} />}
       </HudBody>
     </>
   )

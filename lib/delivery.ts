@@ -39,6 +39,9 @@ export interface Spot {
   noAccount: boolean
   /** Campaign ended but the ad is still on the screen. */
   canceled: boolean
+  /** Set when the ad is marked as a venue host's own ad (ads.host_venue_id). */
+  hostVenueId: string | null
+  hostVenueName: string | null
   tvId: string
   venueId: string
   venueName: string
@@ -57,6 +60,10 @@ export interface AdvertiserDelivery {
   href: string | null
   noAccount: boolean
   canceled: boolean
+  /** The venue whose host this is, when their ad is marked as a host ad. */
+  hostVenueName: string | null
+  /** Best guess at the venue to offer when marking them as a host. */
+  suggestedVenueId: string | null
   monthlyCents: number
   /** Comped or never billed: running, but not revenue. */
   free: boolean
@@ -95,10 +102,16 @@ export interface ScreenOption {
   dark: boolean
 }
 
+export interface VenueOption {
+  id: string
+  name: string
+}
+
 export interface Delivery {
   byAdvertiser: AdvertiserDelivery[]
   byLocation: LocationDelivery[]
   screens: ScreenOption[]
+  venues: VenueOption[]
   totals: {
     advertisers: number
     ads: number
@@ -173,6 +186,8 @@ type PlacementRow = {
     status: string
     owner_kind: string
     owner_user_id: string | null
+    host_venue_id: string | null
+    host_venue: { name: string } | { name: string }[] | null
     owner: { full_name: string | null; email: string; is_demo: boolean; role: string } | null
   } | null
   tv: {
@@ -191,17 +206,18 @@ export const loadDelivery = cache(async (territoryId: string | null): Promise<De
   since.setUTCMinutes(0, 0, 0)
   const sinceISO = since.toISOString()
 
-  const [{ data: placeData }, billing, { data: tvData }] = await Promise.all([
+  const [{ data: placeData }, billing, { data: venueData }, { data: tvData }] = await Promise.all([
     admin
       .from('ad_placements')
       .select(
         `id, ad_id, tv_id, campaign_id, campaign:campaigns(status),
-         ad:ads(title, status, owner_kind, owner_user_id, owner:profiles!owner_user_id(full_name, email, is_demo, role)),
+         ad:ads(title, status, owner_kind, owner_user_id, host_venue_id, host_venue:venues!host_venue_id(name), owner:profiles!owner_user_id(full_name, email, is_demo, role)),
          tv:tvs(id, venue_id, last_heartbeat_at, loop_length_seconds, slot_seconds,
            venue:venues(id, name, territory_id, business_open, business_close, business_days, business_hours))`
       )
       .eq('status', 'active'),
     loadBillingRows(territoryId),
+    admin.from('venues').select('id, name, host_user_id, territory_id, is_demo').order('name'),
     // Every screen, placed or not, for the picker.
     admin
       .from('tvs')
@@ -225,7 +241,8 @@ export const loadDelivery = cache(async (territoryId: string | null): Promise<De
       (p) =>
         p.ad &&
         p.tv?.venue &&
-        p.ad.owner_kind === 'advertiser' &&
+        // Advertiser ads and host promos both take real slots on real screens.
+        (p.ad.owner_kind === 'advertiser' || p.ad.owner_kind === 'host') &&
         p.ad.owner_user_id &&
         AIRING.includes(p.ad.status) &&
         !one(p.ad.owner)?.is_demo &&
@@ -290,6 +307,8 @@ export const loadDelivery = cache(async (territoryId: string | null): Promise<De
         : owner?.full_name || owner?.email || 'Unknown advertiser',
       noAccount,
       canceled: p.campaign?.status === 'canceled',
+      hostVenueId: p.ad!.host_venue_id,
+      hostVenueName: one(p.ad!.host_venue)?.name ?? null,
       tvId: tv.id,
       venueId: venue.id,
       venueName: venue.name,
@@ -300,6 +319,28 @@ export const loadDelivery = cache(async (territoryId: string | null): Promise<De
       scans: scansBySpot.get(`${p.ad_id}:${p.tv_id}`) ?? 0,
     }
   })
+
+  // ---- venues, for "Mark as host ad" ----
+  const allVenues = ((venueData ?? []) as {
+    id: string
+    name: string
+    host_user_id: string | null
+    territory_id: string
+    is_demo: boolean
+  }[]).filter((v) => !v.is_demo && (!territoryId || v.territory_id === territoryId))
+  const norm = (x: string) => x.toLowerCase().replace(/[^a-z0-9]/g, '')
+  // The venue they host, if they are a host; else a venue whose name matches the
+  // business ("El Cerro Tacos" the ad → El Cerro Tacos the venue).
+  const suggestVenue = (advertiserId: string, list: Spot[]): string | null => {
+    const hosted = allVenues.find((v) => v.host_user_id === advertiserId)
+    if (hosted) return hosted.id
+    const n = norm(list[0].advertiserName)
+    const byName = allVenues.find((v) => {
+      const vn = norm(v.name)
+      return n.length >= 4 && vn.length >= 4 && (vn.startsWith(n) || n.startsWith(vn))
+    })
+    return byName?.id ?? null
+  }
 
   // ---- by advertiser ----
   const billingByAdvertiser = new Map<string, typeof billing>()
@@ -320,6 +361,8 @@ export const loadDelivery = cache(async (territoryId: string | null): Promise<De
       href: list[0].noAccount ? null : `/admin/advertisers/${id}`,
       noAccount: list[0].noAccount,
       canceled: list.some((s) => s.canceled),
+      hostVenueName: list.find((s) => s.hostVenueName)?.hostVenueName ?? null,
+      suggestedVenueId: suggestVenue(id, list),
       monthlyCents: bills.reduce((s, b) => s + b.monthlyCents, 0),
       free,
       method: methods[0] ?? null,
@@ -394,6 +437,7 @@ export const loadDelivery = cache(async (territoryId: string | null): Promise<De
     byAdvertiser,
     byLocation,
     screens,
+    venues: allVenues.map((v) => ({ id: v.id, name: v.name })),
     totals: {
       advertisers: byAdvertiser.length,
       ads: adIds.length,

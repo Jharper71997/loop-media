@@ -68,9 +68,18 @@ export const loadHostBenefits = cache(
     // reported every one of those hosts as owed screens they already had.
     // Free = the screens their perk covers, plus every screen on a campaign that
     // is free anyway (comped or priced at nothing).
-    const [{ data: profiles }, billing] = await Promise.all([
+    const [{ data: profiles }, billing, { data: hostAdPlaces }] = await Promise.all([
       supabase.from('profiles').select('id, full_name, email, phone').in('id', hostIds),
       loadBillingRows(territoryId),
+      // Ads marked as a host's own (ads.host_venue_id) that are on screens.
+      supabase
+        .from('ad_placements')
+        .select('campaign_id, ad:ads!inner(host_venue_id)')
+        .eq('status', 'active')
+        .in(
+          'ad.host_venue_id',
+          venues.map((v) => v.id)
+        ),
     ])
     const profileById = new Map(
       ((profiles ?? []) as { id: string; full_name: string | null; email: string; phone: string | null }[]).map(
@@ -84,6 +93,19 @@ export const loadHostBenefits = cache(
       if (!hostSet.has(r.advertiserId)) continue
       const free = r.billing.method === 'comp' || r.listCents === 0 ? r.screens : r.hostFreeScreens
       usingByHost.set(r.advertiserId, (usingByHost.get(r.advertiserId) ?? 0) + free)
+    }
+    // Host ads outside a live campaign (none, or canceled) are free screens the
+    // host is using too. Ones on a live campaign were counted above.
+    const liveCampaigns = new Set(billing.map((b) => b.campaignId))
+    const hostByVenue = new Map(venues.map((v) => [v.id, v.host_user_id!]))
+    for (const p of (hostAdPlaces ?? []) as unknown as {
+      campaign_id: string | null
+      ad: { host_venue_id: string | null } | { host_venue_id: string | null }[] | null
+    }[]) {
+      if (p.campaign_id && liveCampaigns.has(p.campaign_id)) continue
+      const ad = Array.isArray(p.ad) ? p.ad[0] : p.ad
+      const host = ad?.host_venue_id ? hostByVenue.get(ad.host_venue_id) : undefined
+      if (host) usingByHost.set(host, (usingByHost.get(host) ?? 0) + 1)
     }
 
     return hostIds
