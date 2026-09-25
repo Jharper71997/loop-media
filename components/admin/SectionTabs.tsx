@@ -72,6 +72,7 @@ export const SELL_TABS: SectionTab[] = [
   { href: '/admin/sell', label: 'Call list' },
   { href: '/admin/pipeline', label: 'Pipeline' },
   { href: '/admin/advertisers', label: 'Advertisers' },
+  { href: '/admin/delivery', label: 'Where ads run' },
   { href: '/admin/reports', label: 'Reports' },
 ]
 

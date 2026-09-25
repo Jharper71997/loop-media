@@ -88,6 +88,12 @@ const GROUPS: Group[] = [
         icon: Users,
       },
       {
+        href: '/admin/delivery',
+        label: 'Where ads run',
+        detail: 'Every ad on every screen, with plays and scans, in one grid.',
+        icon: Map,
+      },
+      {
         href: '/admin/pipeline',
         label: 'Pipeline',
         detail: 'Prospects mid-conversation, by stage, for both advertisers and venues.',

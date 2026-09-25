@@ -71,7 +71,7 @@ export const VERBS: NavItem[] = [
     href: '/admin/sell',
     label: 'Sell',
     icon: PhoneCall,
-    match: ['/admin/pipeline', '/admin/advertisers', '/admin/deals', '/admin/reports'],
+    match: ['/admin/pipeline', '/admin/advertisers', '/admin/delivery', '/admin/deals', '/admin/reports'],
   },
   {
     href: '/admin/ship',
