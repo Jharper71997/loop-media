@@ -82,13 +82,17 @@ export function riskyVideoNotice(file: File | null): string | null {
 // other advertiser on that screen — a 3-minute clip meant 3 minutes of one ad.
 export const MAX_SPOT_SECONDS = 15
 
+// A host's own promo on their own screen may run longer: it's their screen and a
+// free perk, so a 30s clip plays in full instead of being cut at the paid slot.
+export const HOST_PROMO_MAX_SECONDS = 30
+
 // Whole seconds, clamped into (0, MAX_SPOT_SECONDS]. Rounds UP so a clip is never
 // cut a hair early by its own stored length. ads.duration_seconds is
 // `int not null check (> 0)`, so an unreadable file (0/NaN) must never reach the
 // insert — those fall back to the full slot rather than failing the check.
-export function clampSpotSeconds(secs: number): number {
-  if (!Number.isFinite(secs) || secs <= 0) return MAX_SPOT_SECONDS
-  return Math.min(Math.ceil(secs), MAX_SPOT_SECONDS)
+export function clampSpotSeconds(secs: number, max: number = MAX_SPOT_SECONDS): number {
+  if (!Number.isFinite(secs) || secs <= 0) return max
+  return Math.min(Math.ceil(secs), max)
 }
 
 // A video file's real length in seconds, read off its metadata in the browser, so
