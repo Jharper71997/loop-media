@@ -5,7 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { requireProfile } from '@/lib/auth'
 import { activatePlacementsIfReady } from '@/lib/placement'
 import { getActiveOwnScreenPromos } from '@/lib/ownPromo'
-import { QR_SIZE_DEFAULT } from '@/lib/adCreative'
+import { QR_SIZE_DEFAULT, HOST_PROMO_MAX_SECONDS, clampSpotSeconds } from '@/lib/adCreative'
 
 export interface OwnPromoInput {
   venue_id: string
@@ -13,6 +13,9 @@ export interface OwnPromoInput {
   qr_target_url: string
   creative_type: 'video' | 'image' | null
   creative_url: string | null
+  // Video length in seconds (clamped to HOST_PROMO_MAX_SECONDS). Omitted for
+  // images, which keep the DB default.
+  duration_seconds?: number
   // Free-drag QR center + size as fractions of the 16:9 frame (defaults to the
   // bottom-right corner at the standard size when not positioned).
   qr_x?: number
@@ -79,6 +82,9 @@ export async function submitOwnScreenPromo(input: OwnPromoInput): Promise<OwnPro
       title: input.title.trim(),
       creative_type: input.creative_type ?? 'image',
       creative_url: input.creative_url,
+      ...(input.duration_seconds
+        ? { duration_seconds: clampSpotSeconds(input.duration_seconds, HOST_PROMO_MAX_SECONDS) }
+        : {}),
       status: 'active',
       qr_target_url: input.qr_target_url.trim(),
       qr_x: input.qr_x ?? 0.9,

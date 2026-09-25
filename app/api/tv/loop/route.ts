@@ -155,7 +155,7 @@ export async function GET(req: Request) {
   const { data: placements } = await supabase
     .from('ad_placements')
     .select(
-      'slot_position, ad:ads(id, title, creative_type, creative_url, duration_seconds, qr_target_url, qr_x, qr_y, qr_size, status)'
+      'slot_position, ad:ads(id, title, creative_type, creative_url, duration_seconds, qr_target_url, qr_x, qr_y, qr_size, status, owner_kind)'
     )
     .eq('tv_id', tv.id)
     .eq('status', 'active')
@@ -174,6 +174,7 @@ export async function GET(req: Request) {
       qr_y: number | null
       qr_size: number | null
       status: string
+      owner_kind: string | null
     } | null
   }
 
@@ -203,6 +204,7 @@ export async function GET(req: Request) {
         creative_type: ad.creative_type,
         creative_url: ad.creative_url as string,
         duration: ad.duration_seconds || tv.slot_seconds,
+        host_promo: ad.owner_kind === 'host',
         qr: ad.qr_target_url,
         qr_image,
         qr_x: ad.qr_x ?? 0.9,

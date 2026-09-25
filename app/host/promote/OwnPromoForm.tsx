@@ -14,6 +14,9 @@ import {
   QR_SIZE_DEFAULT,
   exportImageBlob,
   validateCreativeFile,
+  readVideoDuration,
+  clampSpotSeconds,
+  HOST_PROMO_MAX_SECONDS,
   CREATIVE_ACCEPT,
 } from '@/lib/adCreative'
 import { CreativeImageEditor, type CreativeImageEditorHandle } from '@/components/app/CreativeImageEditor'
@@ -140,6 +143,11 @@ export function OwnPromoForm({
       }
       const creative_url = supabase.storage.from('creatives').getPublicUrl(path).data.publicUrl
 
+      // Videos run their real length, up to the host ceiling; images keep the default.
+      const duration_seconds = isVideo
+        ? clampSpotSeconds(await readVideoDuration(file), HOST_PROMO_MAX_SECONDS)
+        : undefined
+
       setStatusMsg('Putting it on your screen…')
       const res = await submitOwnScreenPromo({
         venue_id: venueId,
@@ -147,6 +155,7 @@ export function OwnPromoForm({
         qr_target_url: qrTarget,
         creative_type: isVideo ? 'video' : 'image',
         creative_url,
+        duration_seconds,
         qr_x: QR_DEFAULT.x,
         qr_y: QR_DEFAULT.y,
         qr_size: QR_SIZE_DEFAULT,

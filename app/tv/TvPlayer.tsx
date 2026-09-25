@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Image from 'next/image'
-import { QR_SIZE_DEFAULT } from '@/lib/adCreative'
+import { QR_SIZE_DEFAULT, HOST_PROMO_MAX_SECONDS } from '@/lib/adCreative'
 import { QrChip } from '@/components/app/QrChip'
 import { CreativeVideo } from '@/components/app/CreativeVideo'
 import { ANSWER_SECONDS, ROUND_SECONDS, pointsWithMsLeft } from '@/lib/trivia'
@@ -62,6 +62,9 @@ type AdItem = {
   creative_type: 'video' | 'image'
   creative_url: string
   duration: number
+  // The host's own promo on their own screen: may outrun the paid slot (older
+  // cached manifests omit it).
+  host_promo?: boolean
   qr: string | null
   qr_image: string | null
   // Free-drag QR center as fractions [0,1] of the 16:9 frame (older cached
@@ -906,7 +909,13 @@ function Player({
             // Never longer than the slot this screen sells, even if the ad's stored
             // duration says otherwise (a legacy ad predating the upload-time trim, or
             // an admin override). The slot is the contract; the ad bends to it.
-            cutMs={Math.min(slide.duration, manifest.tv.slot_seconds || 15) * 1000}
+            // A host's own promo is the exception: it runs up to the host ceiling.
+            cutMs={
+              Math.min(
+                slide.duration,
+                slide.host_promo ? HOST_PROMO_MAX_SECONDS : manifest.tv.slot_seconds || 15
+              ) * 1000
+            }
             onDone={advance}
           />
         ) : (
