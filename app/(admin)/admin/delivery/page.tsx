@@ -4,7 +4,7 @@ import { getTerritoryContext } from '@/lib/territory'
 import { PageHeader } from '@/components/admin/PageHeader'
 import { SectionTabs, SELL_TABS } from '@/components/admin/SectionTabs'
 import { HudBody, StatStrip, Stat } from '@/components/admin/hud'
-import { loadDelivery, DELIVERY_WINDOW_DAYS } from '@/lib/delivery'
+import { loadDelivery } from '@/lib/delivery'
 import { formatNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { ByAdvertiserTable, ByLocationTable } from './DeliveryTables'
@@ -21,34 +21,24 @@ export default async function DeliveryPage({
   const territory = await getTerritoryContext(profile)
   const { by } = await searchParams
   const byLocation = by === 'location'
-  const { byAdvertiser, byLocation: locations, totals } = await loadDelivery(territory.activeId)
-  const noAccount = byAdvertiser.filter((a) => a.noAccount).length
+  const { byAdvertiser, byLocation: locations, screens, totals } = await loadDelivery(territory.activeId)
 
   return (
     <>
       <PageHeader
         title="Where ads run"
-        description={`${totals.ads} ads on ${totals.screens} screens at ${totals.locations} locations · last ${DELIVERY_WINDOW_DAYS} days`}
+        description="Which screens each ad is on. Tap ✕ to take an ad off a screen."
       />
       <SectionTabs tabs={SELL_TABS} />
       <HudBody>
-        <StatStrip cols={6}>
+        <StatStrip cols={3} className="grid-cols-3">
           <Stat label="Advertisers on air" value={formatNumber(totals.advertisers)} />
-          <Stat label="Screens carrying ads" value={formatNumber(totals.screens)} />
+          <Stat label="Screens playing ads" value={formatNumber(totals.screens)} />
           <Stat
-            label="Dark right now"
+            label="Screens off right now"
             value={formatNumber(totals.darkScreens)}
             tone={totals.darkScreens ? 'bad' : 'good'}
             href="/admin/uptime"
-          />
-          <Stat label={`Shown ${DELIVERY_WINDOW_DAYS}d`} value={formatNumber(totals.plays)} title="Measured plays, all hours" />
-          <Stat label={`Scans ${DELIVERY_WINDOW_DAYS}d`} value={formatNumber(totals.scans)} title="Measured QR scans, bots excluded" />
-          <Stat
-            label="No account"
-            value={formatNumber(noAccount)}
-            tone={noAccount ? 'warn' : undefined}
-            sub="Placed from your login"
-            title="Ads on your admin login with no campaign. Billing and the Advertisers list cannot see them."
           />
         </StatStrip>
 
@@ -70,7 +60,7 @@ export default async function DeliveryPage({
           ))}
         </div>
 
-        {byLocation ? <ByLocationTable rows={locations} /> : <ByAdvertiserTable rows={byAdvertiser} />}
+        {byLocation ? <ByLocationTable rows={locations} /> : <ByAdvertiserTable rows={byAdvertiser} screens={screens} />}
       </HudBody>
     </>
   )

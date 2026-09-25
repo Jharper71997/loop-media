@@ -1,44 +1,58 @@
 'use client'
 
+import { useMemo } from 'react'
 import Link from 'next/link'
 import { Badge } from '@/components/ui/badge'
 import { DataTable, type Column, type SavedView } from '@/components/admin/DataTable'
-import { formatCents, formatNumber } from '@/lib/format'
+import { formatNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
-import type { AdvertiserDelivery, LocationDelivery, Spot } from '@/lib/delivery'
+import type { AdvertiserDelivery, LocationDelivery, ScreenOption, Spot } from '@/lib/delivery'
+import { AddToScreen, RemoveSpot } from './PlacementEdit'
 
-// The two sides of lib/delivery.ts. The "where" column is the point of the page:
-// every screen an ad is on, with what it did there, without opening a screen.
+// The two sides of lib/delivery.ts, kept deliberately plain: who, which screens,
+// how often it showed, how many scanned. Each screen chip has an ✕ to take the ad
+// off; "Add to a screen" puts it on another. Per-screen play counts live in the
+// chip's tooltip and on the screen page; billing lives on Advertisers.
+//
+// No row link on either table: the rows are where you edit placements, and a
+// row-wide link would swallow the ✕ and Add buttons. The name links instead.
 
-function SpotChips({ spots, label }: { spots: Spot[]; label: (s: Spot) => string }) {
+function ScreenChips({ spots, label }: { spots: Spot[]; label: (s: Spot) => string }) {
   return (
     <div className="flex flex-wrap gap-1">
       {spots.map((s) => (
-        <Link
-          key={`${s.adId}:${s.tvId}`}
-          href={`/admin/tvs/${s.tvId}`}
-          title={`${s.adTitle} on ${s.screenLabel}${s.dark ? ' · screen is dark' : ''}${s.canceled ? ' · campaign canceled' : ''}`}
+        <span
+          key={s.placementId}
           className={cn(
-            'inline-flex items-center gap-1.5 rounded-md border px-1.5 py-0.5 text-[11px] transition-colors hover:bg-accent/60',
-            s.dark ? 'border-destructive/50' : 'border-border'
+            'inline-flex items-center gap-1 rounded-md border py-0.5 pr-0.5 pl-1.5 text-xs',
+            s.dark ? 'border-destructive/60 text-destructive' : 'border-border'
           )}
         >
-          <span
-            className={cn('size-1.5 shrink-0 rounded-full', s.dark ? 'bg-destructive' : 'bg-success')}
-            aria-hidden
-          />
-          <span className="max-w-40 truncate">{label(s)}</span>
-          <span className="font-mono tabular-nums text-muted-foreground">{formatNumber(s.plays)}</span>
-          {s.scans > 0 && (
-            <span className="font-mono tabular-nums text-primary">{s.scans} scan{s.scans === 1 ? '' : 's'}</span>
-          )}
-        </Link>
+          <Link
+            href={`/admin/tvs/${s.tvId}`}
+            title={`${s.adTitle} on ${s.screenLabel}: ${s.plays == null ? 'count unavailable' : `shown ${formatNumber(s.plays)} times in 30 days`}${s.dark ? ' · screen is off right now' : ''}`}
+            className="max-w-44 truncate hover:underline"
+          >
+            {label(s)}
+            {s.dark && ' (off)'}
+          </Link>
+          <RemoveSpot spot={s} />
+        </span>
       ))}
     </div>
   )
 }
 
-const dash = <span className="text-muted-foreground">—</span>
+const shown = (n: number | null) =>
+  n == null ? (
+    <span className="text-muted-foreground" title="Still counting. Refresh in a minute.">
+      …
+    </span>
+  ) : n ? (
+    formatNumber(n)
+  ) : (
+    <span className="text-muted-foreground">0</span>
+  )
 
 // ---------------------------------------------------------------------------
 // By advertiser
@@ -46,113 +60,96 @@ const dash = <span className="text-muted-foreground">—</span>
 
 const ADVERTISER_VIEWS: SavedView<AdvertiserDelivery>[] = [
   { id: 'all', label: 'All', match: () => true },
-  { id: 'paying', label: 'Paying', match: (r) => !r.free },
-  { id: 'free', label: 'Comped / unbilled', match: (r) => r.free && !r.noAccount && r.method !== 'host' },
-  { id: 'host', label: 'Host perk', match: (r) => r.method === 'host' },
+  { id: 'dark', label: 'On a screen that is off', match: (r) => r.darkScreens > 0, tone: 'bad' },
   { id: 'no-account', label: 'No account', match: (r) => r.noAccount, tone: 'warn' },
-  { id: 'dark', label: 'On a dark screen', match: (r) => r.darkScreens > 0, tone: 'bad' },
-  { id: 'canceled', label: 'Canceled, still airing', match: (r) => r.canceled, tone: 'bad' },
 ]
 
-const ADVERTISER_COLUMNS: Column<AdvertiserDelivery>[] = [
+function Where({ r, screens }: { r: AdvertiserDelivery; screens: ScreenOption[] }) {
+  const ads = [...new Map(r.spots.map((s) => [s.adId, s.adTitle])).entries()]
+  const many = ads.length > 1
+  return (
+    <div className="space-y-1.5">
+      <ScreenChips spots={r.spots} label={(s) => (many ? `${s.screenLabel} · ${s.adTitle}` : s.screenLabel)} />
+      <div className="flex flex-wrap gap-1.5">
+        {ads.map(([adId, title]) => (
+          <AddToScreen
+            key={adId}
+            adId={adId}
+            adTitle={title}
+            label={many ? title : undefined}
+            onScreens={r.spots.filter((s) => s.adId === adId).map((s) => s.tvId)}
+            screens={screens}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+const advertiserColumns = (screens: ScreenOption[]): Column<AdvertiserDelivery>[] => [
   {
     key: 'name',
     header: 'Advertiser',
     value: (r) => r.name.toLowerCase(),
-    className: 'md:min-w-40',
+    className: 'md:w-48',
     cell: (r) => (
       <div className="min-w-0">
-        <div className="truncate font-medium">{r.name}</div>
-        <div className="mt-0.5 flex flex-wrap gap-1">
-          {r.noAccount && <Badge variant="warning">No account</Badge>}
-          {r.method === 'host' && <Badge variant="secondary">Host perk</Badge>}
-          {r.canceled && <Badge variant="destructive">Canceled, still airing</Badge>}
-          {r.ads > 1 && <span className="text-[10px] text-muted-foreground">{r.ads} ads</span>}
-        </div>
-        {/* On a phone the where-column would be clipped, so it moves under the name. */}
+        {r.href ? (
+          <Link href={r.href} className="block truncate font-medium hover:underline">
+            {r.name}
+          </Link>
+        ) : (
+          <div className="truncate font-medium">{r.name}</div>
+        )}
+        {(r.noAccount || r.canceled) && (
+          <div className="mt-0.5 flex flex-wrap gap-1">
+            {r.noAccount && <Badge variant="warning">No account</Badge>}
+            {r.canceled && <Badge variant="destructive">Canceled, still airing</Badge>}
+          </div>
+        )}
+        {/* Phones: the screens column is hidden, so it sits under the name. */}
         <div className="mt-1.5 md:hidden">
-          <SpotChips spots={r.spots} label={(s) => s.screenLabel} />
+          <Where r={r} screens={screens} />
         </div>
       </div>
     ),
   },
   {
     key: 'where',
-    header: 'Where it runs',
+    header: 'Screens',
     hideBelow: 'md',
-    className: 'min-w-64',
-    cell: (r) => <SpotChips spots={r.spots} label={(s) => s.screenLabel} />,
-  },
-  {
-    key: 'locations',
-    header: 'Locations',
-    numeric: true,
-    value: (r) => r.locations,
-    cell: (r) => (
-      <span>
-        {r.locations}
-        {r.darkScreens > 0 && <span className="ml-1 text-destructive">·{r.darkScreens} dark</span>}
-      </span>
-    ),
+    cell: (r) => <Where r={r} screens={screens} />,
   },
   {
     key: 'plays',
     header: 'Shown 30d',
     numeric: true,
-    hideBelow: 'sm',
     value: (r) => r.plays,
-    cell: (r) => (r.plays ? formatNumber(r.plays) : dash),
+    cell: (r) => shown(r.plays),
   },
   {
     key: 'scans',
-    header: 'Scans 30d',
+    header: 'Scans',
     numeric: true,
-    hideBelow: 'md',
+    hideBelow: 'sm',
     value: (r) => r.scans,
-    cell: (r) => formatNumber(r.scans),
-  },
-  {
-    key: 'monthly',
-    header: 'Monthly',
-    numeric: true,
-    hideBelow: 'md',
-    value: (r) => r.monthlyCents,
-    cell: (r) =>
-      r.monthlyCents ? (
-        <span className={r.free ? 'text-muted-foreground' : ''}>
-          {formatCents(r.monthlyCents)}
-          {r.free && <span className="ml-1 text-[10px]">free</span>}
-        </span>
-      ) : (
-        dash
-      ),
+    cell: (r) => shown(r.scans),
   },
 ]
 
-export function ByAdvertiserTable({ rows }: { rows: AdvertiserDelivery[] }) {
+export function ByAdvertiserTable({ rows, screens }: { rows: AdvertiserDelivery[]; screens: ScreenOption[] }) {
+  const columns = useMemo(() => advertiserColumns(screens), [screens])
   return (
     <DataTable
       rows={rows}
       rowId={(r) => r.advertiserId}
-      columns={ADVERTISER_COLUMNS}
+      columns={columns}
       views={ADVERTISER_VIEWS}
-      href={(r) => r.href ?? `/admin/tvs/${r.spots[0].tvId}`}
-      defaultSort={{ key: 'plays', dir: 'desc' }}
+      defaultSort={{ key: 'name', dir: 'asc' }}
       searchable={(r) => `${r.name} ${r.spots.map((s) => `${s.screenLabel} ${s.adTitle}`).join(' ')}`}
-      searchPlaceholder="Search an advertiser, ad or location…"
+      searchPlaceholder="Find an advertiser or a screen…"
       emptyTitle="Nothing on air"
-      emptyHint="Ads show up here as soon as they are placed on a screen and approved."
-      csvFilename="loop-where-ads-run.csv"
-      csvRow={(r) => ({
-        advertiser: r.name,
-        account: r.noAccount ? 'none' : 'yes',
-        locations: r.locations,
-        dark_screens: r.darkScreens,
-        plays_30d: r.plays,
-        scans_30d: r.scans,
-        monthly_usd: (r.monthlyCents / 100).toFixed(2),
-        where: r.spots.map((s) => `${s.screenLabel} (${s.plays})`).join('; '),
-      })}
+      emptyHint="Ads show up here once they are approved and on a screen."
     />
   )
 }
@@ -163,8 +160,7 @@ export function ByAdvertiserTable({ rows }: { rows: AdvertiserDelivery[] }) {
 
 const LOCATION_VIEWS: SavedView<LocationDelivery>[] = [
   { id: 'all', label: 'All', match: () => true },
-  { id: 'dark', label: 'Dark now', match: (r) => r.darkScreens > 0, tone: 'bad' },
-  { id: 'room', label: 'Has open slots', match: (r) => r.slotsTotal > r.slotsUsed },
+  { id: 'dark', label: 'Screen is off', match: (r) => r.darkScreens > 0, tone: 'bad' },
 ]
 
 const LOCATION_COLUMNS: Column<LocationDelivery>[] = [
@@ -172,38 +168,31 @@ const LOCATION_COLUMNS: Column<LocationDelivery>[] = [
     key: 'name',
     header: 'Location',
     value: (r) => r.name.toLowerCase(),
-    className: 'md:min-w-36',
+    className: 'md:w-48',
     cell: (r) => (
       <div className="min-w-0">
-        <div className="truncate font-medium">{r.name}</div>
-        <div className="text-[10px] text-muted-foreground">
-          {r.screens} screen{r.screens === 1 ? '' : 's'}
-          {r.darkScreens > 0 && <span className="ml-1 text-destructive">· {r.darkScreens} dark</span>}
-        </div>
+        <Link href={`/admin/venues/${r.venueId}`} className="block truncate font-medium hover:underline">
+          {r.name}
+        </Link>
+        {r.darkScreens > 0 && <div className="text-[11px] text-destructive">Screen is off</div>}
         <div className="mt-1.5 md:hidden">
-          <SpotChips spots={r.spots} label={(s) => s.advertiserName} />
+          <ScreenChips spots={r.spots} label={(s) => s.advertiserName} />
         </div>
       </div>
     ),
   },
   {
     key: 'running',
-    header: 'Running here',
+    header: 'Ads playing here',
     hideBelow: 'md',
-    className: 'min-w-64',
-    cell: (r) => <SpotChips spots={r.spots} label={(s) => s.advertiserName} />,
+    cell: (r) => <ScreenChips spots={r.spots} label={(s) => s.advertiserName} />,
   },
   {
-    key: 'slots',
-    header: 'Slots used',
+    key: 'open',
+    header: 'Open spots',
     numeric: true,
-    value: (r) => r.slotsUsed,
-    cell: (r) => (
-      <span>
-        {r.slotsUsed}
-        {r.slotsTotal > 0 && <span className="text-muted-foreground">/{r.slotsTotal}</span>}
-      </span>
-    ),
+    value: (r) => r.slotsTotal - r.slotsUsed,
+    cell: (r) => Math.max(0, r.slotsTotal - r.slotsUsed),
   },
   {
     key: 'plays',
@@ -211,15 +200,7 @@ const LOCATION_COLUMNS: Column<LocationDelivery>[] = [
     numeric: true,
     hideBelow: 'sm',
     value: (r) => r.plays,
-    cell: (r) => (r.plays ? formatNumber(r.plays) : dash),
-  },
-  {
-    key: 'scans',
-    header: 'Scans 30d',
-    numeric: true,
-    hideBelow: 'md',
-    value: (r) => r.scans,
-    cell: (r) => formatNumber(r.scans),
+    cell: (r) => shown(r.plays),
   },
 ]
 
@@ -230,23 +211,11 @@ export function ByLocationTable({ rows }: { rows: LocationDelivery[] }) {
       rowId={(r) => r.venueId}
       columns={LOCATION_COLUMNS}
       views={LOCATION_VIEWS}
-      href={(r) => `/admin/venues/${r.venueId}`}
-      defaultSort={{ key: 'plays', dir: 'desc' }}
+      defaultSort={{ key: 'name', dir: 'asc' }}
       searchable={(r) => `${r.name} ${r.spots.map((s) => `${s.advertiserName} ${s.adTitle}`).join(' ')}`}
-      searchPlaceholder="Search a location or advertiser…"
-      emptyTitle="No screens carrying ads"
-      emptyHint="A location appears once an approved ad is placed on one of its screens."
-      csvFilename="loop-ads-by-location.csv"
-      csvRow={(r) => ({
-        location: r.name,
-        screens: r.screens,
-        dark_screens: r.darkScreens,
-        slots_used: r.slotsUsed,
-        slots_total: r.slotsTotal,
-        plays_30d: r.plays,
-        scans_30d: r.scans,
-        running: r.spots.map((s) => `${s.advertiserName} (${s.plays})`).join('; '),
-      })}
+      searchPlaceholder="Find a location or an advertiser…"
+      emptyTitle="No screens playing ads"
+      emptyHint="A location shows up once an approved ad is on one of its screens."
     />
   )
 }

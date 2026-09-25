@@ -28,6 +28,7 @@ const AIRING = ['active', 'approved']
 
 /** One ad on one screen. The atom both views are built from. */
 export interface Spot {
+  placementId: string
   adId: string
   campaignId: string | null
   adTitle: string
@@ -44,7 +45,8 @@ export interface Spot {
   /** "Brassa" or "Brassa · screen 2" when the venue has more than one. */
   screenLabel: string
   dark: boolean
-  plays: number
+  /** Null when the count could not be read this time; never shown as 0. */
+  plays: number | null
   scans: number
 }
 
@@ -62,7 +64,8 @@ export interface AdvertiserDelivery {
   ads: number
   locations: number
   darkScreens: number
-  plays: number
+  /** Null while any of their screens' counts is unavailable. */
+  plays: number | null
   scans: number
   spots: Spot[]
 }
@@ -76,16 +79,26 @@ export interface LocationDelivery {
   /** Ad slots in use across the venue's screens, and how many there are. */
   slotsUsed: number
   slotsTotal: number
-  plays: number
+  plays: number | null
   scans: number
   spots: Spot[]
   /** First screen, for the row link. */
   tvId: string
 }
 
+/** A screen an ad could be put on, for the "Add to screen" picker. */
+export interface ScreenOption {
+  tvId: string
+  label: string
+  /** Empty ad slots left in its loop. 0 = full, can't take another ad. */
+  free: number
+  dark: boolean
+}
+
 export interface Delivery {
   byAdvertiser: AdvertiserDelivery[]
   byLocation: LocationDelivery[]
+  screens: ScreenOption[]
   totals: {
     advertisers: number
     ads: number
@@ -114,13 +127,14 @@ const cachedSpotPlays = unstable_cache(
       .eq('ad_id', adId)
       .eq('tv_id', tvId)
       .gte('played_at', sinceISO)
-    if (error) {
-      console.error('ad_plays count failed for', adId, tvId, error.message)
-      return 0
-    }
-    return count ?? 0
+    // Throw, never return 0: a returned value is cached for 15 minutes, and a
+    // failed count cached as a measured zero is how whole rows read "0 shown".
+    // A throw is not cached, and during a background refresh the last good value
+    // is kept.
+    if (error || count == null) throw new Error(`ad_plays count failed for ${adId}/${tvId}: ${error?.message ?? 'no count'}`)
+    return count
   },
-  ['ad-plays-spot-30d'],
+  ['ad-plays-spot-30d-v2'],
   { revalidate: 900 }
 )
 
@@ -138,7 +152,18 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promis
   return out
 }
 
+/** Total plays, or null if any count in the set is missing — a partial sum would undercount. */
+function sumPlays(list: Spot[]): number | null {
+  let total = 0
+  for (const s of list) {
+    if (s.plays == null) return null
+    total += s.plays
+  }
+  return total
+}
+
 type PlacementRow = {
+  id: string
   ad_id: string
   tv_id: string
   campaign_id: string | null
@@ -166,17 +191,24 @@ export const loadDelivery = cache(async (territoryId: string | null): Promise<De
   since.setUTCMinutes(0, 0, 0)
   const sinceISO = since.toISOString()
 
-  const [{ data: placeData }, billing] = await Promise.all([
+  const [{ data: placeData }, billing, { data: tvData }] = await Promise.all([
     admin
       .from('ad_placements')
       .select(
-        `ad_id, tv_id, campaign_id, campaign:campaigns(status),
+        `id, ad_id, tv_id, campaign_id, campaign:campaigns(status),
          ad:ads(title, status, owner_kind, owner_user_id, owner:profiles!owner_user_id(full_name, email, is_demo, role)),
          tv:tvs(id, venue_id, last_heartbeat_at, loop_length_seconds, slot_seconds,
            venue:venues(id, name, territory_id, business_open, business_close, business_days, business_hours))`
       )
       .eq('status', 'active'),
     loadBillingRows(territoryId),
+    // Every screen, placed or not, for the picker.
+    admin
+      .from('tvs')
+      .select(
+        `id, venue_id, last_heartbeat_at, loop_length_seconds, slot_seconds,
+         venue:venues(id, name, territory_id, is_demo, business_open, business_close, business_days, business_hours)`
+      ),
   ])
 
   const placements = ((placeData ?? []) as unknown as PlacementRow[])
@@ -211,7 +243,17 @@ export const loadDelivery = cache(async (territoryId: string | null): Promise<De
 
   const adIds = [...new Set(placements.map((p) => p.ad_id))]
   const [playCounts, { data: scanData }] = await Promise.all([
-    mapLimit(placements, 12, (p) => cachedSpotPlays(p.ad_id, p.tv_id)),
+    mapLimit(placements, 6, async (p) => {
+      // One retry: most failures are the database shedding a burst of counts.
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          return await cachedSpotPlays(p.ad_id, p.tv_id)
+        } catch (e) {
+          if (attempt) console.error((e as Error).message)
+        }
+      }
+      return null
+    }),
     adIds.length
       ? admin
           .from('qr_scans')
@@ -238,6 +280,7 @@ export const loadDelivery = cache(async (territoryId: string | null): Promise<De
     // The ad title is the only thing that names the business, so group on that.
     const noAccount = owner?.role === 'admin' && !p.campaign_id
     return {
+      placementId: p.id,
       adId: p.ad_id,
       campaignId: p.campaign_id,
       adTitle: p.ad!.title,
@@ -283,9 +326,9 @@ export const loadDelivery = cache(async (territoryId: string | null): Promise<De
       ads: new Set(list.map((s) => s.adId)).size,
       locations: new Set(list.map((s) => s.venueId)).size,
       darkScreens: new Set(list.filter((s) => s.dark).map((s) => s.tvId)).size,
-      plays: list.reduce((s, x) => s + x.plays, 0),
+      plays: sumPlays(list),
       scans: list.reduce((s, x) => s + x.scans, 0),
-      spots: [...list].sort((a, b) => b.plays - a.plays),
+      spots: [...list].sort((a, b) => (b.plays ?? 0) - (a.plays ?? 0)),
     }
   })
 
@@ -306,24 +349,58 @@ export const loadDelivery = cache(async (territoryId: string | null): Promise<De
         const tv = tvMeta.get(id)
         return sum + (tv && tv.slot_seconds > 0 ? Math.floor(tv.loop_length_seconds / tv.slot_seconds) : 0)
       }, 0),
-      plays: list.reduce((s, x) => s + x.plays, 0),
+      plays: sumPlays(list),
       scans: list.reduce((s, x) => s + x.scans, 0),
-      spots: [...list].sort((a, b) => b.plays - a.plays),
+      spots: [...list].sort((a, b) => (b.plays ?? 0) - (a.plays ?? 0)),
       tvId: tvIds[0],
     }
   })
+
+  // ---- screens for the picker ----
+  // Slot use counts EVERY active placement on the screen (any owner), the same
+  // number addPlacement checks before it will drop an ad in.
+  type TvRow = {
+    id: string
+    venue_id: string
+    last_heartbeat_at: string | null
+    loop_length_seconds: number
+    slot_seconds: number
+    venue: ({ id: string; name: string; territory_id: string; is_demo: boolean } & VenueHours) | null
+  }
+  const tvRows = ((tvData ?? []) as unknown as (Omit<TvRow, 'venue'> & { venue: TvRow['venue'] | TvRow['venue'][] })[])
+    .map((t) => ({ ...t, venue: one(t.venue) }))
+    .filter((t) => t.venue && !t.venue.is_demo && (!territoryId || t.venue.territory_id === territoryId))
+  const usedByTv = new Map<string, number>()
+  for (const p of (placeData ?? []) as unknown as { tv_id: string }[]) {
+    usedByTv.set(p.tv_id, (usedByTv.get(p.tv_id) ?? 0) + 1)
+  }
+  const siblingsByVenue = new Map<string, string[]>()
+  for (const t of tvRows) siblingsByVenue.set(t.venue_id, [...(siblingsByVenue.get(t.venue_id) ?? []), t.id].sort())
+  const screens: ScreenOption[] = tvRows
+    .map((t) => {
+      const sib = siblingsByVenue.get(t.venue_id) ?? []
+      const cap = Math.max(1, Math.floor((t.loop_length_seconds || 360) / (t.slot_seconds || 15)))
+      return {
+        tvId: t.id,
+        label: sib.length > 1 ? `${t.venue!.name} · screen ${sib.indexOf(t.id) + 1}` : t.venue!.name,
+        free: Math.max(0, cap - (usedByTv.get(t.id) ?? 0)),
+        dark: screenDownState(t.last_heartbeat_at, t.venue!).down,
+      }
+    })
+    .sort((a, b) => a.label.localeCompare(b.label))
 
   const allTvs = new Set(spots.map((s) => s.tvId))
   return {
     byAdvertiser,
     byLocation,
+    screens,
     totals: {
       advertisers: byAdvertiser.length,
       ads: adIds.length,
       locations: byLocation.length,
       screens: allTvs.size,
       darkScreens: new Set(spots.filter((s) => s.dark).map((s) => s.tvId)).size,
-      plays: spots.reduce((s, x) => s + x.plays, 0),
+      plays: sumPlays(spots) ?? 0,
       scans: spots.reduce((s, x) => s + x.scans, 0),
     },
   }
