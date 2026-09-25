@@ -13,6 +13,7 @@
 import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { FREE_SCREENS_PER_HOSTED_TV } from '@/lib/hostComp'
+import { loadBillingRows } from '@/lib/adminInbox'
 
 export interface HostBenefit {
   hostId: string
@@ -59,16 +60,17 @@ export const loadHostBenefits = cache(
 
     const hostIds = [...new Set(venues.map((v) => v.host_user_id!))]
 
-    // What free advertising each host is actually running right now. "Free" means
-    // comped or priced at nothing — the two ways a campaign ends up costing them
-    // zero — counted in SCREENS, because that is the unit the deal is written in.
-    const [{ data: profiles }, { data: camps }] = await Promise.all([
+    // What free advertising each host is actually running right now, in SCREENS
+    // (the unit the deal is written in). This reads the billing rollup rather
+    // than looking for comped or $0 campaigns: a host who took the deal went
+    // through checkout with their 100%-off code, so the campaign carries a list
+    // price and a Stripe subscription that charges nothing. Counting only comps
+    // reported every one of those hosts as owed screens they already had.
+    // Free = the screens their perk covers, plus every screen on a campaign that
+    // is free anyway (comped or priced at nothing).
+    const [{ data: profiles }, billing] = await Promise.all([
       supabase.from('profiles').select('id, full_name, email, phone').in('id', hostIds),
-      supabase
-        .from('campaigns')
-        .select('id, advertiser_id, comp_until, monthly_total_cents, is_demo')
-        .in('advertiser_id', hostIds)
-        .in('status', ['active', 'paused']),
+      loadBillingRows(territoryId),
     ])
     const profileById = new Map(
       ((profiles ?? []) as { id: string; full_name: string | null; email: string; phone: string | null }[]).map(
@@ -76,36 +78,12 @@ export const loadHostBenefits = cache(
       )
     )
 
-    const freeCampaigns = ((camps ?? []) as {
-      id: string
-      advertiser_id: string
-      comp_until: string | null
-      monthly_total_cents: number | null
-      is_demo: boolean
-    }[]).filter((c) => !c.is_demo && (!!c.comp_until || (c.monthly_total_cents ?? 0) === 0))
-
-    const screensByCampaign = new Map<string, number>()
-    if (freeCampaigns.length) {
-      const { data: places } = await supabase
-        .from('ad_placements')
-        .select('campaign_id')
-        .eq('status', 'active')
-        .in(
-          'campaign_id',
-          freeCampaigns.map((c) => c.id)
-        )
-      for (const p of (places ?? []) as { campaign_id: string | null }[]) {
-        if (!p.campaign_id) continue
-        screensByCampaign.set(p.campaign_id, (screensByCampaign.get(p.campaign_id) ?? 0) + 1)
-      }
-    }
-
+    const hostSet = new Set(hostIds)
     const usingByHost = new Map<string, number>()
-    for (const c of freeCampaigns) {
-      usingByHost.set(
-        c.advertiser_id,
-        (usingByHost.get(c.advertiser_id) ?? 0) + (screensByCampaign.get(c.id) ?? 0)
-      )
+    for (const r of billing) {
+      if (!hostSet.has(r.advertiserId)) continue
+      const free = r.billing.method === 'comp' || r.listCents === 0 ? r.screens : r.hostFreeScreens
+      usingByHost.set(r.advertiserId, (usingByHost.get(r.advertiserId) ?? 0) + free)
     }
 
     return hostIds

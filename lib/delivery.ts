@@ -270,7 +270,7 @@ export const loadDelivery = cache(async (territoryId: string | null): Promise<De
   const byAdvertiser: AdvertiserDelivery[] = [...spotsByAdvertiser.entries()].map(([id, list]) => {
     const bills = list[0].noAccount ? [] : (billingByAdvertiser.get(id) ?? [])
     const methods = bills.map((b) => b.billing.method)
-    const free = !methods.length || methods.every((m) => m === 'comp' || m === 'unbilled')
+    const free = !methods.length || methods.every((m) => m === 'comp' || m === 'unbilled' || m === 'host')
     return {
       advertiserId: id,
       name: list[0].advertiserName,

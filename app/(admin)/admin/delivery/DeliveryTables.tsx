@@ -47,7 +47,8 @@ const dash = <span className="text-muted-foreground">—</span>
 const ADVERTISER_VIEWS: SavedView<AdvertiserDelivery>[] = [
   { id: 'all', label: 'All', match: () => true },
   { id: 'paying', label: 'Paying', match: (r) => !r.free },
-  { id: 'free', label: 'Free / comped', match: (r) => r.free && !r.noAccount },
+  { id: 'free', label: 'Comped / unbilled', match: (r) => r.free && !r.noAccount && r.method !== 'host' },
+  { id: 'host', label: 'Host perk', match: (r) => r.method === 'host' },
   { id: 'no-account', label: 'No account', match: (r) => r.noAccount, tone: 'warn' },
   { id: 'dark', label: 'On a dark screen', match: (r) => r.darkScreens > 0, tone: 'bad' },
   { id: 'canceled', label: 'Canceled, still airing', match: (r) => r.canceled, tone: 'bad' },
@@ -64,6 +65,7 @@ const ADVERTISER_COLUMNS: Column<AdvertiserDelivery>[] = [
         <div className="truncate font-medium">{r.name}</div>
         <div className="mt-0.5 flex flex-wrap gap-1">
           {r.noAccount && <Badge variant="warning">No account</Badge>}
+          {r.method === 'host' && <Badge variant="secondary">Host perk</Badge>}
           {r.canceled && <Badge variant="destructive">Canceled, still airing</Badge>}
           {r.ads > 1 && <span className="text-[10px] text-muted-foreground">{r.ads} ads</span>}
         </div>

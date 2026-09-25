@@ -39,12 +39,13 @@ export type AdvertiserRow = {
   deactivated: boolean
 }
 
-const isFree = (r: AdvertiserRow) => r.method === 'comp' || r.method === 'unbilled'
+const isFree = (r: AdvertiserRow) => r.method === 'comp' || r.method === 'unbilled' || r.method === 'host'
 
 const VIEWS: SavedView<AdvertiserRow>[] = [
   { id: 'all', label: 'All', match: (r) => !r.deactivated },
   { id: 'paying', label: 'Paying', match: (r) => !r.deactivated && !!r.method && !isFree(r) },
   { id: 'comped', label: 'Comped', match: (r) => !r.deactivated && r.method === 'comp' },
+  { id: 'host', label: 'Host perk', match: (r) => !r.deactivated && r.method === 'host' },
   { id: 'unbilled', label: 'Never billed', match: (r) => !r.deactivated && r.method === 'unbilled', tone: 'warn' },
   {
     id: 'at-risk',

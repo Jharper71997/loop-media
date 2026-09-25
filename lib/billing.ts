@@ -27,7 +27,11 @@
 
 import { DEFAULT_SETTINGS } from '@/lib/settings'
 
-export type BillingMethod = 'stripe' | 'manual' | 'comp' | 'unbilled'
+// 'host' is never resolved from the billing columns. loadBillingRows sets it on a
+// host's campaign that their hosting perk covers in full (two free advertising
+// screens per screen they host), whatever Stripe or the payments table say: the
+// host code makes that subscription $0, so it is neither revenue nor a comp.
+export type BillingMethod = 'stripe' | 'manual' | 'comp' | 'unbilled' | 'host'
 
 // How urgent this account is, worst-first. 'unbilled' outranks 'overdue' because
 // an unbilled live ad has never produced a dollar.
@@ -38,6 +42,7 @@ export const BILLING_METHOD_LABEL: Record<BillingMethod, string> = {
   manual: 'Check / cash',
   comp: 'Comped',
   unbilled: 'Not billed',
+  host: 'Host perk',
 }
 
 // These three are admin-editable — the live values come from getSettings()
